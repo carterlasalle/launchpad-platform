@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "typecheck": "yarn workspaces foreach -A -t run typecheck",
+    "typecheck": "tsc -b",
     "validate": "yarn platform validate",
     "plan": "yarn platform plan",
     "status": "yarn platform status",

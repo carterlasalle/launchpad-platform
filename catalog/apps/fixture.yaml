@@ -1,0 +1,123 @@
+apiVersion: launchpad.dev/v1
+kind: Application
+metadata:
+  id: fixture-app
+  displayName: Fixture App
+  description: Disposable local Launchpad fixture
+  owners:
+    - "@platform"
+  labels:
+    team: platform
+    criticality: low
+  annotations: {}
+repository:
+  provider: github
+  name: example/fixture
+  productionBranch: main
+  deploymentRef: main
+  access:
+    requirePrivateAccessVerification: true
+    requireVercelGitAccess: true
+  onboarding:
+    managedWorkflow: true
+    workflowVersion: v1
+    openOnboardingPr: false
+vercel:
+  scope: {}
+  project:
+    name: fixture-app
+    framework: nextjs
+    rootDirectory: .
+    nodeVersion: "24.x"
+    build:
+      installCommand: yarn install --immutable
+      buildCommand: yarn build
+      outputDirectory: null
+      developmentCommand: yarn dev
+      ignoredBuildStep: null
+    git:
+      connected: true
+      productionBranch: main
+    deployment:
+      autoAssignProductionDomains: false
+      prioritizeProductionBuilds: true
+      rollingRelease: null
+      skewProtection: false
+    regions:
+      functions: [iad1]
+    protection:
+      preview: public
+      production: public
+    settings:
+      webAnalytics: true
+      speedInsights: true
+environments:
+  preview:
+    enabled: true
+    strategy: shadow-project
+    source:
+      ref: main
+    cleanup:
+      onPrClose: true
+      retentionHours: 24
+    health:
+      path: /api/health
+      method: GET
+      expectedStatus: [200]
+      timeoutSeconds: 10
+      attempts: 3
+      intervalSeconds: 1
+  production:
+    enabled: true
+    health:
+      path: /api/health
+      method: GET
+      expectedStatus: [200]
+      timeoutSeconds: 10
+      attempts: 3
+      intervalSeconds: 1
+    release:
+      strategy: staged-production
+      promoteExactBuild: true
+      autoPromoteAfterChecks: true
+    rollback:
+      enabled: true
+      onFailedHealthCheck: true
+      previousKnownGood: true
+domains:
+  - hostname: fixture.example.com
+    environment: production
+    canonical: true
+    cloudflare:
+      zoneRef: config://cloudflare/example.com
+      mode: dns-only
+      ttl: auto
+    redirects: []
+secrets: []
+dependencies:
+  applications: []
+  external: []
+policies:
+  drift:
+    mode: open-pr
+    checkIntervalMinutes: 30
+  destructiveChanges:
+    allowInNormalApply: false
+  preview:
+    requiredForMerge: true
+  staging:
+    requiredForProduction: false
+  health:
+    requiredForPromotion: true
+  failures:
+    createIssueAfterFinalRetry: true
+    notifyOwners: true
+lifecycle:
+  state: active
+  deletionProtection: true
+  orphanPolicy: retain
+  decommission:
+    requestedAt: null
+    deleteAfter: null
+    approvalToken: null
+    preserveDeployments: true

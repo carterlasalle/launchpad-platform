@@ -1,0 +1,15 @@
+apiVersion: launchpad.dev/v1
+defaults:
+  health:
+    path: /api/health
+    method: GET
+    expectedStatus: [200]
+    timeoutSeconds: 10
+    attempts: 10
+    intervalSeconds: 10
+  policies:
+    drift:
+      mode: open-pr
+      checkIntervalMinutes: 30
+    destructiveChanges:
+      allowInNormalApply: false

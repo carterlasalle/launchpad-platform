@@ -8,6 +8,10 @@
       "import": "./src/index.ts"
     }
   },
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "vitest": "3.1.1"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",

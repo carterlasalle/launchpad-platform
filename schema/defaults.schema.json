@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://launchpad.dev/schema/defaults-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "health": { "type": "object", "additionalProperties": false, "properties": { "path": { "type": "string" }, "method": { "type": "string" }, "timeoutSeconds": { "type": "integer", "minimum": 1 }, "attempts": { "type": "integer", "minimum": 1 }, "intervalSeconds": { "type": "integer", "minimum": 0 } } },
+    "policies": { "type": "object", "additionalProperties": false },
+    "lifecycle": { "type": "object", "additionalProperties": false }
+  }
+}

@@ -1,1 +1,1 @@
-export {};
+export * from './fake-provider.js';

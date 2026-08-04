@@ -1,0 +1,9 @@
+apiVersion: launchpad.dev/v1
+environments:
+  preview:
+    strategy: shadow-project
+  staging:
+    strategy: custom-environment
+    fallbackStrategy: separate-project
+  production:
+    strategy: staged-production
