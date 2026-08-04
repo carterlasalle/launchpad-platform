@@ -1,6 +1,6 @@
 import { stableId } from '@launchpad/shared';
 import type { PlatformPlan } from '@launchpad/core';
-import { InMemoryDatabase, type AuditRow, type OperationRow, type StepRow, type TombstoneRow } from './db.js';
+import { InMemoryDatabase, type ApplicationDashboardRow, type AuditRow, type OperationRow, type StepRow, type TombstoneRow } from './db.js';
 
 export interface StartOperationInput { applicationId: string; workflowId: string; action: string; idempotencyKey: string; payloadHash: string; }
 export interface RecordStepInput { operationId: string; stepId: string; status: StepRow['status']; attempt: number; preconditionHash: string; result: unknown; error: unknown; }
@@ -9,6 +9,13 @@ export class LaunchpadRepositories {
   readonly db: InMemoryDatabase;
 
   constructor(db: InMemoryDatabase) { this.db = db; }
+  upsertApplication(row: ApplicationDashboardRow): void { this.db.applications.set(row.application, { ...row }); }
+
+  listApplications(): ApplicationDashboardRow[] { return [...this.db.applications.values()].sort((left, right) => left.application.localeCompare(right.application)).map((row) => ({ ...row })); }
+
+  getApplication(applicationId: string): ApplicationDashboardRow | null { const row = this.db.applications.get(applicationId); return row ? { ...row } : null; }
+
+  listOperations(applicationId: string): OperationRow[] { return [...this.db.operations.values()].filter((operation) => operation.applicationId === applicationId).map((operation) => ({ ...operation })); }
 
   startOperation(input: StartOperationInput): OperationRow {
     const existing = this.db.idempotency.get(input.idempotencyKey);

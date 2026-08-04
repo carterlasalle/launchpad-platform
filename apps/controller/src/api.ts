@@ -26,8 +26,20 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
   app.get('/healthz', (context) => context.json({ status: 'ok', service: 'launchpad-control-plane' }));
   app.get('/', (context) => new Response(dashboardHtml, { headers: { 'content-type': 'text/html; charset=utf-8' } }));
   app.use('/v1/applications', operatorMiddleware(dependencies));
-  app.get('/v1/applications', async (context) => context.json({ applications: dependencies.store ? await dependencies.store.listApplications() : [] }));
+  app.get('/v1/applications', async (context) => context.json({ applications: dependencies.store ? await dependencies.store.listApplications() : repositories.listApplications() }));
   app.get('/v1/applications/:id/audit', (context) => context.json({ applicationId: context.req.param('id'), events: repositories.listAudit(context.req.param('id')) }));
+  app.get('/v1/applications/:id', (context) => context.json({ application: repositories.getApplication(context.req.param('id')), operations: repositories.listOperations(context.req.param('id')) }));
+  app.get('/v1/applications/:id/resources', (context) => context.json({ applicationId: context.req.param('id'), resources: [] }));
+  app.get('/v1/applications/:id/operations', (context) => context.json({ applicationId: context.req.param('id'), operations: repositories.listOperations(context.req.param('id')) }));
+  app.get('/v1/applications/:id/deployments', (context) => context.json({ applicationId: context.req.param('id'), deployments: [] }));
+  app.get('/v1/applications/:id/health', (context) => context.json({ applicationId: context.req.param('id'), checks: [] }));
+  app.get('/v1/applications/:id/drift', (context) => context.json({ applicationId: context.req.param('id'), drift: [] }));
+  app.post('/v1/applications/:id/changes/propose', async (context) => {
+    const body = await context.req.json<{ payloadHash?: string }>();
+    const operation = repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'PROPOSE_CHANGE', idempotencyKey: context.req.header('idempotency-key') ?? crypto.randomUUID(), payloadHash: body.payloadHash ?? 'propose-change' });
+    repositories.appendAudit({ actor: 'operator:dashboard', action: 'PROPOSE_CHANGE', applicationId: context.req.param('id'), details: { operationId: operation.id } });
+    return context.json({ workflowId: operation.id, status: operation.status }, 202);
+  });
   app.post('/v1/applications/:id/actions/retry', (context) => context.json({ workflowId: repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'RETRY', idempotencyKey: context.req.header('idempotency-key') ?? crypto.randomUUID(), payloadHash: 'retry' }).id }, 202));
   app.post('/v1/applications/:id/actions/recheck', (context) => context.json({ workflowId: repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'HEALTH_CHECK', idempotencyKey: context.req.header('idempotency-key') ?? crypto.randomUUID(), payloadHash: 'recheck' }).id }, 202));
   app.post('/v1/applications/:id/actions/rollback', (context) => context.json({ workflowId: repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'ROLLBACK', idempotencyKey: context.req.header('idempotency-key') ?? crypto.randomUUID(), payloadHash: 'rollback' }).id }, 202));
