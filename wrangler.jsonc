@@ -4,8 +4,7 @@
   "main": "apps/controller/src/worker.ts",
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": { "directory": "apps/dashboard/dist", "binding": "ASSETS" },
-  "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-environment" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-environment", "migrations_dir": "migrations/d1" }],
   "queues": {
     "producers": [
       { "binding": "PROVIDER_EVENTS", "queue": "launchpad-provider-events" },

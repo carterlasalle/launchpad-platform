@@ -9,13 +9,17 @@ function escapeMarkdown(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('|', '\\|');
 }
 
+function redactText(value: string): string {
+  return value.replace(/(token|secret|password|api[_-]?key|database[_-]?url)\s*[:=]\s*[^\s]+/gi, '$1=[REDACTED]');
+}
+
 function resultIcon(state: string): string {
   return state === 'READY' || state === 'PASSED' ? '✅' : state === 'CANCELED' ? '⚠️' : '❌';
 }
 
 export function renderStickyComment(input: ReportingInput): string {
-  const previewMessage = escapeMarkdown(input.preview.message);
-  const healthMessage = escapeMarkdown(input.health.message);
+  const previewMessage = escapeMarkdown(redactText(input.preview.message));
+  const healthMessage = escapeMarkdown(redactText(input.health.message));
   return `<!-- launchpad:plan -->\n${renderPlanMarkdown(input.plan)}\n### Preview deployment\n\n- State: ${resultIcon(input.preview.state)} \`${input.preview.state}\`\n- URL: ${input.preview.url ? `[open preview](${input.preview.url})` : 'not available'}\n- Details: ${previewMessage}\n\n### Health\n\n- State: ${resultIcon(input.health.state)} \`${input.health.state}\`\n- Details: ${healthMessage}\n`;
 }
 
@@ -31,6 +35,6 @@ export function artifactFiles(input: ReportingInput): Record<string, string> {
     'provider-state-redacted.json': JSON.stringify(safeProviderState, null, 2),
     'preview-summary.json': JSON.stringify(redactValue(input.preview), null, 2),
     'health-results.json': JSON.stringify(redactValue(input.health), null, 2),
-    'build-log-tail.txt': logs,
+    'build-log-tail.txt': redactText(logs),
   };
 }

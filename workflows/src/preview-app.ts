@@ -5,10 +5,11 @@ import type { ProjectProvider, ProjectSpec, ProviderContext } from '@launchpad/p
 export interface PreviewWorkflowInput { provider: ProjectProvider; project: ProjectSpec; pullRequestNumber: number; revision: number; commitSha: string; health: HealthSpec; context: ProviderContext; fetchImpl?: typeof fetch; sleep?: (delayMs: number) => Promise<void>; }
 export interface PreviewWorkflowResult { projectId: string; projectName: string; deployment: DeploymentRecord; health: HealthCheckRecord; cleanupProjectId: string; }
 export interface CleanupResult { projectId: string; status: 'CLEANED' | 'FAILED'; errorCode: string | null; message: string; }
+export interface CleanupSweepResult { cleaned: string[]; failed: Array<{ projectId: string; errorCode: string }>; }
 
 export async function runPreviewWorkflow(input: PreviewWorkflowInput): Promise<PreviewWorkflowResult> {
   const projectName = `lp-pr-${input.pullRequestNumber}-${input.project.id}-${input.revision}`.replace(/[^a-z0-9-]/gi, '-').slice(0, 63);
-  const shadowProject: ProjectSpec = { ...input.project, id: projectName, name: projectName, settings: { ...input.project.settings, launchpadShadow: true, launchpadPullRequest: input.pullRequestNumber, launchpadRevision: input.revision } };
+  const shadowProject: ProjectSpec = { ...input.project, id: projectName, name: projectName, settings: { ...input.project.settings, launchpadShadow: true, launchpadPullRequest: input.pullRequestNumber, launchpadRevision: input.revision, launchpadExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } };
   await input.provider.ensureProject(shadowProject, input.context);
   await input.provider.ensureGitConnection({ projectId: shadowProject.id, repository: input.project.repository, productionBranch: input.project.productionBranch }, input.context);
   const deployment = await input.provider.createDeployment({ projectId: shadowProject.id, environment: 'preview', repository: input.project.repository, commitSha: input.commitSha, desiredGeneration: input.revision, staged: false, rootDirectory: input.project.rootDirectory }, input.context);
@@ -26,4 +27,16 @@ export async function cleanupShadowProject(provider: ProjectProvider, projectId:
   } catch (error) {
     return { projectId, status: 'FAILED', errorCode: 'LP-PREVIEW-CLEANUP-FAILED', message: error instanceof Error ? error.message : 'Shadow project cleanup failed.' };
   }
+}
+export async function cleanupExpiredShadowProjects(provider: ProjectProvider, context: ProviderContext, now = new Date()): Promise<CleanupSweepResult> {
+  const cleaned: string[] = [];
+  const failed: Array<{ projectId: string; errorCode: string }> = [];
+  for (const project of await provider.listOwnedShadowProjects(context)) {
+    const settings = project.configuration.settings !== null && typeof project.configuration.settings === 'object' ? project.configuration.settings as Record<string, unknown> : {};
+    const expiresValue = project.configuration.launchpadExpiresAt ?? settings.launchpadExpiresAt;
+    const expiresAt = typeof expiresValue === 'string' ? new Date(expiresValue) : null;
+    if (!expiresAt || expiresAt.getTime() > now.getTime()) continue;
+    try { await provider.deleteProject(project.providerResourceId, context); cleaned.push(project.providerResourceId); } catch { failed.push({ projectId: project.providerResourceId, errorCode: 'LP-PREVIEW-CLEANUP-FAILED' }); }
+  }
+  return { cleaned, failed };
 }

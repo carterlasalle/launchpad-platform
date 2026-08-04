@@ -1,9 +1,15 @@
 import type { D1Database, Fetcher } from '@cloudflare/workers-types';
 
+export interface WorkflowBinding { create(input: { id?: string; params?: unknown }): Promise<{ id: string }>; }
+
 export interface ControllerEnv {
   Bindings: {
     DB?: D1Database;
     ASSETS?: Fetcher;
+    APPLY_WORKFLOW?: WorkflowBinding;
+    PREVIEW_WORKFLOW?: WorkflowBinding;
+    RECONCILE_WORKFLOW?: WorkflowBinding;
+    DECOMMISSION_WORKFLOW?: WorkflowBinding;
     OPERATOR_TOKEN?: string;
     OIDC_ISSUER?: string;
     OIDC_AUDIENCE?: string;

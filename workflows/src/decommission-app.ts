@@ -1,4 +1,4 @@
-import { canonicalJson } from '@launchpad/shared';
+import { canonicalJson, idempotencyKey } from '@launchpad/shared';
 import type { DesiredApplication, ObservedApplication } from '@launchpad/core';
 import { LaunchpadRepositories } from '@launchpad/database';
 import type { DnsProvider, ProjectProvider, ProviderContext } from '@launchpad/provider-contract';
@@ -16,7 +16,8 @@ export async function decommissionApplication(input: DecommissionInput): Promise
   for (const domain of input.desired.domains) {
     const zone = await input.provider.observeZone(domain.cloudflare.zoneRef, input.context);
     const record = await input.provider.observeRecord(zone.zoneId, domain.hostname, input.context);
-    if (record && record.ownershipFingerprint !== null && record.ownershipFingerprint !== input.desired.metadata.id) return { status: 'BLOCKED', applicationId: input.desired.metadata.id, exportJson, tombstone: null, errorCode: 'LP-DNS-CONFLICT-UNOWNED' };
+    const ownershipFingerprint = idempotencyKey('ownership', input.desired.metadata.id, domain.hostname);
+    if (record && record.ownershipFingerprint !== null && record.ownershipFingerprint !== ownershipFingerprint) return { status: 'BLOCKED', applicationId: input.desired.metadata.id, exportJson, tombstone: null, errorCode: 'LP-DNS-CONFLICT-UNOWNED' };
     if (record) await input.provider.deleteRecord(zone.zoneId, record.id, input.context);
   }
   await input.provider.deleteProject(input.desired.metadata.id, input.context);

@@ -1,0 +1,1 @@
+{"id":"dns_fixture","name":"fixture.example.com","type":"CNAME","content":"fixture-app.vercel-dns.example","ttl":1,"proxied":false}

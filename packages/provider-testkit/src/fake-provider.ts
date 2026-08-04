@@ -140,11 +140,11 @@ export class FakeProvider implements ProjectProvider, DnsProvider, SourceProvide
   }
 
   async listOwnedShadowProjects(_ctx: ProviderContext): Promise<ObservedResource[]> {
-    return [...this.projects.values()].filter((project) => project.resourceKey.startsWith('shadow:'));
+    return [...this.projects.values()].filter((project) => project.resourceKey.startsWith('shadow:') || project.resourceKey.startsWith('lp-pr-'));
   }
 
   async deleteProject(projectId: string, _ctx: ProviderContext): Promise<void> {
-    this.projects.delete(projectId);
+    if (!this.projects.delete(projectId)) throw new Error(`Fake project '${projectId}' does not exist.`);
   }
 
   async observeZone(zoneRef: string, _ctx: ProviderContext): Promise<ZoneObservation> {

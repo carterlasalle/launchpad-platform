@@ -1,0 +1,1 @@
+{"notFound":{"status":404},"forbidden":{"status":403},"rateLimited":{"status":429},"malformed":"not-json","transient":{"status":503}}

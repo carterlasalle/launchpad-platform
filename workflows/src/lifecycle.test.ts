@@ -21,7 +21,7 @@ it('rolls back to an exact known-good deployment', async () => {
 it('opens one reconciliation PR for stable drift', async () => {
   const provider = new FakeProvider();
   await provider.ensureProject({ id: 'app', name: 'app', teamId: null, framework: 'nextjs', rootDirectory: '.', nodeVersion: '24.x', build: { installCommand: null, buildCommand: null, outputDirectory: null }, repository: 'acme/app', productionBranch: 'main', settings: {} }, context);
-  provider.mutateProject('app', { rootDirectory: 'apps/web' });
+  provider.mutateProject('app', { rootDirectory: 'apps/manual-drift' });
   const result = await reconcileApplication({ provider, source: provider, desired, observed, context, mode: 'open-pr', mainCommit: 'a'.repeat(40) });
   expect(result.status).toBe('OUT_OF_SYNC');
   expect(result.pullRequest?.number).toBeTypeOf('number');
