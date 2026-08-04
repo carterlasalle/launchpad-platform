@@ -22,7 +22,9 @@
     "jose": "6.0.10"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20250813.0"
+    "@cloudflare/workers-types": "4.20250813.0",
+    "typescript": "5.8.3",
+    "vitest": "3.1.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
