@@ -1,0 +1,42 @@
+name: Launchpad Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'catalog/**'
+      - 'schema/**'
+      - 'packages/**'
+      - 'workflows/**'
+      - '.github/workflows/apply.yml'
+
+permissions: {}
+
+concurrency:
+  group: launchpad-production-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment: launchpad-production
+    permissions:
+      contents: read
+      id-token: write
+      deployments: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { fetch-depth: 2 }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24.18.0', cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - name: Revalidate and apply
+        env:
+          LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
+          LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          yarn platform validate --catalog catalog
+          yarn platform apply --catalog catalog --sha "$GITHUB_SHA" --controller "$LAUNCHPAD_CONTROLLER_URL"

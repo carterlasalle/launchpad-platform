@@ -1,0 +1,135 @@
+name: Launchpad Plan
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'catalog/**'
+      - 'schema/**'
+      - 'packages/core/**'
+      - 'packages/catalog/**'
+      - 'packages/provider-*/**'
+      - 'workflows/**'
+      - '.github/workflows/validate-plan.yml'
+
+permissions: {}
+
+concurrency:
+  group: launchpad-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24.18.0'
+
+jobs:
+  schema:
+    name: platform / schema
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { fetch-depth: 1 }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn typecheck
+      - run: yarn platform validate --catalog catalog
+
+  catalog:
+    name: platform / catalog
+    needs: schema
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn test
+
+  provider-preflight:
+    name: platform / provider-preflight
+    needs: catalog
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn platform preflight --catalog catalog
+        env:
+          LAUNCHPAD_GITHUB_TOKEN: ${{ secrets.LAUNCHPAD_GITHUB_TOKEN }}
+          LAUNCHPAD_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
+          LAUNCHPAD_CLOUDFLARE_TOKEN: ${{ secrets.LAUNCHPAD_CLOUDFLARE_TOKEN }}
+
+  plan:
+    name: platform / plan
+    needs: [schema, catalog]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn platform plan --catalog catalog --format markdown --output artifacts
+      - run: yarn platform report-pr --catalog catalog --artifacts artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: { name: launchpad-plan, path: artifacts }
+
+  preview:
+    name: platform / preview
+    needs: [plan, provider-preflight]
+    if: ${{ always() && needs.plan.result == 'success' && (needs.provider-preflight.result == 'success' || needs.provider-preflight.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn platform preview --catalog catalog --pr ${{ github.event.pull_request.number }} --sha ${{ github.event.pull_request.head.sha }}
+
+  health:
+    name: platform / health
+    needs: preview
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn platform health --catalog catalog --pr ${{ github.event.pull_request.number }}
+
+  summary:
+    name: platform / summary
+    needs: [schema, catalog, provider-preflight, plan, preview, health]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: |
+          set -euo pipefail
+          for result in '${{ needs.schema.result }}' '${{ needs.catalog.result }}' '${{ needs.provider-preflight.result }}' '${{ needs.plan.result }}' '${{ needs.preview.result }}' '${{ needs.health.result }}'; do
+            if [[ "$result" == failure || "$result" == cancelled ]]; then exit 1; fi
+          done

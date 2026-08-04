@@ -1,0 +1,8 @@
+name: Setup Launchpad
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: corepack enable
+    - shell: bash
+      run: yarn install --immutable

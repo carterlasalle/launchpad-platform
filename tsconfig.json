@@ -12,6 +12,7 @@
     { "path": "packages/provider-secrets" },
     { "path": "packages/health" },
     { "path": "packages/database" },
+    { "path": "packages/github-reporting" },
     { "path": "workflows" },
     { "path": "apps/cli" },
     { "path": "apps/controller" },

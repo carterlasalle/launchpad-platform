@@ -1,5 +1,5 @@
 {
-  "name": "@launchpad/workflows",
+  "name": "@launchpad/github-reporting",
   "private": true,
   "type": "module",
   "exports": {
@@ -9,12 +9,7 @@
     }
   },
   "dependencies": {
-    "@launchpad/catalog": "workspace:*",
     "@launchpad/core": "workspace:*",
-    "@launchpad/database": "workspace:*",
-    "@launchpad/health": "workspace:*",
-    "@launchpad/provider-contract": "workspace:*",
-    "@launchpad/provider-testkit": "workspace:*",
     "@launchpad/shared": "workspace:*"
   },
   "devDependencies": {

@@ -1,0 +1,33 @@
+name: Deploy Launchpad Control Plane
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/controller/**'
+      - 'apps/dashboard/**'
+      - 'packages/**'
+      - 'workflows/**'
+      - 'migrations/d1/**'
+      - 'wrangler.jsonc'
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: launchpad-control-plane
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24.18.0', cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn typecheck && yarn test && yarn build
+      - run: yarn wrangler deploy --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: yarn platform controller-smoke --controller '${{ vars.LAUNCHPAD_CONTROLLER_URL }}'

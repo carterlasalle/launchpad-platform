@@ -1,0 +1,40 @@
+name: Launchpad Reusable Application Preview
+
+on:
+  workflow_call:
+    inputs:
+      application_id:
+        required: false
+        type: string
+    outputs:
+      deployment_id:
+        value: ${{ jobs.preview.outputs.deployment_id }}
+      preview_url:
+        value: ${{ jobs.preview.outputs.preview_url }}
+      health_state:
+        value: ${{ jobs.preview.outputs.health_state }}
+
+permissions: {}
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    outputs:
+      deployment_id: ${{ steps.verify.outputs.deployment_id }}
+      preview_url: ${{ steps.verify.outputs.preview_url }}
+      health_state: ${{ steps.verify.outputs.health_state }}
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      deployments: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: '24.18.0', cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - id: verify
+        env:
+          LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
+          LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
+        run: yarn platform app-preview --application '${{ inputs.application_id }}' --controller "$LAUNCHPAD_CONTROLLER_URL"

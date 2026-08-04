@@ -15,9 +15,17 @@
     "@launchpad/catalog": "workspace:*",
     "@launchpad/core": "workspace:*",
     "@launchpad/database": "workspace:*",
+    "@launchpad/github-reporting": "workspace:*",
     "@launchpad/health": "workspace:*",
+    "@launchpad/provider-contract": "workspace:*",
+    "@launchpad/provider-github": "workspace:*",
     "@launchpad/provider-testkit": "workspace:*",
     "@launchpad/workflows": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.19.3",
+    "typescript": "5.8.3",
+    "vitest": "3.1.1"
   },
   "scripts": {
     "launchpad": "tsx src/main.ts",

@@ -796,6 +796,8 @@ __metadata:
     "@launchpad/shared": "workspace:*"
     ajv: "npm:8.17.1"
     ajv-formats: "npm:3.0.1"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
     yaml: "npm:2.8.1"
   languageName: unknown
   linkType: soft
@@ -807,9 +809,15 @@ __metadata:
     "@launchpad/catalog": "workspace:*"
     "@launchpad/core": "workspace:*"
     "@launchpad/database": "workspace:*"
+    "@launchpad/github-reporting": "workspace:*"
     "@launchpad/health": "workspace:*"
+    "@launchpad/provider-contract": "workspace:*"
+    "@launchpad/provider-github": "workspace:*"
     "@launchpad/provider-testkit": "workspace:*"
     "@launchpad/workflows": "workspace:*"
+    tsx: "npm:4.19.3"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   bin:
     launchpad: dist/main.js
   languageName: unknown
@@ -831,6 +839,8 @@ __metadata:
     "@launchpad/workflows": "workspace:*"
     hono: "npm:4.7.7"
     jose: "npm:6.0.10"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -839,12 +849,17 @@ __metadata:
   resolution: "@launchpad/core@workspace:packages/core"
   dependencies:
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
 "@launchpad/dashboard@workspace:apps/dashboard":
   version: 0.0.0-use.local
   resolution: "@launchpad/dashboard@workspace:apps/dashboard"
+  dependencies:
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -855,6 +870,19 @@ __metadata:
     "@cloudflare/workers-types": "npm:4.20250813.0"
     "@launchpad/core": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
+  languageName: unknown
+  linkType: soft
+
+"@launchpad/github-reporting@workspace:*, @launchpad/github-reporting@workspace:packages/github-reporting":
+  version: 0.0.0-use.local
+  resolution: "@launchpad/github-reporting@workspace:packages/github-reporting"
+  dependencies:
+    "@launchpad/core": "workspace:*"
+    "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -864,6 +892,8 @@ __metadata:
   dependencies:
     "@launchpad/core": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -874,6 +904,8 @@ __metadata:
     "@launchpad/core": "workspace:*"
     "@launchpad/provider-contract": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -883,6 +915,8 @@ __metadata:
   dependencies:
     "@launchpad/core": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -893,6 +927,8 @@ __metadata:
     "@launchpad/core": "workspace:*"
     "@launchpad/provider-contract": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -903,6 +939,8 @@ __metadata:
     "@launchpad/core": "workspace:*"
     "@launchpad/provider-contract": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -913,6 +951,8 @@ __metadata:
     "@launchpad/core": "workspace:*"
     "@launchpad/provider-contract": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -923,12 +963,17 @@ __metadata:
     "@launchpad/core": "workspace:*"
     "@launchpad/provider-contract": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
 "@launchpad/shared@workspace:*, @launchpad/shared@workspace:packages/shared":
   version: 0.0.0-use.local
   resolution: "@launchpad/shared@workspace:packages/shared"
+  dependencies:
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -943,6 +988,8 @@ __metadata:
     "@launchpad/provider-contract": "workspace:*"
     "@launchpad/provider-testkit": "workspace:*"
     "@launchpad/shared": "workspace:*"
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -1679,7 +1726,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@npm:^0.25.0":
+"esbuild@npm:^0.25.0, esbuild@npm:~0.25.0":
   version: 0.25.12
   resolution: "esbuild@npm:0.25.12"
   dependencies:
@@ -2021,6 +2068,15 @@ __metadata:
   dependencies:
     node-gyp: "npm:latest"
   conditions: os=darwin
+  languageName: node
+  linkType: hard
+
+"get-tsconfig@npm:^4.7.5":
+  version: 4.14.1
+  resolution: "get-tsconfig@npm:4.14.1"
+  dependencies:
+    resolve-pkg-maps: "npm:^1.0.0"
+  checksum: 10c0/c5e5d8fd298be9bc554b8ca3708a76732c27f632cd9b902c1d41b23ad1f4b6fefbe4dbdecd2fee84994d1ebf46e8cc50dd575fcff1b7ffafcdf6e2e0809a0337
   languageName: node
   linkType: hard
 
@@ -2504,6 +2560,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"resolve-pkg-maps@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "resolve-pkg-maps@npm:1.0.0"
+  checksum: 10c0/fb8f7bbe2ca281a73b7ef423a1cbc786fb244bd7a95cbe5c3fba25b27d327150beca8ba02f622baea65919a57e061eb5005204daa5f93ed590d9b77463a567ab
+  languageName: node
+  linkType: hard
+
 "rollup@npm:^4.34.9":
   version: 4.62.4
   resolution: "rollup@npm:4.62.4"
@@ -2820,6 +2883,22 @@ __metadata:
   version: 2.8.1
   resolution: "tslib@npm:2.8.1"
   checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62
+  languageName: node
+  linkType: hard
+
+"tsx@npm:4.19.3":
+  version: 4.19.3
+  resolution: "tsx@npm:4.19.3"
+  dependencies:
+    esbuild: "npm:~0.25.0"
+    fsevents: "npm:~2.3.3"
+    get-tsconfig: "npm:^4.7.5"
+  dependenciesMeta:
+    fsevents:
+      optional: true
+  bin:
+    tsx: dist/cli.mjs
+  checksum: 10c0/cacfb4cf1392ae10e8e4fe032ad26ccb07cd8a3b32e5a0da270d9c48d06ee74f743e4a84686cbc9d89b48032d59bbc56cd911e076f53cebe61dc24fa525ff790
   languageName: node
   linkType: hard
 

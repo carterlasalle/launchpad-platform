@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111315" />
+    <title>Launchpad Control Plane</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">↗</span><span>LAUNCHPAD</span><small>CONTROL PLANE</small></div>
+        <div class="topbar-meta"><span class="pulse-dot"></span><span>CONTROL PLANE ONLINE</span><span class="date" id="current-time"></span></div>
+      </header>
+      <main class="content">
+        <section class="hero">
+          <div><p class="eyebrow">OPERATIONS / APPLICATION CATALOG</p><h1>Every release,<br /><em>accounted for.</em></h1><p class="lede">Desired state, provider state, and production health in one reviewable surface.</p></div>
+          <div class="hero-stamp"><span>SYNC</span><strong id="sync-count">—</strong><small>applications tracked</small></div>
+        </section>
+        <section class="metrics" aria-label="Platform summary">
+          <article><span class="metric-label">APPLICATIONS</span><strong id="metric-apps">—</strong><small>managed in catalog</small></article>
+          <article><span class="metric-label">SYNC HEALTH</span><strong id="metric-sync">—</strong><small>desired = observed</small></article>
+          <article><span class="metric-label">ACTIVE RELEASES</span><strong id="metric-releases">—</strong><small>durable operations</small></article>
+          <article class="accent"><span class="metric-label">INCIDENTS</span><strong id="metric-incidents">—</strong><small>requiring attention</small></article>
+        </section>
+        <section class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">APPLICATION REGISTER</p><h2>Managed applications</h2></div><button id="refresh" type="button">RECHECK <span>↻</span></button></div>
+          <div id="table-state" class="table-state">Loading catalog state…</div>
+          <div class="table-wrap"><table><thead><tr><th>APPLICATION</th><th>SYNC</th><th>HEALTH</th><th>DEPLOYMENT</th><th>PRODUCTION</th><th>LAST CHANGE</th></tr></thead><tbody id="applications"></tbody></table></div>
+        </section>
+      </main>
+      <footer><span>LAUNCHPAD 1.0</span><span>GIT IS THE DESIRED STATE</span><span>SAFE BY DEFAULT</span></footer>
+    </div>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>

@@ -2,8 +2,12 @@
   "name": "@launchpad/dashboard",
   "private": true,
   "type": "module",
+  "devDependencies": {
+    "typescript": "5.8.3",
+    "vitest": "3.1.1"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp src/index.html src/styles.css dist/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run src"
   }
