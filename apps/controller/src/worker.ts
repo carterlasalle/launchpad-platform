@@ -9,7 +9,7 @@ const app = createControllerApp({ operatorToken: '', oidc: undefined });
 
 export default {
   fetch(request: Request, env: ControllerEnv['Bindings'], executionContext: ExecutionContext): Response | Promise<Response> {
-    const configured = createControllerApp({ operatorToken: env.OPERATOR_TOKEN ?? '', internalWorkflowToken: env.CONTROLLER_INTERNAL_TOKEN, oidc: env.OIDC_ISSUER && env.OIDC_AUDIENCE && env.OIDC_JWKS ? { issuer: env.OIDC_ISSUER, audience: env.OIDC_AUDIENCE, jwks: env.OIDC_JWKS } : undefined, webhookSecret: env.VERCEL_WEBHOOK_SECRET, store: env.DB ? new D1LaunchpadStore(env.DB) : undefined, assets: env.ASSETS as unknown as { fetch(request: Request): Promise<Response> } });
+    const configured = createControllerApp({ operatorToken: env.OPERATOR_TOKEN ?? '', internalWorkflowToken: env.CONTROLLER_INTERNAL_TOKEN, oidc: env.OIDC_ISSUER && env.OIDC_AUDIENCE && env.OIDC_JWKS ? { issuer: env.OIDC_ISSUER, audience: env.OIDC_AUDIENCE, jwks: env.OIDC_JWKS } : undefined, webhookSecret: env.VERCEL_WEBHOOK_SECRET, store: env.DB ? new D1LaunchpadStore(env.DB) : undefined });
     return configured.fetch(request, env, executionContext);
   },
   async queue(batch: QueueBatch): Promise<void> { await handleQueue(batch); },

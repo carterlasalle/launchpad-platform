@@ -6,8 +6,7 @@ import { verifyWebhookSignature } from './auth/webhooks.js';
 import { dashboardHtml } from './dashboard.js';
 import type { ControllerEnv, OidcConfig } from './env.js';
 
-export interface AssetFetcher { fetch(request: Request): Promise<Response>; }
-export interface ControllerDependencies { operatorToken: string; oidc?: OidcConfig | undefined; webhookSecret?: string | undefined; internalWorkflowToken?: string | undefined; repositories?: LaunchpadRepositories | undefined; store?: D1LaunchpadStore | undefined; assets?: AssetFetcher | undefined; }
+export interface ControllerDependencies { operatorToken: string; oidc?: OidcConfig | undefined; webhookSecret?: string | undefined; internalWorkflowToken?: string | undefined; repositories?: LaunchpadRepositories | undefined; store?: D1LaunchpadStore | undefined; }
 
 function bearer(request: Request): string | null {
   const value = request.headers.get('authorization');
@@ -25,6 +24,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
   const repositories = dependencies.repositories ?? new LaunchpadRepositories(new InMemoryDatabase());
   const app = new Hono<ControllerEnv>();
   app.get('/healthz', (context) => context.json({ status: 'ok', service: 'launchpad-control-plane' }));
+  app.get('/', (context) => new Response(dashboardHtml, { headers: { 'content-type': 'text/html; charset=utf-8' } }));
   app.use('/v1/applications/*', operatorMiddleware(dependencies));
   app.get('/v1/applications', operatorMiddleware(dependencies), async (context) => context.json({ applications: dependencies.store ? await dependencies.store.listApplications() : repositories.listApplications() }));
   app.get('/v1/applications/:id/audit', (context) => context.json({ applicationId: context.req.param('id'), events: repositories.listAudit(context.req.param('id')) }));
