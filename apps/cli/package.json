@@ -17,9 +17,11 @@
     "@launchpad/database": "workspace:*",
     "@launchpad/github-reporting": "workspace:*",
     "@launchpad/health": "workspace:*",
+    "@launchpad/provider-cloudflare": "workspace:*",
     "@launchpad/provider-contract": "workspace:*",
     "@launchpad/provider-github": "workspace:*",
     "@launchpad/provider-testkit": "workspace:*",
+    "@launchpad/provider-vercel": "workspace:*",
     "@launchpad/workflows": "workspace:*"
   },
   "devDependencies": {

@@ -13,8 +13,15 @@ export interface ControllerEnv {
     OPERATOR_TOKEN?: string;
     OIDC_ISSUER?: string;
     OIDC_AUDIENCE?: string;
-    OIDC_JWKS?: string;
+    CONTROLLER_INTERNAL_URL?: string;
     CONTROLLER_INTERNAL_TOKEN?: string;
+    OIDC_JWKS?: string;
+    CONTROL_REPOSITORY?: string;
+    CONTROL_CATALOG_ROOT?: string;
+    VERCEL_TOKEN?: string;
+    VERCEL_TEAM_ID?: string;
+    CLOUDFLARE_TOKEN?: string;
+    GITHUB_TOKEN?: string;
     VERCEL_WEBHOOK_SECRET?: string;
     LAUNCHPAD_ENV?: string;
   };

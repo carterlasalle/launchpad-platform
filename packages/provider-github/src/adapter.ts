@@ -2,7 +2,7 @@ import { GitHubClient } from './client.js';
 import type { ProviderContext, RepositoryObservation, SourceProvider } from '@launchpad/provider-contract';
 
 interface RepositoryResponse { id: number; archived: boolean; private: boolean; default_branch: string; }
-interface ContentResponse { type?: string; sha?: string; }
+interface ContentResponse { type?: string; sha?: string; content?: string; encoding?: string; }
 interface RefResponse { object: { sha: string }; }
 interface PullResponse { number: number; html_url: string; head?: { ref: string }; }
 interface CommentResponse { id: number; body?: string; html_url: string; }
@@ -39,6 +39,13 @@ export class GitHubAdapter implements SourceProvider {
       if (typeof error === 'object' && error !== null && 'class' in error && error.class === 'NOT_FOUND') return 'missing';
       throw error;
     }
+  }
+  async readFile(repository: string, ref: string, path: string, ctx: ProviderContext): Promise<string> {
+    const { owner, name } = repoPath(repository);
+    const data = await this.client.github<ContentResponse>(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref)}`, { correlationId: ctx.correlationId });
+    if (!data.content || data.encoding !== 'base64') throw new Error('LP-GITHUB-FILE-CONTENT-MISSING');
+    const bytes = Uint8Array.from(atob(data.content.replaceAll('\n', '')), (character) => character.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
   }
 
   async upsertPullRequestComment(input: { repository: string; pullRequestNumber: number; marker: string; body: string }, ctx: ProviderContext): Promise<{ id: number; url: string }> {

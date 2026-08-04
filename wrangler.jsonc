@@ -22,11 +22,11 @@
     { "name": "reconcile-application", "binding": "RECONCILE_WORKFLOW", "class_name": "ReconcileApplicationWorkflow" },
     { "name": "decommission-application", "binding": "DECOMMISSION_WORKFLOW", "class_name": "DecommissionApplicationWorkflow" }
   ],
-  "vars": { "LAUNCHPAD_ENV": "development" },
+  "vars": { "LAUNCHPAD_ENV": "development", "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787", "CONTROL_REPOSITORY": "CarterLaSalle/launchpad", "CONTROL_CATALOG_ROOT": "catalog/apps" },
   "env": {
     "production": {
-      "vars": { "LAUNCHPAD_ENV": "production" },
-      "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-production" }]
+      "vars": { "LAUNCHPAD_ENV": "production", "CONTROLLER_INTERNAL_URL": "https://launchpad.example.internal", "CONTROL_REPOSITORY": "CarterLaSalle/launchpad", "CONTROL_CATALOG_ROOT": "catalog/apps" },
+      "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-production", "migrations_dir": "migrations/d1" }]
     }
   }
 }

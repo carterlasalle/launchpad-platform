@@ -17,3 +17,10 @@ it('requires OIDC bearer authentication for workflow endpoints', async () => {
   const response = await app.request('/v1/plans/verify', { method: 'POST', body: JSON.stringify({ applicationId: 'app' }), headers: { 'content-type': 'application/json' } });
   expect(response.status).toBe(401);
 });
+
+it('executes the injected durable handler after internal authentication', async () => {
+  const app = createControllerApp({ operatorToken: 'operator-token', internalWorkflowToken: 'internal-token', workflowHandlers: { apply: async (payload) => ({ status: 'SUCCEEDED', applicationId: payload.applicationId }) } });
+  const response = await app.request('/internal/workflows/apply', { method: 'POST', body: JSON.stringify({ applicationId: 'app', sourceCommit: 'a'.repeat(40), planFingerprint: 'f'.repeat(64) }), headers: { 'content-type': 'application/json', 'x-launchpad-workflow-token': 'internal-token' } });
+  expect(response.status).toBe(200);
+  await expect(response.json()).resolves.toEqual({ status: 'SUCCEEDED', applicationId: 'app' });
+});

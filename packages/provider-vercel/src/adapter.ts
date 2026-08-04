@@ -119,6 +119,14 @@ export class VercelAdapter implements ProjectProvider {
     if (!Array.isArray(projects)) return [];
     return projects.map((project: unknown) => { const data = record(project); const id = text(data.id) ?? ''; return { provider: 'vercel', resourceType: 'vercel.shadow-project', resourceKey: text(data.name) ?? id, providerResourceId: id, configuration: data, ownershipFingerprint: text(data.name), observedAt: new Date().toISOString() }; });
   }
+  async findDeploymentByCommit(projectId: string, commitSha: string, ctx: ProviderContext): Promise<DeploymentRecord | null> {
+    const response = await this.client.request<unknown>(this.client.withTeam(`/v7/deployments?projectId=${encodeURIComponent(projectId)}&limit=100`), { correlationId: ctx.correlationId });
+    const deployments = record(response).deployments;
+    if (!Array.isArray(deployments)) return null;
+    const match = deployments.find((deployment) => { const data = record(deployment); const meta = record(data.meta); return text(data.commitSha) === commitSha || text(meta.gitCommitSha) === commitSha; });
+    if (!match) return null;
+    return mapDeployment(match, { projectId, environment: 'preview', repository: '', commitSha, desiredGeneration: 0 });
+  }
 
   async deleteProject(projectId: string, ctx: ProviderContext): Promise<void> {
     await this.client.request(this.client.withTeam(`/v9/projects/${encodeURIComponent(projectId)}`), { method: 'DELETE', correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-delete-project', projectId) });

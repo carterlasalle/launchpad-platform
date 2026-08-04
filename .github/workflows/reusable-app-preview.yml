@@ -37,4 +37,4 @@ jobs:
         env:
           LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
           LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
-        run: yarn platform app-preview --application '${{ inputs.application_id }}' --controller "$LAUNCHPAD_CONTROLLER_URL"
+        run: yarn platform app-preview --application '${{ inputs.application_id }}' --sha '${{ github.sha }}' --controller "$LAUNCHPAD_CONTROLLER_URL"

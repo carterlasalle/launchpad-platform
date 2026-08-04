@@ -180,6 +180,10 @@ export class FakeProvider implements ProjectProvider, DnsProvider, SourceProvide
   async hasPath(_repository: string, _ref: string, path: string, _ctx: ProviderContext): Promise<'file' | 'directory' | 'missing'> {
     return path.includes('missing') ? 'missing' : path.endsWith('/') ? 'directory' : 'file';
   }
+  async readFile(_repository: string, _ref: string, path: string, _ctx: ProviderContext): Promise<string> {
+    if (path.includes('missing')) throw new Error('LP-FAKE-FILE-NOT_FOUND');
+    return 'apiVersion: launchpad.dev/v1\nkind: Application\n';
+  }
 
   async upsertPullRequestComment(input: { repository: string; pullRequestNumber: number; marker: string; body: string }, _ctx: ProviderContext): Promise<{ id: number; url: string }> {
     return { id: input.pullRequestNumber, url: `https://github.com/${input.repository}/pull/${input.pullRequestNumber}#issuecomment-${input.pullRequestNumber}` };

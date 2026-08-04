@@ -6,7 +6,8 @@ import { verifyWebhookSignature } from './auth/webhooks.js';
 import { dashboardHtml } from './dashboard.js';
 import type { ControllerEnv, OidcConfig } from './env.js';
 
-export interface ControllerDependencies { operatorToken: string; oidc?: OidcConfig | undefined; webhookSecret?: string | undefined; internalWorkflowToken?: string | undefined; repositories?: LaunchpadRepositories | undefined; store?: D1LaunchpadStore | undefined; }
+export type WorkflowHandler = (payload: Record<string, unknown>) => Promise<Record<string, unknown>>;
+export interface ControllerDependencies { operatorToken: string; oidc?: OidcConfig | undefined; webhookSecret?: string | undefined; internalWorkflowToken?: string | undefined; repositories?: LaunchpadRepositories | undefined; store?: D1LaunchpadStore | undefined; workflowHandlers?: Record<string, WorkflowHandler> | undefined; }
 
 function bearer(request: Request): string | null {
   const value = request.headers.get('authorization');
@@ -47,11 +48,23 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     if (!dependencies.oidc) return context.json({ error: 'OIDC is not configured' }, 503);
     try { const claims = await verifyGithubOidc(bearer(context.req.raw), dependencies.oidc); return context.json({ verified: true, repository: claims.repository, sha: claims.sha ?? null }); } catch (error) { return context.json({ error: error instanceof Error ? error.message : 'OIDC verification failed' }, 401); }
   });
+  app.post('/v1/applications/:id/preview/verify', async (context) => {
+    if (!dependencies.oidc) return context.json({ error: 'OIDC is not configured' }, 503);
+    try { await verifyGithubOidc(bearer(context.req.raw), dependencies.oidc); } catch (error) { return context.json({ error: error instanceof Error ? error.message : 'OIDC verification failed' }, 401); }
+    const body = await context.req.json<Record<string, unknown>>();
+    const handler = dependencies.workflowHandlers?.[body.desired ? 'preview' : 'app-preview'];
+    if (handler) return context.json(await handler({ ...body, applicationId: context.req.param('id') }));
+    const operation = repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'PREVIEW', idempotencyKey: context.req.header('idempotency-key') ?? crypto.randomUUID(), payloadHash: 'preview' });
+    return context.json({ workflowId: operation.id, status: operation.status }, 202);
+  });
+
   app.post('/v1/applications/:id/apply', async (context) => {
     if (!dependencies.oidc) return context.json({ error: 'OIDC is not configured' }, 503);
     try { await verifyGithubOidc(bearer(context.req.raw), dependencies.oidc); } catch (error) { return context.json({ error: error instanceof Error ? error.message : 'OIDC verification failed' }, 401); }
-    const body = await context.req.json<{ idempotencyKey?: string; payloadHash?: string }>();
-    const operation = repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'APPLY', idempotencyKey: body.idempotencyKey ?? crypto.randomUUID(), payloadHash: body.payloadHash ?? 'apply' });
+    const body = await context.req.json<Record<string, unknown>>();
+    const handler = dependencies.workflowHandlers?.apply;
+    if (handler) return context.json(await handler({ ...body, applicationId: context.req.param('id') }));
+    const operation = repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'APPLY', idempotencyKey: typeof body.idempotencyKey === 'string' ? body.idempotencyKey : crypto.randomUUID(), payloadHash: typeof body.payloadHash === 'string' ? body.payloadHash : 'apply' });
     return context.json({ workflowId: operation.id, status: operation.status }, 202);
   });
   app.post('/v1/cli/:command', operatorMiddleware(dependencies), async (context) => {
@@ -61,9 +74,12 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
   app.post('/internal/workflows/:kind', async (context) => {
     const expected = dependencies.internalWorkflowToken;
     if (!expected || context.req.header('x-launchpad-workflow-token') !== expected) return context.json({ error: 'workflow authentication required' }, 401);
-    const payload = await context.req.json<{ applicationId?: string; idempotencyKey?: string }>();
-    if (!payload.applicationId) return context.json({ error: 'applicationId is required' }, 400);
-    const operation = repositories.startOperation({ applicationId: payload.applicationId, workflowId: crypto.randomUUID(), action: context.req.param('kind').toUpperCase(), idempotencyKey: payload.idempotencyKey ?? crypto.randomUUID(), payloadHash: context.req.param('kind') });
+    const payload = await context.req.json<Record<string, unknown>>();
+    const applicationId = typeof payload.applicationId === 'string' ? payload.applicationId : null;
+    if (!applicationId) return context.json({ error: 'applicationId is required' }, 400);
+    const handler = dependencies.workflowHandlers?.[context.req.param('kind')];
+    if (handler) return context.json(await handler(payload));
+    const operation = repositories.startOperation({ applicationId, workflowId: crypto.randomUUID(), action: context.req.param('kind').toUpperCase(), idempotencyKey: typeof payload.idempotencyKey === 'string' ? payload.idempotencyKey : crypto.randomUUID(), payloadHash: context.req.param('kind') });
     return context.json({ workflowId: operation.id, status: operation.status }, 202);
   });
   app.post('/webhooks/vercel', async (context) => {

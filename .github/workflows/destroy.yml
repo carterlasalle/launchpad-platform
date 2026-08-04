@@ -29,3 +29,4 @@ jobs:
       - run: yarn platform destroy --catalog catalog --app '${{ inputs.application }}' --approval-token '${{ inputs.approval_token }}'
         env:
           LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
+          LAUNCHPAD_OPERATOR_TOKEN: ${{ secrets.LAUNCHPAD_OPERATOR_TOKEN }}

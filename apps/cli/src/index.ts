@@ -7,16 +7,18 @@ import { checkHealth } from '@launchpad/health';
 import { FakeProvider } from '@launchpad/provider-testkit';
 import { artifactFiles, renderStickyComment } from '@launchpad/github-reporting';
 import { GitHubAdapter } from '@launchpad/provider-github';
+import { CloudflareAdapter } from '@launchpad/provider-cloudflare';
+import { VercelAdapter } from '@launchpad/provider-vercel';
 import { runPreviewWorkflow } from '@launchpad/workflows';
 import type { ProjectSpec, ProviderContext } from '@launchpad/provider-contract';
 
-export type CliCommand = 'validate' | 'plan' | 'status' | 'graph' | 'health' | 'reconcile' | 'logs' | 'preview' | 'report-pr' | 'apply' | 'destroy' | 'app-preview' | 'controller-smoke';
+export type CliCommand = 'validate' | 'preflight' | 'plan' | 'status' | 'graph' | 'health' | 'reconcile' | 'logs' | 'preview' | 'report-pr' | 'apply' | 'destroy' | 'app-preview' | 'controller-smoke';
 export interface CliArgs { command: CliCommand; flags: Record<string, string | boolean>; }
-const knownFlags = new Set(['catalog', 'format', 'output', 'app', 'sha', 'pr', 'controller', 'approval-token', 'environment', 'dry-run', 'artifacts']);
+const knownFlags = new Set(['catalog', 'format', 'output', 'app', 'application', 'sha', 'pr', 'controller', 'approval-token', 'environment', 'dry-run', 'artifacts']);
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   const command = argv[0] as CliCommand | undefined;
-  const commands: CliCommand[] = ['validate', 'plan', 'status', 'graph', 'health', 'reconcile', 'logs', 'preview', 'report-pr', 'apply', 'destroy', 'app-preview', 'controller-smoke'];
+  const commands: CliCommand[] = ['validate', 'preflight', 'plan', 'status', 'graph', 'health', 'reconcile', 'logs', 'preview', 'report-pr', 'apply', 'destroy', 'app-preview', 'controller-smoke'];
   if (!command || !commands.includes(command)) throw new Error(`Unknown or missing command. Expected one of: ${commands.join(', ')}.`);
   const flags: Record<string, string | boolean> = {};
   for (let index = 1; index < argv.length; index += 1) {
@@ -60,9 +62,31 @@ function projectSpec(application: DesiredApplication): ProjectSpec {
 function providerContext(applicationId: string, flags: Record<string, string | boolean>): ProviderContext {
   return { correlationId: `cli-${Date.now()}`, applicationId, workflowId: 'cli', actor: { kind: 'operator', id: 'cli' }, dryRun: flags['dry-run'] === true };
 }
+async function workflowToken(): Promise<string | null> {
+  const url = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+  const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+  if (url && requestToken) {
+    const response = await fetch(`${url}${url.includes('?') ? '&' : '?'}audience=${encodeURIComponent(process.env.LAUNCHPAD_OIDC_AUDIENCE ?? 'launchpad')}`, { headers: { authorization: `Bearer ${requestToken}` } });
+    if (response.ok) return response.text();
+  }
+  return process.env.LAUNCHPAD_OPERATOR_TOKEN ?? null;
+}
+
+async function controllerRequest(controller: string, path: string, token: string | null, body: Record<string, unknown>): Promise<{ ok: boolean; status: number; text: string }> {
+  const response = await fetch(`${controller.replace(/\/$/, '')}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+  return { ok: response.ok, status: response.status, text: await response.text() };
+}
 
 export async function runCli(argv: readonly string[], output: { write(value: string): void } = process.stdout): Promise<number> {
   const args = parseCliArgs(argv);
+  if (args.command === 'app-preview' && typeof args.flags.application === 'string') {
+    const controller = typeof args.flags.controller === 'string' ? args.flags.controller : process.env.LAUNCHPAD_CONTROLLER_URL;
+    const token = await workflowToken();
+    if (!controller || !token) { output.write('Controller URL and OIDC/operator token are required for app-preview.\n'); return 1; }
+    const response = await controllerRequest(controller, `/v1/applications/${encodeURIComponent(args.flags.application)}/preview/verify`, token, { applicationId: args.flags.application, sourceCommit: typeof args.flags.sha === 'string' ? args.flags.sha : process.env.GITHUB_SHA ?? '0'.repeat(40) });
+    output.write(`${response.text}\n`);
+    return response.ok ? 0 : 1;
+  }
   const catalogPath = typeof args.flags.catalog === 'string' ? args.flags.catalog : 'catalog';
   const result = loadCatalog(readCatalogFiles(catalogPath));
   if (args.command === 'validate') {
@@ -75,6 +99,26 @@ export async function runCli(argv: readonly string[], output: { write(value: str
   const application = selected[0];
   if (!application) { output.write('No matching applications.\n'); return 1; }
   const provider = new FakeProvider();
+  if (args.command === 'preflight') {
+    const githubToken = process.env.LAUNCHPAD_GITHUB_TOKEN;
+    const vercelToken = process.env.LAUNCHPAD_VERCEL_TOKEN;
+    const cloudflareToken = process.env.LAUNCHPAD_CLOUDFLARE_TOKEN;
+    if (!githubToken || !vercelToken || !cloudflareToken) { output.write('Provider preflight requires GitHub, Vercel, and Cloudflare runtime credentials.\n'); return 1; }
+    const github = new GitHubAdapter({ token: githubToken });
+    const vercel = new VercelAdapter({ token: vercelToken, ...(process.env.LAUNCHPAD_VERCEL_TEAM_ID ? { teamId: process.env.LAUNCHPAD_VERCEL_TEAM_ID } : {}) });
+    const cloudflare = new CloudflareAdapter({ token: cloudflareToken });
+    for (const preflightApplication of selected) {
+      const context = providerContext(preflightApplication.metadata.id, args.flags);
+      const repository = await github.observeRepository(preflightApplication.repository.name, context);
+      if (repository.archived || !repository.access) throw new Error(`LP-GITHUB-REPO-INACCESSIBLE: ${preflightApplication.repository.name}`);
+      const root = await github.hasPath(preflightApplication.repository.name, preflightApplication.repository.deploymentRef, preflightApplication.vercel.project.rootDirectory, context);
+      if (root === 'missing') throw new Error(`LP-GITHUB-ROOT-MISSING: ${preflightApplication.vercel.project.rootDirectory}`);
+      await vercel.observeProject({ projectId: preflightApplication.metadata.id }, context);
+      for (const domain of preflightApplication.domains) await cloudflare.observeZone(domain.cloudflare.zoneRef, context);
+    }
+    output.write(`Provider preflight passed for ${selected.length} application(s).\n`);
+    return 0;
+  }
   if (args.command === 'plan' || args.command === 'graph') {
     const plans = await Promise.all(selected.map(async (selectedApplication) => buildPlan({ desired: selectedApplication, observed: emptyObserved(selectedApplication.metadata.id), capabilities: await provider.capabilities(), sourceCommit: typeof args.flags.sha === 'string' ? args.flags.sha : '0'.repeat(40), desiredGeneration: 1 })));
     const content = args.command === 'graph' ? JSON.stringify(selected.map((selectedApplication) => buildResourceGraph(selectedApplication, emptyObserved(selectedApplication.metadata.id))), null, 2) : args.flags.format === 'json' ? JSON.stringify(plans, null, 2) : plans.map(renderPlanMarkdown).join('\n');
@@ -117,7 +161,37 @@ export async function runCli(argv: readonly string[], output: { write(value: str
   if (args.command === 'logs') { output.write('No local operation logs are available. Use the controller operation URL from the deployment summary.\n'); return 0; }
   const controller = typeof args.flags.controller === 'string' ? args.flags.controller : process.env.LAUNCHPAD_CONTROLLER_URL;
   if (!controller) { output.write('A controller URL is required for this command.\n'); return 1; }
-  const response = await fetch(`${controller.replace(/\/$/, '')}/v1/cli/${args.command}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.LAUNCHPAD_OPERATOR_TOKEN ?? ''}` }, body: JSON.stringify({ applicationIds: selected.map((application) => application.metadata.id), sourceCommit: args.flags.sha ?? null, approvalToken: args.flags['approval-token'] ?? null }) });
-  output.write(`${await response.text()}\n`);
-  return response.ok ? 0 : 1;
+  const token = await workflowToken();
+  if (args.command === 'controller-smoke') {
+    const response = await fetch(`${controller.replace(/\/$/, '')}/healthz`);
+    output.write(`${await response.text()}\n`);
+    return response.ok ? 0 : 1;
+  }
+  if (args.command === 'apply') {
+    if (!token) { output.write('An OIDC or operator token is required for apply.\n'); return 1; }
+    let success = true;
+    for (const applyApplication of selected) {
+      const applyPlan = await buildPlan({ desired: applyApplication, observed: emptyObserved(applyApplication.metadata.id), capabilities: await provider.capabilities(), sourceCommit: typeof args.flags.sha === 'string' ? args.flags.sha : '0'.repeat(40), desiredGeneration: 1 });
+      const response = await controllerRequest(controller, `/v1/applications/${encodeURIComponent(applyApplication.metadata.id)}/apply`, token, { applicationId: applyApplication.metadata.id, desired: applyApplication, observed: emptyObserved(applyApplication.metadata.id), plan: applyPlan, sourceCommit: applyPlan.sourceCommit, planFingerprint: applyPlan.fingerprint, idempotencyKey: `apply:${applyApplication.metadata.id}:${applyPlan.sourceCommit}` });
+      output.write(`${response.text}\n`);
+      success = success && response.ok;
+    }
+    return success ? 0 : 1;
+  }
+  if (args.command === 'app-preview') {
+    const response = await controllerRequest(controller, `/v1/applications/${encodeURIComponent(typeof args.flags.application === 'string' ? args.flags.application : application.metadata.id)}/preview/verify`, token, { applicationId: typeof args.flags.application === 'string' ? args.flags.application : application.metadata.id, desired: application, sourceCommit: typeof args.flags.sha === 'string' ? args.flags.sha : '0'.repeat(40) });
+    output.write(`${response.text}\n`);
+    return response.ok ? 0 : 1;
+  }
+  if (args.command === 'destroy') {
+    const response = await controllerRequest(controller, '/v1/cli/destroy', token, { applicationId: application.metadata.id, approvalToken: args.flags['approval-token'] ?? null });
+    output.write(`${response.text}\n`);
+    return response.ok ? 0 : 1;
+  }
+  if (args.command === 'reconcile') {
+    const response = await controllerRequest(controller, '/v1/cli/reconcile', token, { applicationIds: selected.map((selectedApplication) => selectedApplication.metadata.id), sourceCommit: args.flags.sha ?? null });
+    output.write(`${response.text}\n`);
+    return response.ok ? 0 : 1;
+  }
+  return 1;
 }

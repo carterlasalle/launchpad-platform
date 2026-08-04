@@ -34,7 +34,7 @@ export interface ZoneObservation { provider: 'cloudflare'; zoneId: string; name:
 export interface DnsRecordObservation { provider: 'cloudflare'; id: string; zoneId: string; name: string; type: string; content: string; ttl: number; proxied: boolean; ownershipFingerprint: string | null; }
 export interface SourceProvider {
   observeRepository(repository: string, ctx: ProviderContext): Promise<RepositoryObservation>;
-  hasPath(repository: string, ref: string, path: string, ctx: ProviderContext): Promise<'file' | 'directory' | 'missing'>;
+  readFile(repository: string, ref: string, path: string, ctx: ProviderContext): Promise<string>;
   upsertPullRequestComment(input: { repository: string; pullRequestNumber: number; marker: string; body: string }, ctx: ProviderContext): Promise<{ id: number; url: string }>;
   createOrUpdatePullRequest(input: { repository: string; branch: string; title: string; body: string; files: Record<string, string> }, ctx: ProviderContext): Promise<{ number: number; url: string }>;
 }
