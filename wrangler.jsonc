@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "launchpad-control-plane",
+  "main": "apps/controller/src/worker.ts",
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "apps/dashboard/dist", "binding": "ASSETS" },
+  "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-environment" }],
+  "queues": {
+    "producers": [
+      { "binding": "PROVIDER_EVENTS", "queue": "launchpad-provider-events" },
+      { "binding": "HEALTH_CHECKS", "queue": "launchpad-health-checks" }
+    ],
+    "consumers": [
+      { "queue": "launchpad-provider-events", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
+      { "queue": "launchpad-health-checks", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
+      { "queue": "launchpad-dead-letter", "max_retries": 0 }
+    ]
+  },
+  "workflows": [
+    { "name": "apply-application", "binding": "APPLY_WORKFLOW", "class_name": "ApplyApplicationWorkflow" },
+    { "name": "preview-application", "binding": "PREVIEW_WORKFLOW", "class_name": "PreviewApplicationWorkflow" },
+    { "name": "reconcile-application", "binding": "RECONCILE_WORKFLOW", "class_name": "ReconcileApplicationWorkflow" },
+    { "name": "decommission-application", "binding": "DECOMMISSION_WORKFLOW", "class_name": "DecommissionApplicationWorkflow" }
+  ],
+  "vars": { "LAUNCHPAD_ENV": "development" },
+  "env": {
+    "production": {
+      "vars": { "LAUNCHPAD_ENV": "production" },
+      "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-production" }]
+    }
+  }
+}

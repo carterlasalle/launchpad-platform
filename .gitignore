@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.wrangler/
+.yarn/install-state.gz
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+.DS_Store

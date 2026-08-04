@@ -1,0 +1,20 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/core" },
+    { "path": "packages/catalog" },
+    { "path": "packages/provider-contract" },
+    { "path": "packages/provider-testkit" },
+    { "path": "packages/provider-github" },
+    { "path": "packages/provider-vercel" },
+    { "path": "packages/provider-cloudflare" },
+    { "path": "packages/provider-secrets" },
+    { "path": "packages/health" },
+    { "path": "packages/database" },
+    { "path": "workflows" },
+    { "path": "apps/cli" },
+    { "path": "apps/controller" },
+    { "path": "apps/dashboard" }
+  ]
+}

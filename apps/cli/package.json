@@ -1,0 +1,28 @@
+{
+  "name": "@launchpad/cli",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "launchpad": "dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@launchpad/catalog": "workspace:*",
+    "@launchpad/core": "workspace:*",
+    "@launchpad/database": "workspace:*",
+    "@launchpad/health": "workspace:*",
+    "@launchpad/provider-testkit": "workspace:*",
+    "@launchpad/workflows": "workspace:*"
+  },
+  "scripts": {
+    "launchpad": "tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src"
+  }
+}

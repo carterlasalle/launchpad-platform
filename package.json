@@ -1,0 +1,40 @@
+{
+  "name": "launchpad",
+  "private": true,
+  "type": "module",
+  "packageManager": "yarn@4.10.3",
+  "engines": {
+    "node": ">=24.18.0 <25"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "workflows"
+  ],
+  "scripts": {
+    "build": "yarn workspaces foreach -A -t run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "yarn workspaces foreach -A -t run typecheck",
+    "validate": "yarn platform validate",
+    "plan": "yarn platform plan",
+    "status": "yarn platform status",
+    "platform": "yarn workspace @launchpad/cli launchpad"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
+    "hono": "4.7.7",
+    "jose": "6.0.10",
+    "yaml": "2.8.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20250813.0",
+    "@types/node": "22.15.0",
+    "eslint": "9.24.0",
+    "typescript": "5.8.3",
+    "vitest": "3.1.1",
+    "wrangler": "4.25.0"
+  }
+}
