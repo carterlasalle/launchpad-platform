@@ -9,6 +9,21 @@ export interface AuditRow { id: string; actor: string; action: string; applicati
 export interface TombstoneRow { applicationId: string; domain: string; deletedAt: string; retainUntil: string; }
 export interface StoredPlan { id: string; applicationId: string; fingerprint: string; plan: PlatformPlan; createdAt: string; }
 
+export interface IncidentRow {
+  id: string;
+  type: string;
+  fingerprint: string;
+  severity: 'warning' | 'critical';
+  applicationId: string | null;
+  operationId: string | null;
+  message: string;
+  details: Record<string, unknown>;
+  firstSeenAt: string;
+  lastFiredAt: string;
+  resolvedAt: string | null;
+  delivery: Record<string, unknown>;
+}
+
 export class InMemoryDatabase {
   readonly applications = new Map<string, ApplicationDashboardRow>();
   readonly operations = new Map<string, OperationRow>();
@@ -18,4 +33,5 @@ export class InMemoryDatabase {
   readonly audits: AuditRow[] = [];
   readonly tombstones = new Map<string, TombstoneRow>();
   readonly plans = new Map<string, StoredPlan>();
+  readonly incidents = new Map<string, IncidentRow>();
 }

@@ -58,4 +58,17 @@ describe('fake provider contract', () => {
     const rolledBack = await provider.rollback({ projectId: 'fixture-app', deploymentId: deployment.id, previousKnownGoodId: deployment.id }, context);
     expect(rolledBack.deploymentId).toBe(deployment.id);
   });
+
+  it('maps DNS mode and acknowledgment into required DNS records like the Vercel adapter', async () => {
+    const provider = new FakeProvider();
+    const base = { projectId: 'fixture-app', hostname: 'app.example.com', environment: 'production' as const };
+    const acknowledged = await provider.requiredDnsRecords({ ...base, mode: 'proxied', proxyAcknowledgment: true }, context);
+    expect(acknowledged[0]).toMatchObject({ proxied: true, proxyAcknowledgment: true });
+    const [dnsOnlyRecord] = await provider.requiredDnsRecords({ ...base, mode: 'dns-only' }, context);
+    expect(dnsOnlyRecord).toMatchObject({ proxied: false });
+    expect(dnsOnlyRecord?.proxyAcknowledgment).toBeUndefined();
+    const [unacknowledgedRecord] = await provider.requiredDnsRecords({ ...base, mode: 'proxied' }, context);
+    expect(unacknowledgedRecord).toMatchObject({ proxied: false });
+    expect(unacknowledgedRecord?.proxyAcknowledgment).toBeUndefined();
+  });
 });

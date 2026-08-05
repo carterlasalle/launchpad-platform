@@ -1,6 +1,7 @@
 import { sha256Hex } from './hash.js';
 
 const sensitiveMarker = Symbol('launchpad.sensitive');
+const nodeInspect = Symbol.for('nodejs.util.inspect.custom');
 
 export class SensitiveValue<T> {
   readonly [sensitiveMarker] = true;
@@ -10,10 +11,19 @@ export class SensitiveValue<T> {
     this.#value = value;
   }
 
+  /**
+   * Explicit escape hatch. Revealing a value is intended exclusively for provider write
+   * paths (for example sending the resolved value to a provider API). Every other consumer
+   * MUST use `redacted()` or one of the fingerprint methods instead.
+   */
   reveal(): T {
     return this.#value;
   }
 
+  /**
+   * Stable non-keyed fingerprint (FNV-1a, 64-bit). Prefer `keyedFingerprint` whenever the
+   * secret is bound to a reference so fingerprints cannot be confused across keys.
+   */
   fingerprint(): string {
     const text = typeof this.#value === 'string' ? this.#value : JSON.stringify(this.#value);
     let hash = 0xcbf29ce484222325n;
@@ -24,8 +34,35 @@ export class SensitiveValue<T> {
     return hash.toString(16).padStart(16, '0');
   }
 
+  /**
+   * SHA-256 fingerprint keyed by `key` (for example the secret reference the value was
+   * retrieved from). Stable for the same key and value; changes when either changes.
+   * The raw value is never exposed in the fingerprint.
+   */
+  async keyedFingerprint(key: string): Promise<string> {
+    const raw = typeof this.#value === 'string' ? this.#value : JSON.stringify(this.#value);
+    return sha256Hex(`${key}\u0000${raw ?? ''}`);
+  }
+
   redacted(): '[REDACTED]' {
     return '[REDACTED]';
+  }
+
+  toString(): string {
+    return '[REDACTED]';
+  }
+
+  [Symbol.toPrimitive](hint: 'string' | 'number' | 'default'): string | never {
+    if (hint === 'string') return '[REDACTED]';
+    throw new TypeError('SensitiveValue cannot be coerced to a non-string primitive');
+  }
+
+  get [Symbol.toStringTag](): string {
+    return 'SensitiveValue';
+  }
+
+  [nodeInspect](): string {
+    return 'SensitiveValue([REDACTED])';
   }
 
   toJSON(): never {
@@ -38,12 +75,22 @@ export function isSensitiveValue(value: unknown): value is SensitiveValue<unknow
 }
 
 export function redactValue(value: unknown): unknown {
-  if (isSensitiveValue(value)) return '[REDACTED]';
-  if (Array.isArray(value)) return value.map(redactValue);
-  if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactValue(item)]));
-  }
-  return value;
+  const seen = new WeakSet<object>();
+  const redact = (current: unknown): unknown => {
+    if (isSensitiveValue(current)) return '[REDACTED]';
+    if (Array.isArray(current)) {
+      if (seen.has(current)) return '[Circular]';
+      seen.add(current);
+      return current.map((item) => redact(item));
+    }
+    if (current !== null && typeof current === 'object') {
+      if (seen.has(current)) return '[Circular]';
+      seen.add(current);
+      return Object.fromEntries(Object.entries(current).map(([key, item]) => [key, redact(item)]));
+    }
+    return current;
+  };
+  return redact(value);
 }
 
 export async function secureFingerprint(value: SensitiveValue<unknown>): Promise<string> {

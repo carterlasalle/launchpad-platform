@@ -1,6 +1,6 @@
 import { stableId } from '@launchpad/shared';
 import type { PlatformPlan } from '@launchpad/core';
-import { InMemoryDatabase, type ApplicationDashboardRow, type AuditRow, type OperationRow, type StepRow, type TombstoneRow } from './db.js';
+import { InMemoryDatabase, type ApplicationDashboardRow, type AuditRow, type IncidentRow, type OperationRow, type StepRow, type TombstoneRow } from './db.js';
 
 export interface StartOperationInput { applicationId: string; workflowId: string; action: string; idempotencyKey: string; payloadHash: string; }
 export interface RecordStepInput { operationId: string; stepId: string; status: StepRow['status']; attempt: number; preconditionHash: string; result: unknown; error: unknown; }
@@ -93,4 +93,31 @@ export class LaunchpadRepositories {
   }
 
   isTombstoned(applicationId: string): boolean { return this.db.tombstones.has(applicationId); }
+
+  /** Upserts one incident per (type, fingerprint); refires reopen the same row. */
+  recordIncident(input: Omit<IncidentRow, 'id' | 'firstSeenAt' | 'lastFiredAt' | 'delivery'> & { firedAt?: string; delivery?: Record<string, unknown> }): IncidentRow {
+    const firedAt = input.firedAt ?? new Date().toISOString();
+    const key = `${input.type}:${input.fingerprint}`;
+    const existing = this.db.incidents.get(key);
+    const row: IncidentRow = {
+      id: existing?.id ?? stableId('incident', input.type, input.fingerprint),
+      type: input.type,
+      fingerprint: input.fingerprint,
+      severity: input.severity,
+      applicationId: input.applicationId ?? existing?.applicationId ?? null,
+      operationId: input.operationId ?? existing?.operationId ?? null,
+      message: input.message,
+      details: structuredClone(input.details),
+      firstSeenAt: existing?.firstSeenAt ?? firedAt,
+      lastFiredAt: firedAt,
+      resolvedAt: null,
+      delivery: structuredClone(input.delivery ?? {}),
+    };
+    this.db.incidents.set(key, row);
+    return { ...row, details: structuredClone(row.details), delivery: structuredClone(row.delivery) };
+  }
+
+  listIncidents(): IncidentRow[] {
+    return [...this.db.incidents.values()].sort((left, right) => right.lastFiredAt.localeCompare(left.lastFiredAt)).map((row) => ({ ...row, details: structuredClone(row.details), delivery: structuredClone(row.delivery) }));
+  }
 }

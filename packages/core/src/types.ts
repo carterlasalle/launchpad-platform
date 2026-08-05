@@ -1,5 +1,27 @@
-export type ProviderName = 'github' | 'vercel' | 'cloudflare' | 'secrets';
+export type ProviderName = 'github' | 'vercel' | 'cloudflare' | 'secrets' | 'platform';
 export type EnvironmentName = 'preview' | 'staging' | 'production';
+export type PlanMode = 'apply' | 'reconcile';
+
+export interface PlanBlock {
+  code: string;
+  rule: string;
+  message: string;
+  remediation: string | null;
+}
+
+export type DriftCategory = 'missing' | 'changed' | 'untracked' | 'ownership' | 'secret' | 'access' | 'deployment' | 'health';
+
+export interface DriftRecord {
+  resourceKey: string;
+  category: DriftCategory;
+  detail: string;
+}
+
+export interface DriftSummary {
+  detected: boolean;
+  fingerprint: string;
+  records: DriftRecord[];
+}
 
 export interface ApplicationMetadata {
   id: string;
@@ -43,6 +65,13 @@ export interface VercelProjectSpec {
   };
 }
 
+export interface HealthDependencySpec {
+  id: string;
+  type: 'application' | 'external';
+  url?: string | null;
+  required: boolean;
+}
+
 export interface HealthSpec {
   path: string;
   method: string;
@@ -51,7 +80,9 @@ export interface HealthSpec {
   timeoutSeconds: number;
   attempts: number;
   intervalSeconds: number;
-  body?: { jsonPath?: string; equals?: string | number | boolean | null; contains?: string; matches?: string };
+  backoff?: { multiplier?: number; maxDelaySeconds?: number };
+  dependencies?: HealthDependencySpec[];
+  body?: { jsonPath?: string; equals?: unknown; contains?: string; matches?: string };
   tls?: { required: boolean; minimumDaysRemaining?: number };
   redirects?: { allowed: boolean };
   latencyMs?: number;
@@ -106,6 +137,7 @@ export interface LifecycleSpec {
   deletionProtection: boolean;
   orphanPolicy: 'retain' | 'destroy';
   decommission: { requestedAt: string | null; deleteAfter: string | null; approvalToken: string | null; preserveDeployments: boolean };
+  recoveryPolicy?: { allowReactivateBeforeDeletionApproval: boolean };
 }
 
 export interface DesiredApplication {
@@ -139,6 +171,7 @@ export interface ObservedApplication {
   desiredGeneration: number;
   desiredHash: string;
   observedHash: string;
+  lifecycleState?: LifecycleState | null;
   resources: ObservedResource[];
   deployments: DeploymentRecord[];
   health: HealthSummary;
@@ -208,4 +241,8 @@ export interface PlatformPlan {
   policyResults: PolicyResult[];
   fingerprint: string;
   result: 'READY' | 'BLOCKED' | 'DESTRUCTIVE';
+  mode?: PlanMode;
+  blockedReason?: string | null;
+  layers?: string[][];
+  drift?: DriftSummary | null;
 }

@@ -1,0 +1,6 @@
+# Cloudflare zone registry for catalog validation.
+# Every `cloudflare.zoneRef: config://cloudflare/<zone>` in an application
+# manifest must reference a zone listed here.
+apiVersion: launchpad.dev/v1
+zones:
+  - example.com

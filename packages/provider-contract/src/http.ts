@@ -37,8 +37,11 @@ export class ProviderHttpClient {
       }
       if (!response.ok) {
         const retryable = response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500;
-        const errorClass: ProviderRequestError['class'] = response.status === 401 ? 'AUTHENTICATION' : response.status === 403 ? 'AUTHORIZATION' : response.status === 404 ? 'NOT_FOUND' : response.status === 409 ? 'CONFLICT' : response.status === 429 ? 'RATE_LIMITED' : retryable ? 'TRANSIENT_PROVIDER' : 'INTERNAL';
-        throw new ProviderRequestError({ code: `LP-${this.provider.toUpperCase()}-HTTP-${response.status}`, class: errorClass, provider: this.provider, message: `Provider request failed with HTTP ${response.status}.`, status: response.status, retryable, safeDetails: { status: response.status, body: body && typeof body === 'object' ? body : null } });
+        const errorClass: ProviderRequestError['class'] = response.status === 401 ? 'AUTHENTICATION' : response.status === 403 ? 'AUTHORIZATION' : response.status === 404 ? 'NOT_FOUND' : response.status === 409 || response.status === 422 ? 'CONFLICT' : response.status === 429 ? 'RATE_LIMITED' : retryable ? 'TRANSIENT_PROVIDER' : 'INTERNAL';
+        // Raw provider bodies never enter error details: they are persisted
+        // into provider_errors.safe_details_json and surfaced in logs, and
+        // providers may echo secret values back in error responses.
+        throw new ProviderRequestError({ code: `LP-${this.provider.toUpperCase()}-HTTP-${response.status}`, class: errorClass, provider: this.provider, message: `Provider request failed with HTTP ${response.status}.`, status: response.status, retryable, safeDetails: { status: response.status } });
       }
       return body as T;
     } catch (error) {

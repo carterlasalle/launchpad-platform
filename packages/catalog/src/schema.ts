@@ -14,6 +14,9 @@ function issuePath(error: ErrorObject): string {
   if (error.keyword === 'additionalProperties' && typeof error.params.additionalProperty === 'string') {
     return base ? `${base}.${error.params.additionalProperty}` : error.params.additionalProperty;
   }
+  if (error.keyword === 'required' && typeof error.params.missingProperty === 'string') {
+    return base ? `${base}.${error.params.missingProperty}` : error.params.missingProperty;
+  }
   return base || '$';
 }
 
