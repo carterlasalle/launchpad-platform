@@ -731,6 +731,14 @@ export async function runCli(argv: readonly string[], output: { write(value: str
     const sha = exactCommitSha(args.flags);
     const url = typeof args.flags.url === 'string' ? args.flags.url : null;
     const previewSummaryFile = typeof args.flags['preview-summary'] === 'string' ? args.flags['preview-summary'] : null;
+    const requestedEnvironment = typeof args.flags.environment === 'string' ? args.flags.environment : 'preview';
+    if (!['preview', 'staging', 'production'].includes(requestedEnvironment)) {
+      throw new CliFailure('LP-ENVIRONMENT-INVALID', `Health environment '${requestedEnvironment}' must be preview, staging, or production.`);
+    }
+    const environment = requestedEnvironment as 'preview' | 'staging' | 'production';
+    if (previewSummaryFile && environment !== 'preview') {
+      throw new CliFailure('LP-ENVIRONMENT-INVALID', '--preview-summary can only be used with the preview environment.');
+    }
     if (!url && !previewSummaryFile) throw new CliFailure('LP-PREVIEW-URL-MISSING', 'Health requires --url <deployment-url> or --preview-summary <file> with the preview deployment URL(s).');
     const targets: Array<{ applicationId: string; url: string }> = [];
     if (url) {
@@ -753,8 +761,12 @@ export async function runCli(argv: readonly string[], output: { write(value: str
     const records: Array<{ applicationId: string; url: string; result: HealthCheckRecord }> = [];
     for (const target of targets) {
       const targetApplication = result.applications.find((candidate) => candidate.metadata.id === target.applicationId) ?? application;
-      const spec = targetApplication.environments.preview?.health ?? { path: '/api/health', method: 'GET', expectedStatus: [200], timeoutSeconds: 10, attempts: 1, intervalSeconds: 0 };
-      const record = await checkHealth({ applicationId: target.applicationId, environment: 'preview', deploymentId: null, baseUrl: target.url, spec });
+      const targetEnvironment = targetApplication.environments[environment];
+      if (!targetEnvironment?.enabled) {
+        throw new CliFailure('LP-ENVIRONMENT-NOT-CONFIGURED', `Application '${target.applicationId}' does not enable the '${environment}' environment.`);
+      }
+      const spec = targetEnvironment.health ?? { path: '/api/health', method: 'GET', expectedStatus: [200], timeoutSeconds: 10, attempts: 1, intervalSeconds: 0 };
+      const record = await checkHealth({ applicationId: target.applicationId, environment, deploymentId: null, baseUrl: target.url, spec });
       records.push({ applicationId: target.applicationId, url: target.url, result: record });
     }
     if (typeof args.flags.output === 'string') {
@@ -825,7 +837,11 @@ export async function runCli(argv: readonly string[], output: { write(value: str
   }
 
   if (args.command === 'reconcile') {
-    const response = await controllerRequest(controller, '/v1/cli/reconcile', token, { applicationIds: selected.map((selectedApplication) => selectedApplication.metadata.id), sourceCommit: typeof args.flags.sha === 'string' ? args.flags.sha : null });
+    const response = await controllerRequest(controller, '/v1/cli/reconcile', token, {
+      applicationIds: selected.map((selectedApplication) => selectedApplication.metadata.id),
+      sourceCommit: typeof args.flags.sha === 'string' ? args.flags.sha : null,
+      automatic: process.env.LAUNCHPAD_AUTOMATED_RECONCILIATION === 'true',
+    });
     output.write(`${response.text}\n`);
     return response.ok ? 0 : 1;
   }

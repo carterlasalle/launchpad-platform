@@ -33,6 +33,8 @@ const D1_ID = '0123456789abcdef0123456789abcdef';
 const STORE_ID = 'fedcba9876543210fedcba9876543210';
 const TEAM_ID = 'team_launchpad-production';
 const RESOLVER_URL = 'https://dns-resolver.launchpad.internal/v1/dns';
+const CONTROLLER_URL = 'https://launchpad-control-plane.example.workers.dev';
+const OIDC_AUDIENCE = 'https://launchpad.example.internal';
 const RENDERED_OUTPUT = 'wrangler.deploy.test.json';
 const RENDERED_PATH = join(root, RENDERED_OUTPUT);
 
@@ -44,6 +46,8 @@ const run = (script: string, args: string[], overrides: Record<string, string> =
       LAUNCHPAD_SECRETS_STORE_ID: STORE_ID,
       LAUNCHPAD_VERCEL_TEAM_ID: TEAM_ID,
       LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL: RESOLVER_URL,
+      LAUNCHPAD_CONTROLLER_URL: CONTROLLER_URL,
+      LAUNCHPAD_OIDC_AUDIENCE: OIDC_AUDIENCE,
       ...process.env,
       ...overrides,
     },
@@ -90,15 +94,33 @@ it('renders a deployable config for the selected environment and nothing else', 
   for (const binding of production?.secrets_store_secrets ?? []) expect(binding.store_id).toBe(STORE_ID);
   expect(production?.vars?.VERCEL_TEAM_ID).toBe(TEAM_ID);
   expect(production?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe(RESOLVER_URL);
+  expect(production?.vars?.CONTROLLER_INTERNAL_URL).toBe(CONTROLLER_URL);
+  expect(production?.vars?.OIDC_AUDIENCE).toBe(OIDC_AUDIENCE);
 
   // Every other environment keeps its reviewed placeholders.
   expect(rendered.env?.test?.d1_databases?.[0]?.database_id).toBe('replace-in-test');
   for (const binding of rendered.env?.test?.secrets_store_secrets ?? []) expect(binding.store_id).toBe('replace-in-test');
   expect(rendered.env?.test?.vars?.VERCEL_TEAM_ID).toBe('replace-in-test');
   expect(rendered.env?.test?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe('replace-in-test');
+  expect(rendered.env?.test?.vars?.CONTROLLER_INTERNAL_URL).toBe('replace-in-test');
+  expect(rendered.env?.test?.vars?.OIDC_AUDIENCE).toBe('replace-in-test');
   expect(rendered.d1_databases?.[0]?.database_id).toBe('replace-in-environment');
-  expect(rendered.vars?.VERCEL_TEAM_ID).toBe('replace-in-environment');
-  expect(rendered.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe('replace-in-environment');
+  expect(rendered.vars?.VERCEL_TEAM_ID).toBeUndefined();
+  expect(rendered.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBeUndefined();
+});
+
+it('renders the runtime control-plane gate as disabled by default and only accepts exact boolean activation', () => {
+  const disabled = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], { LAUNCHPAD_CONTROL_PLANE_ENABLED: '' });
+  expect(disabled.status).toBe(0);
+  expect(readRendered().env?.production?.vars?.LAUNCHPAD_CONTROL_PLANE_ENABLED).toBe('false');
+
+  const enabled = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], { LAUNCHPAD_CONTROL_PLANE_ENABLED: 'true' });
+  expect(enabled.status).toBe(0);
+  expect(readRendered().env?.production?.vars?.LAUNCHPAD_CONTROL_PLANE_ENABLED).toBe('true');
+
+  const invalid = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], { LAUNCHPAD_CONTROL_PLANE_ENABLED: 'yes' });
+  expect(invalid.status).not.toBe(0);
+  expect(invalid.stderr).toContain('LAUNCHPAD_CONTROL_PLANE_ENABLED');
 });
 
 it('renders test without touching the production placeholders', () => {
@@ -110,9 +132,13 @@ it('renders test without touching the production placeholders', () => {
   for (const binding of rendered.env?.test?.secrets_store_secrets ?? []) expect(binding.store_id).toBe(STORE_ID);
   expect(rendered.env?.test?.vars?.VERCEL_TEAM_ID).toBe(TEAM_ID);
   expect(rendered.env?.test?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe(RESOLVER_URL);
+  expect(rendered.env?.test?.vars?.CONTROLLER_INTERNAL_URL).toBe(CONTROLLER_URL);
+  expect(rendered.env?.test?.vars?.OIDC_AUDIENCE).toBe(OIDC_AUDIENCE);
   expect(rendered.env?.production?.d1_databases?.[0]?.database_id).toBe('replace-in-production');
   expect(rendered.env?.production?.vars?.VERCEL_TEAM_ID).toBe('replace-in-production');
   expect(rendered.env?.production?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe('replace-in-production');
+  expect(rendered.env?.production?.vars?.CONTROLLER_INTERNAL_URL).toBe('replace-in-production');
+  expect(rendered.env?.production?.vars?.OIDC_AUDIENCE).toBe('replace-in-production');
 });
 
 it('preserves every other field and keeps deploy paths root-relative', () => {
@@ -136,11 +162,15 @@ it('fails before writing when deployment variables are missing or empty', () => 
     LAUNCHPAD_D1_DATABASE_ID: '',
     LAUNCHPAD_SECRETS_STORE_ID: '',
     LAUNCHPAD_VERCEL_TEAM_ID: '',
+    LAUNCHPAD_CONTROLLER_URL: '',
+    LAUNCHPAD_OIDC_AUDIENCE: '',
   });
   expect(missing.status).not.toBe(0);
   expect(missing.stderr).toContain('LAUNCHPAD_D1_DATABASE_ID');
   expect(missing.stderr).toContain('LAUNCHPAD_SECRETS_STORE_ID');
   expect(missing.stderr).toContain('LAUNCHPAD_VERCEL_TEAM_ID');
+  expect(missing.stderr).toContain('LAUNCHPAD_CONTROLLER_URL');
+  expect(missing.stderr).toContain('LAUNCHPAD_OIDC_AUDIENCE');
   expect(existsSync(RENDERED_PATH)).toBe(false);
 
   const singleMissing = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], { LAUNCHPAD_VERCEL_TEAM_ID: '' });
@@ -255,6 +285,20 @@ it('rejects absent, placeholder, and non-HTTPS resolver URLs before writing', ()
   expect(placeholder.status).not.toBe(0);
   expect(placeholder.stderr).toContain('placeholder');
   expect(existsSync(RENDERED_PATH)).toBe(false);
+});
+
+it('rejects absent or non-HTTPS controller and OIDC audience URLs before writing', () => {
+  for (const [name, value] of [
+    ['LAUNCHPAD_CONTROLLER_URL', ''],
+    ['LAUNCHPAD_CONTROLLER_URL', 'http://launchpad.example.internal'],
+    ['LAUNCHPAD_OIDC_AUDIENCE', ''],
+    ['LAUNCHPAD_OIDC_AUDIENCE', 'http://launchpad.example.internal'],
+  ] as const) {
+    const result = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], { [name]: value });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(name);
+    expect(existsSync(RENDERED_PATH)).toBe(false);
+  }
 });
 
 it('asserts a concrete HTTPS resolver URL in concrete mode and rejects non-HTTPS values', () => {

@@ -83,7 +83,8 @@ describe('ApplyApplicationWorkflow', () => {
     });
     vi.stubGlobal('fetch', fetchImpl);
     try {
-      const workflow = new ApplyApplicationWorkflow({} as never, { CONTROLLER_INTERNAL_URL: 'http://controller.test', CONTROLLER_INTERNAL_TOKEN: 'internal-token' });
+      const internalSecret = { get: vi.fn(async () => 'internal-token') };
+      const workflow = new ApplyApplicationWorkflow({} as never, { CONTROLLER_INTERNAL_URL: 'http://controller.test', SECRETS_CONTROLLER_INTERNAL_TOKEN: internalSecret });
       const result = await workflow.run({ payload: applyPayload, timestamp: new Date(), instanceId: 'inst-1', workflowName: 'apply-application' } as never, stepRunsCallbacks());
       expect(result.status).toBe('SUCCEEDED');
       expect(result.operationId).toBe('op-1');
@@ -97,6 +98,7 @@ describe('ApplyApplicationWorkflow', () => {
       expect(knownGoodDispatch?.body.productionHealth).toMatchObject({ result: 'PASSED' });
       // Internal dispatch carries the authenticated token.
       expect(fetchImpl.mock.calls[0]?.[1]?.headers).toMatchObject({ 'x-launchpad-workflow-token': 'internal-token' });
+      expect(internalSecret.get).toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }

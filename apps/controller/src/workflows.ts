@@ -1,6 +1,6 @@
 import { WorkflowEntrypoint } from 'cloudflare:workers';
 import type { WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, SecretsStoreSecret } from '@cloudflare/workers-types';
 import { WorkflowFailure, type ReconcileMode } from '@launchpad/workflows';
 import { idempotencyKey } from '@launchpad/shared';
 import { parseReconciliationEnvelope } from './queues.js';
@@ -9,6 +9,8 @@ import { buildObservability, recordPermanentFailure, recordRollback } from './ob
 interface WorkflowEnv {
   CONTROLLER_INTERNAL_URL?: string;
   CONTROLLER_INTERNAL_TOKEN?: string;
+  SECRETS_CONTROLLER_INTERNAL_TOKEN?: SecretsStoreSecret;
+  SECRETS_GITHUB_TOKEN?: SecretsStoreSecret;
   DB?: D1Database;
   GITHUB_TOKEN?: string;
   GITHUB_BASE_URL?: string;
@@ -21,6 +23,16 @@ interface WorkflowEnv {
 }
 interface WorkflowPayload { applicationId: string; sourceCommit?: string; planFingerprint?: string; desiredGeneration?: number; idempotencyKey?: string; version?: number; kind?: string; operationId?: string; workflowId?: string; correlationId?: string; repository?: string; prNumber?: number | string; pullRequestNumber?: number; mode?: string; [key: string]: unknown; }
 
+/** Resolves a typed Secrets Store binding, with direct-string fallback for local development. */
+async function resolveWorkflowSecret(binding: SecretsStoreSecret | undefined, fallback: string | undefined): Promise<string | undefined> {
+  if (!binding) return fallback;
+  try {
+    return await binding.get();
+  } catch {
+    throw new Error('LP-SECRET-RESOLUTION-FAILED');
+  }
+}
+
 /**
  * Records a terminal workflow failure through the observability pipeline
  * (provider-error row, incident row, GitHub fan-out when context exists).
@@ -28,7 +40,15 @@ interface WorkflowPayload { applicationId: string; sourceCommit?: string; planFi
  * never make the failed operation look green.
  */
 async function recordWorkflowFailure(env: WorkflowEnv, payload: WorkflowPayload, error: unknown, failedStep: string | null): Promise<void> {
-  const observability = buildObservability(env as Parameters<typeof buildObservability>[0]);
+  let githubToken = env.GITHUB_TOKEN;
+  try {
+    githubToken = await resolveWorkflowSecret(env.SECRETS_GITHUB_TOKEN, githubToken);
+  } catch {
+    // Preserve the original workflow failure and its D1 record even when the
+    // optional GitHub reporting credential cannot be resolved.
+  }
+  const runtime = githubToken ? { ...env, GITHUB_TOKEN: githubToken } : env;
+  const observability = buildObservability(runtime as Parameters<typeof buildObservability>[0]);
   await recordPermanentFailure(observability, {
     error,
     kind: payload.kind ?? 'apply',
@@ -51,8 +71,9 @@ async function recordWorkflowFailure(env: WorkflowEnv, payload: WorkflowPayload,
  * bodies or secrets; the envelope is surfaced as a typed `WorkflowFailure`.
  */
 async function dispatch(env: WorkflowEnv, kind: string, payload: WorkflowPayload): Promise<Record<string, unknown>> {
-  if (!env.CONTROLLER_INTERNAL_URL || !env.CONTROLLER_INTERNAL_TOKEN) throw new Error('LP-WORKFLOW-DISPATCH-CONFIG-MISSING');
-  const response = await fetch(`${env.CONTROLLER_INTERNAL_URL.replace(/\/$/, '')}/internal/workflows/${kind}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-launchpad-workflow-token': env.CONTROLLER_INTERNAL_TOKEN }, body: JSON.stringify(payload) });
+  const internalToken = await resolveWorkflowSecret(env.SECRETS_CONTROLLER_INTERNAL_TOKEN, env.CONTROLLER_INTERNAL_TOKEN);
+  if (!env.CONTROLLER_INTERNAL_URL || !internalToken) throw new Error('LP-WORKFLOW-DISPATCH-CONFIG-MISSING');
+  const response = await fetch(`${env.CONTROLLER_INTERNAL_URL.replace(/\/$/, '')}/internal/workflows/${kind}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-launchpad-workflow-token': internalToken }, body: JSON.stringify(payload) });
   if (!response.ok) throw await dispatchError(response, kind);
   const value = await response.json() as unknown;
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };

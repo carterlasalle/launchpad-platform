@@ -20,27 +20,34 @@ async function resolveSecret(binding: { get(): Promise<string> } | undefined): P
   }
 }
 
-let resolvedSecrets: Partial<Record<SecretName, string>> | null = null;
+/** Automatic reconciliation is fail-closed: only the exact deployment value enables it. */
+function automaticReconciliationEnabled(env: ControllerEnv['Bindings']): boolean {
+  return env.LAUNCHPAD_CONTROL_PLANE_ENABLED === 'true';
+}
 
-/** Resolves typed Secrets Store bindings into the plain string bindings the controller consumes. Fails closed on resolution errors. */
+/**
+ * Resolves typed Secrets Store bindings into the plain string bindings the
+ * controller consumes. Values are fetched for every event so a store rotation
+ * takes effect without waiting for an isolate restart. Resolution is parallel
+ * and fails closed if any configured binding cannot be read.
+ */
 async function withSecrets(env: ControllerEnv['Bindings']): Promise<ControllerEnv['Bindings']> {
-  if (!resolvedSecrets) {
-    const secrets: Partial<Record<SecretName, string>> = {};
-    const operatorToken = await resolveSecret(env.SECRETS_OPERATOR_TOKEN) ?? env.OPERATOR_TOKEN;
-    if (operatorToken !== undefined) secrets.OPERATOR_TOKEN = operatorToken;
-    const internalToken = await resolveSecret(env.SECRETS_CONTROLLER_INTERNAL_TOKEN) ?? env.CONTROLLER_INTERNAL_TOKEN;
-    if (internalToken !== undefined) secrets.CONTROLLER_INTERNAL_TOKEN = internalToken;
-    const vercelToken = await resolveSecret(env.SECRETS_VERCEL_TOKEN) ?? env.VERCEL_TOKEN;
-    if (vercelToken !== undefined) secrets.VERCEL_TOKEN = vercelToken;
-    const cloudflareToken = await resolveSecret(env.SECRETS_CLOUDFLARE_TOKEN) ?? env.CLOUDFLARE_TOKEN;
-    if (cloudflareToken !== undefined) secrets.CLOUDFLARE_TOKEN = cloudflareToken;
-    const githubToken = await resolveSecret(env.SECRETS_GITHUB_TOKEN) ?? env.GITHUB_TOKEN;
-    if (githubToken !== undefined) secrets.GITHUB_TOKEN = githubToken;
-    const webhookSecret = await resolveSecret(env.SECRETS_VERCEL_WEBHOOK_SECRET) ?? env.VERCEL_WEBHOOK_SECRET;
-    if (webhookSecret !== undefined) secrets.VERCEL_WEBHOOK_SECRET = webhookSecret;
-    resolvedSecrets = secrets;
-  }
-  return { ...env, ...resolvedSecrets };
+  const [operatorToken, internalToken, vercelToken, cloudflareToken, githubToken, webhookSecret] = await Promise.all([
+    resolveSecret(env.SECRETS_OPERATOR_TOKEN).then((value) => value ?? env.OPERATOR_TOKEN),
+    resolveSecret(env.SECRETS_CONTROLLER_INTERNAL_TOKEN).then((value) => value ?? env.CONTROLLER_INTERNAL_TOKEN),
+    resolveSecret(env.SECRETS_VERCEL_TOKEN).then((value) => value ?? env.VERCEL_TOKEN),
+    resolveSecret(env.SECRETS_CLOUDFLARE_TOKEN).then((value) => value ?? env.CLOUDFLARE_TOKEN),
+    resolveSecret(env.SECRETS_GITHUB_TOKEN).then((value) => value ?? env.GITHUB_TOKEN),
+    resolveSecret(env.SECRETS_VERCEL_WEBHOOK_SECRET).then((value) => value ?? env.VERCEL_WEBHOOK_SECRET),
+  ]);
+  const secrets: Partial<Record<SecretName, string>> = {};
+  if (operatorToken !== undefined) secrets.OPERATOR_TOKEN = operatorToken;
+  if (internalToken !== undefined) secrets.CONTROLLER_INTERNAL_TOKEN = internalToken;
+  if (vercelToken !== undefined) secrets.VERCEL_TOKEN = vercelToken;
+  if (cloudflareToken !== undefined) secrets.CLOUDFLARE_TOKEN = cloudflareToken;
+  if (githubToken !== undefined) secrets.GITHUB_TOKEN = githubToken;
+  if (webhookSecret !== undefined) secrets.VERCEL_WEBHOOK_SECRET = webhookSecret;
+  return { ...env, ...secrets };
 }
 
 /**
@@ -126,6 +133,7 @@ function queueDependencies(env: ControllerEnv['Bindings'], store: LaunchpadRepos
   const fanout = createProviderEventFanout({
     limit: parseProviderEventFanoutLimit(env.PROVIDER_EVENT_FANOUT_LIMIT),
     shardCount: parseProviderEventShardCount(env.PROVIDER_EVENT_SHARD_COUNT),
+    enabled: automaticReconciliationEnabled(env),
     dependencies: {
       listManagedApplications: () => listApplicationIds(env),
       dispatchReconciliation: (input) => dispatchEventReconciliation(env, input.applicationId, input.envelope),
@@ -133,8 +141,8 @@ function queueDependencies(env: ControllerEnv['Bindings'], store: LaunchpadRepos
     },
   });
   return {
-    // provider-event envelopes fan out to durable reconciliation instances;
-    // every other kind forwards to the internal workflow endpoint.
+    // Provider-event envelopes always record their durable outcome; they fan
+    // out into reconciliation workflows only while runtime automation is enabled.
     dispatch: { dispatch: async (envelope) => {
       if (envelope.kind === 'provider-event') {
         await fanout.dispatch(envelope);
@@ -170,9 +178,13 @@ export default {
   async scheduled(_controller: ScheduledController, env: ControllerEnv['Bindings']): Promise<void> {
     const runtime = await withSecrets(env);
     const observability = buildObservability(runtime);
-    const dispatcher = createReconciliationWorkflowDispatcher(env.RECONCILE_WORKFLOW);
     const applicationIds = await listApplicationIds(env);
-    await dispatchScheduledReconciliation({ applicationIds, shardCount: parseReconciliationShardCount(env.RECONCILIATION_SHARD_COUNT), dispatcher });
+    if (automaticReconciliationEnabled(runtime)) {
+      const dispatcher = createReconciliationWorkflowDispatcher(runtime.RECONCILE_WORKFLOW);
+      await dispatchScheduledReconciliation({ applicationIds, shardCount: parseReconciliationShardCount(runtime.RECONCILIATION_SHARD_COUNT), dispatcher });
+    } else {
+      observability.logger.info('scheduled reconciliation skipped because the control plane is disabled', { step: 'scheduled/reconciliation', controlPlaneEnabled: false });
+    }
     // Failure observability pass: credential-expiry warnings (metadata only),
     // bounded metric snapshots, and the controller error-rate alert. Failures
     // here are logged, never fatal to the reconciliation dispatch above.

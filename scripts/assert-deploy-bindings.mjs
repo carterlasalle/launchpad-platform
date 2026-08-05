@@ -102,7 +102,7 @@ check(has(environment.queues?.consumers, (consumer) => consumer.queue === 'launc
 
 // Vars (non-inherited)
 const vars = environment.vars ?? {};
-for (const name of ['LAUNCHPAD_ENV', 'CONTROLLER_INTERNAL_URL', 'CONTROL_REPOSITORY', 'CONTROL_CATALOG_ROOT', 'RECONCILIATION_SHARD_COUNT', 'PROVIDER_EVENT_FANOUT_LIMIT', 'PROVIDER_EVENT_SHARD_COUNT', 'VERCEL_TEAM_ID', 'LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL', 'OIDC_ISSUER', 'OIDC_AUDIENCE', 'OIDC_JWKS']) {
+for (const name of ['LAUNCHPAD_ENV', 'LAUNCHPAD_CONTROL_PLANE_ENABLED', 'CONTROLLER_INTERNAL_URL', 'CONTROL_REPOSITORY', 'CONTROL_CATALOG_ROOT', 'RECONCILIATION_SHARD_COUNT', 'PROVIDER_EVENT_FANOUT_LIMIT', 'PROVIDER_EVENT_SHARD_COUNT', 'VERCEL_TEAM_ID', 'LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL', 'OIDC_ISSUER', 'OIDC_AUDIENCE', 'OIDC_JWKS']) {
   check(typeof vars[name] === 'string' && vars[name].length > 0, `[${envName}] vars must declare ${name}.`);
 }
 
@@ -154,6 +154,7 @@ if (concrete) {
   if (!placeholder.test(vars.VERCEL_TEAM_ID)) {
     check(teamId.test(vars.VERCEL_TEAM_ID), `[${envName}] vars.VERCEL_TEAM_ID must be a 'team_...' id or lowercase slug, got '${vars.VERCEL_TEAM_ID}'.`);
   }
+  check(vars.LAUNCHPAD_CONTROL_PLANE_ENABLED === 'true' || vars.LAUNCHPAD_CONTROL_PLANE_ENABLED === 'false', `[${envName}] vars.LAUNCHPAD_CONTROL_PLANE_ENABLED must be exactly 'true' or 'false', got '${String(vars.LAUNCHPAD_CONTROL_PLANE_ENABLED)}'.`);
   if (typeof vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL === 'string' && !placeholder.test(vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL)) {
     let httpsUrl = false;
     try {
@@ -163,6 +164,19 @@ if (concrete) {
       httpsUrl = false;
     }
     check(httpsUrl, `[${envName}] vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL must be an absolute, credential-free https:// URL, got '${vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL}'.`);
+  }
+  for (const name of ['CONTROLLER_INTERNAL_URL', 'OIDC_AUDIENCE']) {
+    const value = vars[name];
+    if (typeof value === 'string' && !placeholder.test(value)) {
+      let httpsUrl = false;
+      try {
+        const parsed = new URL(value);
+        httpsUrl = parsed.protocol === 'https:' && parsed.hostname.length > 0 && parsed.username === '' && parsed.password === '';
+      } catch {
+        httpsUrl = false;
+      }
+      check(httpsUrl, `[${envName}] vars.${name} must be an absolute, credential-free https:// URL, got '${value}'.`);
+    }
   }
 }
 

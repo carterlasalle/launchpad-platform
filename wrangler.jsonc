@@ -31,6 +31,7 @@
   },
   "vars": {
     "LAUNCHPAD_ENV": "development",
+    "LAUNCHPAD_CONTROL_PLANE_ENABLED": "false",
     "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787",
     "CONTROL_REPOSITORY": "carterlasalle/launchpad-platform",
     "CONTROL_CATALOG_ROOT": "catalog/apps",
@@ -43,9 +44,6 @@
     "LAUNCHPAD_ALERT_RECONCILIATION_THRESHOLD": "3",
     "LAUNCHPAD_ALERT_CREDENTIAL_EXPIRY_WINDOW_DAYS": "14",
     "LAUNCHPAD_ALERT_ERROR_RATE_THRESHOLD": "0.1",
-
-    "VERCEL_TEAM_ID": "replace-in-environment",
-    "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-environment",
     "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
     "OIDC_AUDIENCE": "https://launchpad.example.internal",
     "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
@@ -74,7 +72,8 @@
       },
       "vars": {
         "LAUNCHPAD_ENV": "production",
-        "CONTROLLER_INTERNAL_URL": "https://launchpad.example.internal",
+        "LAUNCHPAD_CONTROL_PLANE_ENABLED": "false",
+        "CONTROLLER_INTERNAL_URL": "replace-in-production",
         "CONTROL_REPOSITORY": "carterlasalle/launchpad-platform",
         "CONTROL_CATALOG_ROOT": "catalog/apps",
     "RECONCILIATION_SHARD_COUNT": "1",
@@ -90,7 +89,7 @@
         "VERCEL_TEAM_ID": "replace-in-production",
         "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-production",
         "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
-        "OIDC_AUDIENCE": "https://launchpad.example.internal",
+        "OIDC_AUDIENCE": "replace-in-production",
         "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
       },
       "secrets_store_secrets": [
@@ -125,7 +124,8 @@
       },
       "vars": {
         "LAUNCHPAD_ENV": "test",
-        "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787",
+        "LAUNCHPAD_CONTROL_PLANE_ENABLED": "false",
+        "CONTROLLER_INTERNAL_URL": "replace-in-test",
         "CONTROL_REPOSITORY": "carterlasalle/launchpad-platform",
         "CONTROL_CATALOG_ROOT": "catalog/apps",
     "RECONCILIATION_SHARD_COUNT": "1",
@@ -141,7 +141,7 @@
         "VERCEL_TEAM_ID": "replace-in-test",
         "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-test",
         "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
-        "OIDC_AUDIENCE": "https://launchpad.example.internal",
+        "OIDC_AUDIENCE": "replace-in-test",
         "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
       },
       "secrets_store_secrets": [

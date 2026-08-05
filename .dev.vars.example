@@ -1,0 +1,12 @@
+# Local Wrangler bindings only. Copy to .dev.vars; never reuse these example
+# values or commit real provider credentials.
+OPERATOR_TOKEN=replace-with-a-random-local-operator-token
+CONTROLLER_INTERNAL_TOKEN=replace-with-a-random-local-internal-token
+
+# Optional: required only when exercising provider-backed flows locally.
+VERCEL_TOKEN=
+VERCEL_TEAM_ID=
+CLOUDFLARE_TOKEN=
+GITHUB_TOKEN=
+VERCEL_WEBHOOK_SECRET=
+LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL=

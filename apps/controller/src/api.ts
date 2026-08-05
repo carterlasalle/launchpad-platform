@@ -559,6 +559,7 @@ async function dispatchInternal(context: Context<AppEnv>, dependencies: Controll
   const applicationId = typeof payload.applicationId === 'string' && payload.applicationId.length > 0 ? payload.applicationId : null;
   if (!applicationId) return errorResponse(context, 'LP-WORKFLOW-PAYLOAD-MISSING-APPLICATIONID', 'applicationId is required.', 400, false);
   const kind = context.req.param('kind');
+  if (!kind) return errorResponse(context, 'LP-WORKFLOW-KIND-MISSING', 'Workflow kind is required.', 400, false);
   const handler = phase ? (dependencies.workflowHandlers?.[`${kind}/${phase}`] ?? dependencies.workflowHandlers?.[kind]) : dependencies.workflowHandlers?.[kind];
   if (handler) {
     const startedAt = Date.now();
@@ -1613,11 +1614,15 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     });
   }
 
-  // Operator-triggered manual reconciliation: dispatches one durable
-  // RECONCILE_WORKFLOW instance per application (shard 0 of 1), so a manual
-  // provider change can be checked without waiting for the scheduled cron.
+  // Operator-triggered manual reconciliation dispatches one durable
+  // RECONCILE_WORKFLOW instance per application. GitHub-scheduled callers
+  // declare automatic=true and are gated by the deployed runtime flag.
   app.post('/v1/cli/reconcile', operatorMiddleware(dependencies), async (context) => {
     const body = await readJsonObject(context);
+    const automatic = body?.automatic === true;
+    if (automatic && context.env.LAUNCHPAD_CONTROL_PLANE_ENABLED !== 'true') {
+      return errorResponse(context, 'LP-CONTROL-PLANE-DISABLED', 'Automatic reconciliation is disabled until the deployed control-plane runtime gate is exactly true.', 409, false);
+    }
     const applicationIds = Array.isArray(body?.applicationIds) ? body.applicationIds.filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0) : [];
     if (applicationIds.length === 0) return errorResponse(context, 'LP-RECONCILE-APPLICATION-IDS-REQUIRED', 'applicationIds must be a non-empty array of application ids.', 400, false);
     const sourceCommit = typeof body?.sourceCommit === 'string' && /^[0-9a-f]{40}$/.test(body.sourceCommit) ? body.sourceCommit : undefined;
@@ -1631,7 +1636,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       const instance = await dispatcher.dispatch(envelope);
       instanceIds.push(instance.instanceId);
     }
-    await dependencies.store?.appendAudit({ actor: 'operator:dashboard', action: 'RECONCILE_REQUESTED', applicationId: 'platform', details: { applicationIds, sourceCommit: sourceCommit ?? null, instanceIds } });
+    await dependencies.store?.appendAudit({ actor: automatic ? 'automation:github-actions' : 'operator:dashboard', action: 'RECONCILE_REQUESTED', applicationId: 'platform', details: { applicationIds, sourceCommit: sourceCommit ?? null, instanceIds, automatic } });
     return context.json({ status: 'QUEUED', instanceIds, applicationIds }, 202);
   });
 
@@ -1855,6 +1860,9 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     return enqueueOidcOperation(context, dependencies, { kind: 'app-preview-status', applicationIdFromRoute: context.req.param('id'), body });
   });
   app.post('/v1/applications/:id/apply', oidcMiddleware(dependencies), async (context) => {
+    if (context.env.LAUNCHPAD_CONTROL_PLANE_ENABLED !== 'true') {
+      return errorResponse(context, 'LP-CONTROL-PLANE-DISABLED', 'Automatic apply is disabled until the deployed control-plane runtime gate is exactly true.', 409, false);
+    }
     const body = await readJsonObject(context);
     if (!body) return errorResponse(context, 'LP-REQUEST-BODY-INVALID', 'The request body must be a JSON object.', 400, false);
     if (typeof body.planFingerprint !== 'string' || body.planFingerprint.length === 0) return errorResponse(context, 'LP-PLAN-FINGERPRINT-REQUIRED', 'Apply requires a planFingerprint bound to the exact source commit.', 400, false);

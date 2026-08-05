@@ -157,6 +157,9 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Contr
     PROVIDER_EVENTS: queue,
     HEALTH_CHECKS: queue,
     LAUNCHPAD_ALERTS_ENABLED: 'true',
+    // Integration flows exercise a fully activated control plane unless a
+    // scenario explicitly overrides this gate.
+    LAUNCHPAD_CONTROL_PLANE_ENABLED: 'true',
     ...(options.envOverrides ?? {}),
   } as Record<string, unknown>;
 

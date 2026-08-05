@@ -46,6 +46,8 @@ export interface ControllerEnv {
     /** Deterministic provider-event fan-out shards (>= 1). */
     PROVIDER_EVENT_SHARD_COUNT?: string;
     LAUNCHPAD_ENV?: string;
+    /** Exact runtime gate for scheduled and provider-event reconciliation. */
+    LAUNCHPAD_CONTROL_PLANE_ENABLED?: string;
     LAUNCHPAD_LOG_LEVEL?: string;
     LAUNCHPAD_ALERTS_ENABLED?: string;
     LAUNCHPAD_ALERT_COOLDOWN_SECONDS?: string;

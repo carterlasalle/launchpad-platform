@@ -18,11 +18,14 @@
  *   LAUNCHPAD_SECRETS_STORE_ID                Workers Secrets Store id (32 hex characters)
  *   LAUNCHPAD_VERCEL_TEAM_ID                  Vercel team id ("team_..." id or lowercase slug)
  *   LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL  HTTPS authoritative DNS resolver endpoint
+ *   LAUNCHPAD_CONTROLLER_URL                   Public HTTPS controller URL
+ *   LAUNCHPAD_OIDC_AUDIENCE                    GitHub Actions OIDC audience URI
+ *   LAUNCHPAD_CONTROL_PLANE_ENABLED             Exact `true` enables automatic reconciliation; absent or `false` keeps it dormant
  *
  * Usage:
  *   LAUNCHPAD_D1_DATABASE_ID=... LAUNCHPAD_SECRETS_STORE_ID=... \
  *     LAUNCHPAD_VERCEL_TEAM_ID=... \
- *     LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL=... \
+ *     LAUNCHPAD_CONTROLLER_URL=... LAUNCHPAD_OIDC_AUDIENCE=... \
  *     node scripts/render-wrangler-config.mjs --env production --output wrangler.deploy.json
  *
  * The command is deterministic: the same template and variables yield
@@ -100,6 +103,14 @@ function readIdentifier(name, formatCheck, formatDescription, normalize) {
   return { ok: true, value: normalize(value) };
 }
 
+/** Defaults to disabled and rejects ambiguous values so GitHub and Worker gates cannot diverge. */
+function readControlPlaneEnabled() {
+  const value = process.env.LAUNCHPAD_CONTROL_PLANE_ENABLED;
+  if (value === undefined || value === '' || value === 'false') return { ok: true, value: 'false' };
+  if (value === 'true') return { ok: true, value: 'true' };
+  return { ok: false, error: `LAUNCHPAD_CONTROL_PLANE_ENABLED must be exactly 'true' or 'false', got '${value}'.` };
+}
+
 const { options, errors } = parseArgs(process.argv.slice(2));
 if (errors.length > 0) {
   console.error(errors.join('\n'));
@@ -119,19 +130,22 @@ if (FORBIDDEN_OUTPUTS.has(options.output)) {
   process.exit(2);
 }
 
+const controlPlaneEnabled = readControlPlaneEnabled();
 const identifiers = [
   readIdentifier('LAUNCHPAD_D1_DATABASE_ID', HEX_ID_RE, 'a 32-hex-character id', (value) => value.toLowerCase()),
   readIdentifier('LAUNCHPAD_SECRETS_STORE_ID', HEX_ID_RE, 'a 32-hex-character id', (value) => value.toLowerCase()),
   readIdentifier('LAUNCHPAD_VERCEL_TEAM_ID', VERCEL_TEAM_ID_RE, 'a "team_..." id or lowercase slug', (value) => value),
   readIdentifier('LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
+  readIdentifier('LAUNCHPAD_CONTROLLER_URL', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
+  readIdentifier('LAUNCHPAD_OIDC_AUDIENCE', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
 ];
-const failures = identifiers.filter((identifier) => !identifier.ok);
+const failures = [...identifiers, controlPlaneEnabled].filter((identifier) => !identifier.ok);
 if (failures.length > 0) {
   console.error('Cannot render Wrangler config:');
   for (const { error } of failures) console.error(`  - ${error}`);
   process.exit(1);
 }
-const [d1Id, storeId, teamId, resolverUrl] = identifiers.map((identifier) => identifier.value);
+const [d1Id, storeId, teamId, resolverUrl, controllerUrl, oidcAudience] = identifiers.map((identifier) => identifier.value);
 
 let template;
 try {
@@ -158,6 +172,14 @@ if (typeof environment.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL !== 'strin
   console.error(`${TEMPLATE} must declare vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL for '${options.env}'.`);
   process.exit(1);
 }
+if (typeof environment.vars?.CONTROLLER_INTERNAL_URL !== 'string') {
+  console.error(`${TEMPLATE} must declare vars.CONTROLLER_INTERNAL_URL for '${options.env}'.`);
+  process.exit(1);
+}
+if (typeof environment.vars?.OIDC_AUDIENCE !== 'string') {
+  console.error(`${TEMPLATE} must declare vars.OIDC_AUDIENCE for '${options.env}'.`);
+  process.exit(1);
+}
 
 const rendered = JSON.parse(JSON.stringify(template));
 const selected = rendered.env[options.env];
@@ -165,6 +187,9 @@ for (const database of selected.d1_databases) database.database_id = d1Id;
 for (const binding of selected.secrets_store_secrets) binding.store_id = storeId;
 selected.vars.VERCEL_TEAM_ID = teamId;
 selected.vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL = resolverUrl;
+selected.vars.CONTROLLER_INTERNAL_URL = controllerUrl;
+selected.vars.OIDC_AUDIENCE = oidcAudience;
+selected.vars.LAUNCHPAD_CONTROL_PLANE_ENABLED = controlPlaneEnabled.value;
 
 const outputPath = join(root, options.output);
 try {
@@ -174,5 +199,5 @@ try {
   process.exit(1);
 }
 console.log(
-  `Rendered ${options.output} for environment '${options.env}': ${selected.d1_databases.length} D1 database id, ${selected.secrets_store_secrets.length} secrets store ids, VERCEL_TEAM_ID, and LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL substituted; all other fields preserved.`
+  `Rendered ${options.output} for environment '${options.env}': ${selected.d1_databases.length} D1 database id, ${selected.secrets_store_secrets.length} secrets store ids, VERCEL_TEAM_ID, LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL, CONTROLLER_INTERNAL_URL, OIDC_AUDIENCE, and LAUNCHPAD_CONTROL_PLANE_ENABLED substituted; all other fields preserved.`
 );

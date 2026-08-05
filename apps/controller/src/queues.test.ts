@@ -302,6 +302,28 @@ describe('createProviderEventFanout', () => {
     expect(outcomes).toEqual([outcome]);
   });
 
+  it('records provider events without reconciliation dispatch while automatic reconciliation is disabled', async () => {
+    const dispatched: Array<{ applicationId: string; envelope: QueueEnvelope }> = [];
+    const outcomes: ProviderEventFanOutcome[] = [];
+    const options = {
+      limit: 100,
+      enabled: false,
+      dependencies: {
+        listManagedApplications: async () => ['alpha', 'beta'],
+        dispatchReconciliation: async (input: { applicationId: string; envelope: QueueEnvelope }) => {
+          dispatched.push(input);
+          return { instanceId: input.applicationId };
+        },
+        recordOutcome: async (outcome: ProviderEventFanOutcome) => { outcomes.push(outcome); },
+      },
+    };
+    const disabledFanout = createProviderEventFanout(options);
+
+    await expect(disabledFanout.dispatch(eventEnvelope())).resolves.toEqual({ eventId: 'evt-1', type: 'deployment.created', applications: 2, dispatched: 0 });
+    expect(dispatched).toEqual([]);
+    expect(outcomes).toEqual([{ eventId: 'evt-1', type: 'deployment.created', applications: 2, dispatched: 0 }]);
+  });
+
   it('assigns deterministic shards from the envelope id so redeliveries hit the same applications', async () => {
     const first = fanout({}, { shardCount: 2 });
     await first.fanoutRef.dispatch(eventEnvelope());

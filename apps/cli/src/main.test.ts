@@ -575,6 +575,36 @@ describe('health', () => {
     expect(results.applications[0]?.result.result).toBe('PASSED');
     rmSync(catalog, { recursive: true, force: true });
   });
+
+  it('uses the requested environment health policy and records that environment', async () => {
+    const catalog = tempCatalog();
+    const manifest = join(catalog, 'apps', 'invalid-root.yaml');
+    writeFileSync(manifest, readFileSync(manifest, 'utf8').replace(
+      'production: {enabled: true, health: {path: /api/health,',
+      'production: {enabled: true, health: {path: /readyz,',
+    ));
+    stubFetch([{ match: /https:\/\/prod\.example\.com\/readyz/, response: () => new Response('ok', { status: 200 }) }]);
+    const out = writer();
+
+    const exitCode = await runCli(['health', '--catalog', catalog, '--sha', sha, '--environment', 'production', '--url', 'https://prod.example.com'], out);
+
+    expect(exitCode).toBe(0);
+    const results = JSON.parse(out.text) as { applications: Array<{ result: { environment: string } }> };
+    expect(results.applications[0]?.result.environment).toBe('production');
+    rmSync(catalog, { recursive: true, force: true });
+  });
+
+
+  it('rejects a health check for an environment the application does not enable', async () => {
+    const catalog = tempCatalog();
+    await expect(runCli(['health', '--catalog', catalog, '--sha', sha, '--environment', 'staging', '--url', 'https://staging.example.com'], writer())).rejects.toThrow(/LP-ENVIRONMENT-NOT-CONFIGURED/);
+    rmSync(catalog, { recursive: true, force: true });
+  });
+  it('rejects an unknown health environment', async () => {
+    const catalog = tempCatalog();
+    await expect(runCli(['health', '--catalog', catalog, '--sha', sha, '--environment', 'qa', '--url', 'https://qa.example.com'], writer())).rejects.toThrow(/LP-ENVIRONMENT-INVALID/);
+    rmSync(catalog, { recursive: true, force: true });
+  });
 });
 
 describe('status', () => {
@@ -779,7 +809,7 @@ describe('controller token selection', () => {
       oidcRoute(),
       { match: /\/v1\/cli\/reconcile$/, response: (url, init) => {
         expect(bearerOf(init)).toBe('Bearer operator-token');
-        expect(JSON.parse(String(init?.body))).toMatchObject({ applicationIds: ['invalid-root'] });
+        expect(JSON.parse(String(init?.body))).toMatchObject({ applicationIds: ['invalid-root'], automatic: false });
         return jsonResponse({ status: 'QUEUED', instanceIds: ['wf-1'], applicationIds: ['invalid-root'] }, 202);
       } },
     ]);
@@ -787,6 +817,21 @@ describe('controller token selection', () => {
     const exitCode = await runCli(['reconcile', '--catalog', catalog, '--controller', controller], out);
     expect(exitCode).toBe(0);
     expect(JSON.parse(out.text)).toMatchObject({ status: 'QUEUED', instanceIds: ['wf-1'] });
+    rmSync(catalog, { recursive: true, force: true });
+  });
+
+  it('marks a scheduled reconciliation request as automatic only when explicitly configured', async () => {
+    const catalog = tempCatalog();
+    bothEnv();
+    vi.stubEnv('LAUNCHPAD_AUTOMATED_RECONCILIATION', 'true');
+    stubFetch([
+      oidcRoute(),
+      { match: /\/v1\/cli\/reconcile$/, response: (url, init) => {
+        expect(JSON.parse(String(init?.body))).toMatchObject({ applicationIds: ['invalid-root'], automatic: true });
+        return jsonResponse({ status: 'QUEUED', instanceIds: ['wf-1'], applicationIds: ['invalid-root'] }, 202);
+      } },
+    ]);
+    await expect(runCli(['reconcile', '--catalog', catalog, '--controller', controller], writer())).resolves.toBe(0);
     rmSync(catalog, { recursive: true, force: true });
   });
 

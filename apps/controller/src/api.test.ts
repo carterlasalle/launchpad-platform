@@ -168,7 +168,7 @@ function createHarness(overrides: Partial<Parameters<typeof createControllerApp>
     },
     ...overrides,
   });
-  const env: Record<string, unknown> = { APPLY_WORKFLOW: binding, PREVIEW_WORKFLOW: binding, APP_PREVIEW_STATUS_WORKFLOW: binding, RECONCILE_WORKFLOW: binding, DECOMMISSION_WORKFLOW: binding, PROVIDER_EVENTS: { send: async () => undefined }, HEALTH_CHECKS: { send: async () => undefined }, ...envOverrides };
+  const env: Record<string, unknown> = { APPLY_WORKFLOW: binding, PREVIEW_WORKFLOW: binding, APP_PREVIEW_STATUS_WORKFLOW: binding, RECONCILE_WORKFLOW: binding, DECOMMISSION_WORKFLOW: binding, PROVIDER_EVENTS: { send: async () => undefined }, HEALTH_CHECKS: { send: async () => undefined }, LAUNCHPAD_CONTROL_PLANE_ENABLED: 'true', ...envOverrides };
   return { app, store, workflowCalls, handlersCalled, env };
 }
 
@@ -477,6 +477,30 @@ describe('durable enqueue contract', () => {
       expect(response.status).toBe(400);
     }
     expect(harness.workflowCalls).toHaveLength(0);
+  });
+
+  it('blocks OIDC apply while the runtime control-plane gate is disabled', async () => {
+    const harness = createHarness({}, { LAUNCHPAD_CONTROL_PLANE_ENABLED: 'false' });
+    const token = await signToken(baseClaims());
+    const response = await request(harness, '/v1/applications/app-demo/apply', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-CONTROL-PLANE-DISABLED', retryable: false } });
+    expect(harness.workflowCalls).toHaveLength(0);
+  });
+
+  it('blocks automatic reconciliation while the runtime control-plane gate is disabled', async () => {
+    const harness = createHarness({}, { LAUNCHPAD_CONTROL_PLANE_ENABLED: 'false' });
+    const response = await request(harness, '/v1/cli/reconcile', { method: 'POST', body: JSON.stringify({ applicationIds: ['app-demo'], automatic: true }), headers: { 'content-type': 'application/json', ...bearer('operator-token') } });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-CONTROL-PLANE-DISABLED', retryable: false } });
+    expect(harness.workflowCalls).toHaveLength(0);
+  });
+
+  it('keeps explicit operator reconciliation available while the runtime control-plane gate is disabled', async () => {
+    const harness = createHarness({}, { LAUNCHPAD_CONTROL_PLANE_ENABLED: 'false' });
+    const response = await request(harness, '/v1/cli/reconcile', { method: 'POST', body: JSON.stringify({ applicationIds: ['app-demo'], automatic: false }), headers: { 'content-type': 'application/json', ...bearer('operator-token') } });
+    expect(response.status).toBe(202);
+    expect(harness.workflowCalls).toHaveLength(1);
   });
 
   it('enqueues health runs against the dedicated app-preview-status workflow', async () => {

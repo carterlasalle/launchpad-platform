@@ -349,6 +349,8 @@ export interface ProviderEventFanoutOptions {
   limit: number;
   /** Deterministic shard assignment: when > 1, each consumer reconciles only its stable share of sorted managed applications. */
   shardCount?: number;
+  /** When false, record the webhook event but do not start reconciliation workflows. */
+  enabled?: boolean;
   dependencies: ProviderEventFanoutDependencies;
 }
 
@@ -395,15 +397,16 @@ export function parseProviderEventShardCount(value: string | undefined): number 
 }
 
 /**
- * Provider-event consumer: fans out one sanitized envelope into durable
- * reconciliation instances for managed applications. Deterministic ordering
- * (sorted ids) and shard assignment (envelope-id hash) keep redeliveries
- * identical; the outcome is recorded only after every dispatch succeeded, so
- * an acknowledgement implies durable dispatch. Payload state is ignored.
+ * Provider-event consumer: records one sanitized envelope outcome for managed
+ * applications and, when enabled, fans it out into durable reconciliation
+ * instances. Deterministic ordering (sorted ids) and shard assignment
+ * (envelope-id hash) keep redeliveries identical; the outcome is recorded
+ * only after every enabled dispatch succeeds. Payload state is ignored.
  */
 export function createProviderEventFanout(options: ProviderEventFanoutOptions): ProviderEventFanout {
   const limit = options.limit;
   const shardCount = options.shardCount ?? 1;
+  const reconciliationEnabled = options.enabled !== false;
   if (!Number.isInteger(limit) || limit < 1) throw failClosed('LP-PROVIDER-EVENT-FANOUT-LIMIT-INVALID', 'permanent', `The provider-event fan-out limit must be a positive integer, got '${String(limit)}'.`);
   if (!Number.isInteger(shardCount) || shardCount < 1) throw failClosed('LP-PROVIDER-EVENT-SHARD-COUNT-INVALID', 'permanent', `The provider-event shard count must be a positive integer, got '${String(shardCount)}'.`);
   return {
@@ -419,6 +422,7 @@ export function createProviderEventFanout(options: ProviderEventFanoutOptions): 
         const applicationId = applicationIds[index];
         if (typeof applicationId !== 'string' || applicationId.length === 0) throw new QueueFailure('LP-PROVIDER-EVENT-APPLICATION-ID-INVALID', 'permanent', 'Managed application ids must be non-empty strings.');
         if (shardCount > 1 && index % shardCount !== shard) continue;
+        if (!reconciliationEnabled) continue;
         await options.dependencies.dispatchReconciliation({ applicationId, envelope });
         dispatched += 1;
         if (dispatched >= limit) break;
