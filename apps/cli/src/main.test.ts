@@ -192,10 +192,11 @@ lifecycle: {}
 });
 
 describe('plan', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
   it('fails closed without an exact commit SHA', async () => {
     const catalog = tempCatalog();
+    vi.stubEnv('GITHUB_SHA', '');
     await expect(runCli(['plan', '--catalog', catalog], writer())).rejects.toThrow(/LP-COMMIT-UNBOUND/);
   });
 

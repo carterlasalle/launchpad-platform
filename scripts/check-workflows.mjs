@@ -2,12 +2,13 @@
 /**
  * Verifies GitHub Actions hygiene for every workflow and composite action:
  *
- *  1. All third-party `uses:` references are pinned to immutable commit SHAs
+ *  1. Every file is valid YAML with unique mapping keys.
+ *  2. All third-party `uses:` references are pinned to immutable commit SHAs
  *     (40-hex) or local `./` actions; `docker://` images must pin a
  *     `@sha256:` digest; expressions in `uses:` are rejected.
- *  2. Every workflow declares top-level `permissions: {}` and grants only
+ *  3. Every workflow declares top-level `permissions: {}` and grants only
  *     job-level permissions (workflow security baseline, master plan 25.2).
- *  3. setup-node must not request Yarn caching before the repository's local
+ *  4. setup-node must not request Yarn caching before the repository's local
  *     setup action enables Corepack; GitHub-hosted runners otherwise invoke
  *     their global Yarn 1 and fail before immutable installation can begin.
  *
@@ -17,6 +18,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseDocument } from 'yaml';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const failures = [];
@@ -46,7 +48,10 @@ for (const filePath of [...workflowFiles, ...actionFiles]) {
   filesChecked += 1;
   const relative = filePath.slice(root.length + 1);
   const isWorkflow = relative.startsWith('.github/workflows/');
-  const lines = readFileSync(filePath, 'utf8').split('\n');
+  const source = readFileSync(filePath, 'utf8');
+  const document = parseDocument(source, { uniqueKeys: true });
+  for (const error of document.errors) failures.push(`${relative}: invalid YAML: ${error.message}`);
+  const lines = source.split('\n');
 
   let topLevelPermissions = false;
   let permissionsValue = null;
@@ -95,4 +100,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log(`Workflow security verified: ${filesChecked} workflow/action file(s); all third-party actions SHA-pinned, all workflows start with permissions: {}, and setup-node never invokes Yarn before Corepack.`);
+console.log(`Workflow security verified: ${filesChecked} workflow/action file(s); all YAML is valid, all third-party actions SHA-pinned, all workflows start with permissions: {}, and setup-node never invokes Yarn before Corepack.`);

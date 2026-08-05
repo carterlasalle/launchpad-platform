@@ -40,7 +40,8 @@ jobs:
           expected_sha: ${{ env.HEAD_SHA }}
           token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: ${{ env.NODE_VERSION }} }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-launchpad
       - run: yarn typecheck
       - run: yarn platform validate --catalog catalog
@@ -63,7 +64,8 @@ jobs:
           expected_sha: ${{ env.HEAD_SHA }}
           token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: ${{ env.NODE_VERSION }} }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-launchpad
       - run: yarn test
 
@@ -86,7 +88,8 @@ jobs:
           expected_sha: ${{ env.HEAD_SHA }}
           token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: ${{ env.NODE_VERSION }} }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-launchpad
       - run: yarn platform preflight --catalog catalog --format json
         env:
@@ -113,7 +116,8 @@ jobs:
           expected_sha: ${{ env.HEAD_SHA }}
           token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: ${{ env.NODE_VERSION }} }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-launchpad
       - run: yarn platform plan --catalog catalog --sha ${{ env.HEAD_SHA }} --format json --output artifacts
         env:
@@ -151,7 +155,8 @@ jobs:
           expected_sha: ${{ env.HEAD_SHA }}
           token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: ${{ env.NODE_VERSION }} }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-launchpad
       - uses: actions/download-artifact@65a9edc5881444af0b909df76e214148ea5671c6
         with:
@@ -186,7 +191,8 @@ jobs:
           expected_sha: ${{ env.HEAD_SHA }}
           token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: ${{ env.NODE_VERSION }} }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-launchpad
       - uses: actions/download-artifact@65a9edc5881444af0b909df76e214148ea5671c6
         continue-on-error: true
@@ -278,7 +284,8 @@ jobs:
           name: launchpad-health
           path: report/health
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: ${{ env.NODE_VERSION }} }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - uses: ./.github/actions/setup-launchpad
       - name: Publish aggregated Launchpad report comment
         if: ${{ !github.event.pull_request.head.repo.fork }}
