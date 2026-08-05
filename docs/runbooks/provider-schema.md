@@ -33,7 +33,7 @@ never the core domain.
    (`deploy-control-plane.yml`, gated on the static foundation checks) and
    re-run a disposable fixture operation:
    `yarn platform preflight --catalog catalog`
-   `yarn platform reconcile --catalog catalog --dry-run`
+   `yarn platform reconcile --catalog catalog --dry-run --sha "$(git rev-parse HEAD)"`
 
 ## Validation
 

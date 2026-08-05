@@ -52,9 +52,10 @@ that cannot run fails the release; nothing is claimed from memory.
 ## Supply chain and dependency review
 
 - Dependency automation is active: Renovate (`renovate.json`) opens update
-  PRs and the `dependency / review` workflow
+  PRs and the private-repository-compatible `dependency / review` workflow
   (`.github/workflows/dependency-review.yml`) is green on every dependency
   PR and is a required status check on `main`.
+- `yarn npm audit --all --recursive --severity high` reports no findings.
 - `yarn.lock` is current and immutable installs are enforced
   (`.yarnrc.yml`, `setup-launchpad` action).
 
@@ -67,9 +68,10 @@ that cannot run fails the release; nothing is claimed from memory.
     latest-push-approval, conversation-resolution, status-check, strict
     up-to-date, no-force-push, no-deletion, and no-creation rules match
     `.github/rulesets/main.json`.
-  - Required checks `platform / schema`, `platform / catalog`,
-    `platform / provider-preflight`, `platform / plan`, `platform / preview`,
-    `platform / health`, and `dependency / review` are all required.
+  - Required checks `static / toolchain`, `static / quality`,
+    `platform / summary`, and `dependency / review` are all required.
+    `platform / summary` aggregates schema, catalog, provider preflight,
+    plan, preview, and health for relevant platform changes.
   - Squash-merge-only repository settings and `main` default branch verified.
 - Unavailability or mismatch fails the release (deploy gate in
   `.github/workflows/deploy-control-plane.yml`).

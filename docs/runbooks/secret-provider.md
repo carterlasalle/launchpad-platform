@@ -29,13 +29,13 @@ promotions, and never substitute an empty or stale secret value.
    cause is a credential).
 2. Run a read-only reference existence check and fingerprint comparison:
    `yarn platform preflight --catalog catalog`
-   `yarn platform reconcile --catalog catalog --dry-run`
+   `yarn platform reconcile --catalog catalog --dry-run --sha "$(git rev-parse HEAD)"`
 3. Stage a new candidate: Vercel environment values are deployment-scoped,
    so a fixed secret requires a fresh staged build, not re-promoting the
    old candidate.
 4. Run candidate and production health checks before promotion:
-   `yarn platform health --catalog catalog --environment staging`
-   `yarn platform health --catalog catalog --environment production`
+   - Candidate: `yarn platform health --catalog catalog --app <application-id> --environment staging --sha <merged-commit-sha> --url 'https://<candidate-hostname>'`.
+   - Production: `yarn platform health --catalog catalog --app <application-id> --environment production --sha <merged-commit-sha> --url 'https://<production-hostname>'`.
 5. Scan all release artifacts for the canary secret before declaring
    success (automated leak checks in the release gates).
 

@@ -16,11 +16,11 @@ platform owner (see `.github/CODEOWNERS`).
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| 0001 | No Terraform / OpenTofu | Accepted |
-| 0002 | No custom GitHub App | Accepted |
-| 0003 | Cloudflare Worker / Workflows / D1 control plane | Accepted |
-| 0004 | Git as the desired state | Accepted |
-| 0005 | Open-PR reconciliation default | Accepted |
-| 0006 | Staged production promotion | Accepted |
-| 0007 | Node.js and Yarn toolchain pinning | Accepted |
-| 0008 | Automated dependency updates through reviewed PRs | Accepted |
+| [0001](0001-no-terraform.md) | No Terraform / OpenTofu | Accepted |
+| [0002](0002-no-custom-github-app.md) | No custom GitHub App | Accepted |
+| [0003](0003-cloudflare-control-plane.md) | Cloudflare Worker / Workflows / D1 control plane | Accepted |
+| [0004](0004-git-as-desired-state.md) | Git as the desired state | Accepted |
+| [0005](0005-open-pr-reconciliation.md) | Open-PR reconciliation default | Accepted |
+| [0006](0006-staged-production-promotion.md) | Staged production promotion | Accepted |
+| [0007](0007-toolchain-node-yarn.md) | Node.js and Yarn toolchain pinning | Accepted |
+| [0008](0008-dependency-automation.md) | Automated dependency updates through reviewed PRs | Accepted |

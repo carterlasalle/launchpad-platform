@@ -21,9 +21,13 @@ version-update automation.
 - Node updates stay on the 24 LTS line; exact patch changes to Node/Yarn
   must also update the ADR-0007 decision record and are verified by
   `scripts/check-toolchain.mjs`.
-- `actions/dependency-review-action` (`.github/workflows/dependency-review.yml`)
-  fails PRs that introduce high-severity vulnerabilities, and dependency
-  review is a required status check on protected `main`.
+- The required `dependency / review` workflow runs
+  `yarn npm audit --all --recursive --severity high` whenever a package
+  manifest or `yarn.lock` changes. It fails on any high/critical advisory in
+  the complete workspace graph, not only newly introduced findings. This
+  repository-owned gate works for a user-owned private repository without
+  requiring GitHub Code Security; the native dependency-review API is not
+  available in that repository class.
 - Every third-party Action in production workflows is pinned to an immutable
   40-hex commit SHA; `scripts/check-workflows.mjs` enforces this and top-level
   `permissions: {}` in CI and the release gate. Renovate keeps the pinned

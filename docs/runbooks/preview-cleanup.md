@@ -43,7 +43,7 @@ and keep cleanup failures visible instead of silently accumulating.
 - The shadow project returns 404 on a follow-up GET, and the cleanup backlog
   decreases:
   `yarn wrangler d1 execute launchpad --remote --command "SELECT status, COUNT(*) FROM cleanup_jobs GROUP BY status"`
-- Production projects/domains are untouched; `yarn platform status --catalog catalog` shows no production drift.
+- Production projects/domains are untouched; `yarn platform status --catalog catalog --controller "$LAUNCHPAD_CONTROLLER_URL"` shows no production drift.
 
 ## Escalation
 

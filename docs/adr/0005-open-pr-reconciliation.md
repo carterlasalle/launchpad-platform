@@ -21,7 +21,7 @@ silently overwriting manual changes or destroying resources (TR-REC-001..006).
   review, and approval gates remain in force.
 - Reconciliation never automatically destroys resources; loss of provider
   access is represented as `UNKNOWN`/`BLOCKED`, never `SYNCED` (TR-REC-006).
-- `yarn platform reconcile --catalog catalog --dry-run` performs a read-only
+- `yarn platform reconcile --catalog catalog --dry-run --sha "$(git rev-parse HEAD)"` performs a read-only
   check; the write path goes through the controller
   (`POST /v1/cli/reconcile`).
 

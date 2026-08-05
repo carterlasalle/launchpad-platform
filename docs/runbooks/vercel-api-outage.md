@@ -31,7 +31,7 @@ outage, and resume only through the normal review/apply path.
   `curl -sS -X POST "$LAUNCHPAD_CONTROLLER_URL/v1/applications/<id>/actions/retry" -H "Authorization: Bearer $LAUNCHPAD_OPERATOR_TOKEN" -H "Idempotency-Key: <original-key>"`
 - Re-run the read-only path first:
   `yarn platform preflight --catalog catalog`
-  `yarn platform plan --catalog catalog --format json`
+  `yarn platform plan --catalog catalog --sha <merged-commit-sha> --format json`
   Verify the plan fingerprint is current for the merged SHA
   (`yarn platform apply --catalog catalog --sha <sha> --controller "$LAUNCHPAD_CONTROLLER_URL"` revalidates before writing).
 - If a catalog change is mid-flight, push a corrected revision through a PR;
@@ -39,7 +39,7 @@ outage, and resume only through the normal review/apply path.
 
 ## Validation
 
-- `yarn platform health --catalog catalog --environment production` passes
+- `yarn platform health --catalog catalog --app <application-id> --environment production --sha <merged-commit-sha> --url 'https://<production-hostname>'` passes
   against the production domain (HTTP status per the configured spec).
 - Vercel domain verification and TLS are green for the intended domain:
   `curl -sS "https://api.vercel.com/v9/projects/<project>/domains" -H "Authorization: Bearer $LAUNCHPAD_VERCEL_TOKEN"`

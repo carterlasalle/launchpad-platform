@@ -42,14 +42,14 @@ loudly when no known-good target exists or the rollback itself fails.
 
 ## Validation
 
-- Health check against the current production domain passes, with DNS/TLS/
-  status/body evidence captured:
-  `yarn platform health --catalog catalog --environment production`
+- The production health check passes with DNS, TLS, latency, status, and
+  body evidence captured:
+  `yarn platform health --catalog catalog --app <application-id> --environment production --sha <restored-commit-sha> --url 'https://<production-hostname>'`.
 - The production alias points at the restored deployment (Vercel API or
   `dig` for the production hostname).
 - After recovery, record the restored deployment and re-run reconciliation
   from protected `main`:
-  `yarn platform reconcile --catalog catalog --dry-run`
+  `yarn platform reconcile --catalog catalog --dry-run --sha "$(git rev-parse HEAD)"`
 - The original workflow run is still `FAILED` with its `error_code`
   (`SELECT id, status, error_code FROM workflow_runs WHERE application_id = '<id>' ORDER BY started_at DESC LIMIT 5`).
 

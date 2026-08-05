@@ -29,7 +29,7 @@ API is unavailable; repository and review state is unknown during the outage.
   SHA:
   `yarn platform validate --catalog catalog`
   `yarn platform preflight --catalog catalog`
-  `yarn platform plan --catalog catalog --format json`
+  `yarn platform plan --catalog catalog --sha <merged-commit-sha> --format json`
   `LAUNCHPAD_RULESET_TOKEN=<token> GITHUB_REPOSITORY=carterlasalle/launchpad-platform node scripts/verify-ruleset.mjs`
 - Compare the plan fingerprint with the one approved for the merged SHA; a
   mismatch means the plan is stale and apply must not proceed

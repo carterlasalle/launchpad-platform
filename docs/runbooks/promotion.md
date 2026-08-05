@@ -32,9 +32,10 @@ staged health must be proven before production aliases change.
 
 ## Validation
 
-- Staged health passed for the candidate before promotion
-  (`yarn platform health --catalog catalog --environment staging`).
-- After promotion: `yarn platform health --catalog catalog --environment production`
+- Staged health passed for the candidate before promotion:
+  `yarn platform health --catalog catalog --app <application-id> --environment staging --sha <merged-commit-sha> --url 'https://<candidate-hostname>'`.
+- After promotion,
+  `yarn platform health --catalog catalog --app <application-id> --environment production --sha <merged-commit-sha> --url 'https://<production-hostname>'`
   passes against the production domain.
 - The deployment/promotion records show the exact intended commit:
   `yarn wrangler d1 execute launchpad --remote --command "SELECT deployment_id, previous_deployment_id, result, promoted_at FROM deployment_promotions WHERE application_id = '<id>' ORDER BY promoted_at DESC LIMIT 5"`

@@ -35,12 +35,21 @@ secret and without giving any single token more scope than its purpose.
    purpose (fine-grained GitHub token with only the selected repositories;
    Vercel token scoped to the required projects/team; Cloudflare token
    scoped to the required zones and DNS edit permissions).
-2. Store the replacement in the matching GitHub environment secret
-   (`launchpad-production`, `launchpad-control-plane`) or Worker secret:
-   `yarn wrangler secret put <NAME> --env production`
+2. Update every consumer of that credential before revoking the old value:
+   - GitHub, Vercel, and Cloudflare provider tokens are used by both PR/apply
+     workflows and the Worker, so update the matching protected GitHub secret
+     **and** the named Worker Secrets Store entry.
+   - Operator, controller-internal, and webhook credentials that are consumed
+     only by the Worker need only their named Secrets Store entry updated.
+   Update a Secrets Store entry interactively (omit `--value`):
+   `yarn wrangler secrets-store secret update '<STORE_ID>' --secret-id '<SECRET_ID>' --scopes workers --remote`
+   Use `yarn wrangler secrets-store secret list '<STORE_ID>' --remote` to
+   locate metadata; see the [deployment guide](../guides/deployment.md).
+   The Worker resolves bindings on every event, so a stored value takes effect
+   after provider propagation without a Worker redeploy.
 3. Run read-only checks against a disposable fixture, then the catalog:
    `yarn platform preflight --catalog catalog`
-   `yarn platform reconcile --catalog catalog --dry-run`
+   `yarn platform reconcile --catalog catalog --dry-run --sha "$(git rev-parse HEAD)"`
 4. Revoke the old token only after the replacement read and write checks
    succeed.
 5. Record owner, purpose, expiration metadata, rotation time, and

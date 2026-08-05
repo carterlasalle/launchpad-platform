@@ -24,8 +24,8 @@ post-promotion, with rollback to a previously recorded known-good deployment.
 - Post-promotion health failure triggers rollback and leaves the release
   operation failed (fail loud, PRD-APL-008).
 - The operator-facing health check is
-  `yarn platform health --catalog catalog --environment production`, which
-  exercises the production domain over HTTPS.
+  `yarn platform health --catalog catalog --app <application-id> --environment production --sha <merged-commit-sha> --url 'https://<production-hostname>'`,
+  which exercises the production domain over HTTPS.
 
 ## Consequences
 
