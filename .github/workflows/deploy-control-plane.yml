@@ -29,7 +29,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .node-version
-          cache: yarn
       - uses: ./.github/actions/setup-launchpad
       - name: Verify toolchain decision record
         run: node scripts/check-toolchain.mjs
@@ -61,7 +60,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .node-version
-          cache: yarn
       - uses: ./.github/actions/setup-launchpad
       - run: yarn typecheck && yarn test && yarn build
       - name: Render production Wrangler config from environment variables

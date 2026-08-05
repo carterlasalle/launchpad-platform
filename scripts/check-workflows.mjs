@@ -7,6 +7,9 @@
  *     `@sha256:` digest; expressions in `uses:` are rejected.
  *  2. Every workflow declares top-level `permissions: {}` and grants only
  *     job-level permissions (workflow security baseline, master plan 25.2).
+ *  3. setup-node must not request Yarn caching before the repository's local
+ *     setup action enables Corepack; GitHub-hosted runners otherwise invoke
+ *     their global Yarn 1 and fail before immutable installation can begin.
  *
  * Fails (exit 1) on any violation. Intended for CI (ci.yml), the production
  * release gate (deploy-control-plane.yml), and the release checklist.
@@ -49,6 +52,9 @@ for (const filePath of [...workflowFiles, ...actionFiles]) {
   let permissionsValue = null;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+    if (isWorkflow && /\bcache:\s*yarn\b/.test(line)) {
+      failures.push(`${relative}:${index + 1}: setup-node Yarn caching runs before Corepack is enabled; remove 'cache: yarn'`);
+    }
     if (/^permissions:\s*/.test(line)) {
       topLevelPermissions = true;
       const rest = line.replace(/^permissions:\s*/, '').trim();
@@ -89,4 +95,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log(`Workflow security verified: ${filesChecked} workflow/action file(s); all third-party actions SHA-pinned, all workflows start with permissions: {}.`);
+console.log(`Workflow security verified: ${filesChecked} workflow/action file(s); all third-party actions SHA-pinned, all workflows start with permissions: {}, and setup-node never invokes Yarn before Corepack.`);

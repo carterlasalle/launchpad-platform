@@ -11,5 +11,6 @@ it('pins third-party actions and uses least-privilege workflow defaults', () => 
     expect(source).toContain('permissions: {}');
     for (const line of source.split('\n').filter((candidate) => candidate.includes('uses: actions/'))) expect(line).toMatch(/@[0-9a-f]{40}/);
     expect(source).not.toMatch(/npm install|pnpm install|bun install/);
+    expect(source).not.toMatch(/\bcache:\s*yarn\b/);
   }
 });
