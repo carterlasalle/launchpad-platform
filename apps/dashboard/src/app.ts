@@ -1,43 +1,106 @@
-interface ApplicationState { application?: string; displayName?: string; owner?: string; sync?: string; health?: string; deployment?: string; productionUrl?: string | null; updatedAt?: string; }
+// Dashboard entry: builds the shell chrome, wires the session panel and
+// starts the hash router. All data-driven rendering happens in pages through
+// the safe DOM helpers — this module only wires events.
 
-const state = { applications: [] as ApplicationState[] };
-const byId = (id: string): HTMLElement => { const element = document.getElementById(id); if (!element) throw new Error(`Missing dashboard element ${id}`); return element; };
+import { ApiClient } from './api.js';
+import { setText } from './dom.js';
+import { renderApplicationsPage } from './pages/applications.js';
+import { renderApplicationDetailPage } from './pages/application.js';
+import { renderAuditPage } from './pages/audit.js';
+import { renderCredentialsPage } from './pages/credentials.js';
+import { renderDriftPage, renderDeploymentsPage, renderHealthPage } from './pages/history.js';
+import { renderOperationsPage } from './pages/operations.js';
+import { renderPlanPage } from './pages/plan.js';
+import { renderResourcesPage } from './pages/resources.js';
+import { renderWorkflowPage } from './pages/workflow.js';
+import { HashRouter, defineRoute, type RouteDefinition } from './router.js';
+import { readSessionToken, writeSessionToken } from './session.js';
 
-function badge(value: string | undefined, kind: 'sync' | 'health' | 'deployment'): string {
-  const safe = value ?? 'UNKNOWN';
-  const normalized = safe.toLowerCase().replaceAll('_', '-');
-  return `<span class="badge ${kind} ${normalized}"><i></i>${safe.replaceAll('_', ' ')}</span>`;
+function byId(id: string): HTMLElement {
+  const element = document.getElementById(id);
+  if (!element) throw new Error(`Missing dashboard element #${id}`);
+  return element;
 }
 
-function render(): void {
-  const apps = state.applications;
-  const synced = apps.filter((app) => app.sync === 'SYNCED').length;
-  const active = apps.filter((app) => app.deployment && !['CURRENT', 'UNKNOWN'].includes(app.deployment)).length;
-  const incidents = apps.filter((app) => ['UNHEALTHY', 'DEGRADED', 'BLOCKED'].includes(app.health ?? '')).length;
-  byId('metric-apps').textContent = String(apps.length).padStart(2, '0');
-  byId('metric-sync').textContent = apps.length === 0 ? '—' : `${Math.round((synced / apps.length) * 100)}%`;
-  byId('metric-releases').textContent = String(active).padStart(2, '0');
-  byId('metric-incidents').textContent = String(incidents).padStart(2, '0');
-  byId('sync-count').textContent = String(apps.length).padStart(2, '0');
-  const body = byId('applications');
-  body.innerHTML = apps.length === 0 ? '<tr><td colspan="6" class="empty">No applications are registered in the current desired state.</td></tr>' : apps.map((app) => `<tr><td><strong>${app.displayName ?? app.application ?? 'Unnamed application'}</strong><small>${app.application ?? ''} · ${app.owner ?? 'unowned'}</small></td><td>${badge(app.sync, 'sync')}</td><td>${badge(app.health, 'health')}</td><td>${badge(app.deployment, 'deployment')}</td><td>${app.productionUrl ? `<a href="https://${app.productionUrl}" target="_blank" rel="noreferrer">${app.productionUrl} ↗</a>` : '—'}</td><td>${app.updatedAt ? new Date(app.updatedAt).toLocaleString() : '—'}</td></tr>`).join('');
-  byId('table-state').textContent = apps.length === 0 ? 'Catalog loaded · no applications found' : `${apps.length} application${apps.length === 1 ? '' : 's'} · live status`; 
+const view = byId('view');
+const authState = byId('auth-state');
+const sessionPanel = byId('session-panel');
+const sessionTokenInput = byId('session-token') as HTMLInputElement;
+const sessionHint = byId('session-hint');
+const sessionToggle = byId('session-toggle');
+const sessionSave = byId('session-save');
+const sessionClear = byId('session-clear');
+
+const client = new ApiClient({
+  token: readSessionToken(),
+  onUnauthorized: () => setText(authState, 'SESSION REJECTED'),
+});
+
+const routes: RouteDefinition[] = [
+  defineRoute('/', 'applications', renderApplicationsPage),
+  defineRoute('/applications/:id', 'application', renderApplicationDetailPage),
+  defineRoute('/applications/:id/resources', 'resources', renderResourcesPage),
+  defineRoute('/applications/:id/plan', 'plan', renderPlanPage),
+  defineRoute('/applications/:id/workflows/:operationId', 'workflow', renderWorkflowPage),
+  defineRoute('/applications/:id/deployments', 'deployments', renderDeploymentsPage),
+  defineRoute('/applications/:id/health', 'health', renderHealthPage),
+  defineRoute('/applications/:id/drift', 'drift', renderDriftPage),
+  defineRoute('/applications/:id/audit', 'audit', renderAuditPage),
+  defineRoute('/operations', 'operations', renderOperationsPage),
+  defineRoute('/audit', 'audit', renderAuditPage),
+  defineRoute('/credentials', 'credentials', renderCredentialsPage),
+];
+
+const router = new HashRouter({
+  routes,
+  container: view,
+  client,
+  openSession: () => {
+    sessionPanel.classList.add('is-open');
+    sessionTokenInput.focus();
+  },
+});
+
+function refreshSessionUi(): void {
+  const token = client.token;
+  setText(authState, token === null ? 'NO SESSION' : 'SESSION ACTIVE');
+  sessionTokenInput.value = token ?? '';
+  setText(
+    sessionHint,
+    token === null
+      ? 'No operator session token. Protected control-plane reads fail closed until a token is saved.'
+      : 'Operator session token stored for this browser tab and sent as a Bearer credential.',
+  );
 }
 
-async function refresh(): Promise<void> {
-  byId('table-state').textContent = 'Reading control-plane state…';
-  try {
-    const response = await fetch('/v1/applications', { headers: { accept: 'application/json' } });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const body = await response.json() as { applications?: ApplicationState[] };
-    state.applications = body.applications ?? [];
-  } catch (error) {
-    state.applications = [];
-    byId('table-state').textContent = `Control-plane read failed · ${error instanceof Error ? error.message : 'unknown error'}`;
+sessionToggle.addEventListener('click', () => {
+  sessionPanel.classList.toggle('is-open');
+});
+
+sessionSave.addEventListener('click', () => {
+  const token = sessionTokenInput.value.trim();
+  if (token === '') {
+    setText(sessionHint, 'A session token cannot be empty.');
+    return;
   }
-  render();
-}
+  writeSessionToken(token);
+  client.setToken(token);
+  refreshSessionUi();
+  sessionPanel.classList.remove('is-open');
+  void router.render();
+});
 
-byId('current-time').textContent = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase();
-byId('refresh').addEventListener('click', () => void refresh());
-void refresh();
+sessionClear.addEventListener('click', () => {
+  writeSessionToken(null);
+  client.setToken(null);
+  refreshSessionUi();
+  sessionPanel.classList.remove('is-open');
+  void router.render();
+});
+
+refreshSessionUi();
+setText(
+  byId('current-time'),
+  new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase(),
+);
+router.start();
