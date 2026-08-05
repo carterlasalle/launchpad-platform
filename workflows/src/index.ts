@@ -1,4 +1,5 @@
 export * from './apply-app.js';
+export * from './app-preview-status.js';
 export * from './decommission-app.js';
 export * from './operation-runner.js';
 export * from './preview-app.js';

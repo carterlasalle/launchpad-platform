@@ -833,6 +833,7 @@ __metadata:
     "@launchpad/catalog": "workspace:*"
     "@launchpad/core": "workspace:*"
     "@launchpad/database": "workspace:*"
+    "@launchpad/github-reporting": "workspace:*"
     "@launchpad/health": "workspace:*"
     "@launchpad/provider-cloudflare": "workspace:*"
     "@launchpad/provider-github": "workspace:*"
@@ -992,6 +993,7 @@ __metadata:
     "@launchpad/shared": "workspace:*"
     typescript: "npm:5.8.3"
     vitest: "npm:3.1.1"
+    yaml: "npm:2.8.1"
   languageName: unknown
   linkType: soft
 

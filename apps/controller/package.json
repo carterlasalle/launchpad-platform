@@ -12,6 +12,7 @@
     "@launchpad/catalog": "workspace:*",
     "@launchpad/core": "workspace:*",
     "@launchpad/database": "workspace:*",
+    "@launchpad/github-reporting": "workspace:*",
     "@launchpad/health": "workspace:*",
     "@launchpad/provider-cloudflare": "workspace:*",
     "@launchpad/provider-github": "workspace:*",

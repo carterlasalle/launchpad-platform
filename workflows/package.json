@@ -15,7 +15,8 @@
     "@launchpad/health": "workspace:*",
     "@launchpad/provider-contract": "workspace:*",
     "@launchpad/provider-testkit": "workspace:*",
-    "@launchpad/shared": "workspace:*"
+    "@launchpad/shared": "workspace:*",
+    "yaml": "2.8.1"
   },
   "devDependencies": {
     "typescript": "5.8.3",

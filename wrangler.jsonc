@@ -4,7 +4,20 @@
   "main": "apps/controller/src/worker.ts",
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./apps/dashboard/dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "triggers": { "crons": ["*/30 * * * *"] },
   "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-environment", "migrations_dir": "migrations/d1" }],
+  "workflows": [
+    { "name": "apply-application", "binding": "APPLY_WORKFLOW", "class_name": "ApplyApplicationWorkflow" },
+    { "name": "preview-application", "binding": "PREVIEW_WORKFLOW", "class_name": "PreviewApplicationWorkflow" },
+    { "name": "app-preview-status-application", "binding": "APP_PREVIEW_STATUS_WORKFLOW", "class_name": "AppPreviewStatusWorkflow" },
+    { "name": "reconcile-application", "binding": "RECONCILE_WORKFLOW", "class_name": "ReconcileApplicationWorkflow" },
+    { "name": "decommission-application", "binding": "DECOMMISSION_WORKFLOW", "class_name": "DecommissionApplicationWorkflow" }
+  ],
   "queues": {
     "producers": [
       { "binding": "PROVIDER_EVENTS", "queue": "launchpad-provider-events" },
@@ -13,20 +26,132 @@
     "consumers": [
       { "queue": "launchpad-provider-events", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
       { "queue": "launchpad-health-checks", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
-      { "queue": "launchpad-dead-letter", "max_retries": 0 }
+      { "queue": "launchpad-dead-letter", "max_retries": 10, "retry_delay": 60 }
     ]
   },
-  "workflows": [
-    { "name": "apply-application", "binding": "APPLY_WORKFLOW", "class_name": "ApplyApplicationWorkflow" },
-    { "name": "preview-application", "binding": "PREVIEW_WORKFLOW", "class_name": "PreviewApplicationWorkflow" },
-    { "name": "reconcile-application", "binding": "RECONCILE_WORKFLOW", "class_name": "ReconcileApplicationWorkflow" },
-    { "name": "decommission-application", "binding": "DECOMMISSION_WORKFLOW", "class_name": "DecommissionApplicationWorkflow" }
-  ],
-  "vars": { "LAUNCHPAD_ENV": "development", "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787", "CONTROL_REPOSITORY": "CarterLaSalle/launchpad", "CONTROL_CATALOG_ROOT": "catalog/apps" },
+  "vars": {
+    "LAUNCHPAD_ENV": "development",
+    "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787",
+    "CONTROL_REPOSITORY": "CarterLaSalle/launchpad",
+    "CONTROL_CATALOG_ROOT": "catalog/apps",
+    "RECONCILIATION_SHARD_COUNT": "1",
+    "PROVIDER_EVENT_FANOUT_LIMIT": "100",
+    "PROVIDER_EVENT_SHARD_COUNT": "1",
+    "LAUNCHPAD_LOG_LEVEL": "info",
+    "LAUNCHPAD_ALERTS_ENABLED": "true",
+    "LAUNCHPAD_ALERT_COOLDOWN_SECONDS": "3600",
+    "LAUNCHPAD_ALERT_RECONCILIATION_THRESHOLD": "3",
+    "LAUNCHPAD_ALERT_CREDENTIAL_EXPIRY_WINDOW_DAYS": "14",
+    "LAUNCHPAD_ALERT_ERROR_RATE_THRESHOLD": "0.1",
+
+    "VERCEL_TEAM_ID": "replace-in-environment",
+    "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-environment",
+    "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
+    "OIDC_AUDIENCE": "https://launchpad.example.internal",
+    "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
+  },
   "env": {
     "production": {
-      "vars": { "LAUNCHPAD_ENV": "production", "CONTROLLER_INTERNAL_URL": "https://launchpad.example.internal", "CONTROL_REPOSITORY": "CarterLaSalle/launchpad", "CONTROL_CATALOG_ROOT": "catalog/apps" },
-      "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-production", "migrations_dir": "migrations/d1" }]
+      "triggers": { "crons": ["*/30 * * * *"] },
+      "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-production", "migrations_dir": "migrations/d1" }],
+      "workflows": [
+        { "name": "apply-application", "binding": "APPLY_WORKFLOW", "class_name": "ApplyApplicationWorkflow" },
+        { "name": "preview-application", "binding": "PREVIEW_WORKFLOW", "class_name": "PreviewApplicationWorkflow" },
+        { "name": "app-preview-status-application", "binding": "APP_PREVIEW_STATUS_WORKFLOW", "class_name": "AppPreviewStatusWorkflow" },
+        { "name": "reconcile-application", "binding": "RECONCILE_WORKFLOW", "class_name": "ReconcileApplicationWorkflow" },
+        { "name": "decommission-application", "binding": "DECOMMISSION_WORKFLOW", "class_name": "DecommissionApplicationWorkflow" }
+      ],
+      "queues": {
+        "producers": [
+          { "binding": "PROVIDER_EVENTS", "queue": "launchpad-provider-events" },
+          { "binding": "HEALTH_CHECKS", "queue": "launchpad-health-checks" }
+        ],
+        "consumers": [
+          { "queue": "launchpad-provider-events", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
+          { "queue": "launchpad-health-checks", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
+          { "queue": "launchpad-dead-letter", "max_retries": 10, "retry_delay": 60 }
+        ]
+      },
+      "vars": {
+        "LAUNCHPAD_ENV": "production",
+        "CONTROLLER_INTERNAL_URL": "https://launchpad.example.internal",
+        "CONTROL_REPOSITORY": "CarterLaSalle/launchpad",
+        "CONTROL_CATALOG_ROOT": "catalog/apps",
+    "RECONCILIATION_SHARD_COUNT": "1",
+    "PROVIDER_EVENT_FANOUT_LIMIT": "100",
+    "PROVIDER_EVENT_SHARD_COUNT": "1",
+    "LAUNCHPAD_LOG_LEVEL": "info",
+    "LAUNCHPAD_ALERTS_ENABLED": "true",
+    "LAUNCHPAD_ALERT_COOLDOWN_SECONDS": "3600",
+    "LAUNCHPAD_ALERT_RECONCILIATION_THRESHOLD": "3",
+    "LAUNCHPAD_ALERT_CREDENTIAL_EXPIRY_WINDOW_DAYS": "14",
+    "LAUNCHPAD_ALERT_ERROR_RATE_THRESHOLD": "0.1",
+
+        "VERCEL_TEAM_ID": "replace-in-production",
+        "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-production",
+        "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
+        "OIDC_AUDIENCE": "https://launchpad.example.internal",
+        "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
+      },
+      "secrets_store_secrets": [
+        { "binding": "SECRETS_OPERATOR_TOKEN", "store_id": "replace-in-production", "secret_name": "launchpad-operator-token" },
+        { "binding": "SECRETS_CONTROLLER_INTERNAL_TOKEN", "store_id": "replace-in-production", "secret_name": "launchpad-controller-internal-token" },
+        { "binding": "SECRETS_VERCEL_TOKEN", "store_id": "replace-in-production", "secret_name": "launchpad-vercel-token" },
+        { "binding": "SECRETS_CLOUDFLARE_TOKEN", "store_id": "replace-in-production", "secret_name": "launchpad-cloudflare-token" },
+        { "binding": "SECRETS_GITHUB_TOKEN", "store_id": "replace-in-production", "secret_name": "launchpad-github-token" },
+        { "binding": "SECRETS_VERCEL_WEBHOOK_SECRET", "store_id": "replace-in-production", "secret_name": "launchpad-vercel-webhook-secret" }
+      ]
+    },
+    "test": {
+      "triggers": { "crons": ["*/30 * * * *"] },
+      "d1_databases": [{ "binding": "DB", "database_name": "launchpad-test", "database_id": "replace-in-test", "migrations_dir": "migrations/d1" }],
+      "workflows": [
+        { "name": "apply-application", "binding": "APPLY_WORKFLOW", "class_name": "ApplyApplicationWorkflow" },
+        { "name": "preview-application", "binding": "PREVIEW_WORKFLOW", "class_name": "PreviewApplicationWorkflow" },
+        { "name": "app-preview-status-application", "binding": "APP_PREVIEW_STATUS_WORKFLOW", "class_name": "AppPreviewStatusWorkflow" },
+        { "name": "reconcile-application", "binding": "RECONCILE_WORKFLOW", "class_name": "ReconcileApplicationWorkflow" },
+        { "name": "decommission-application", "binding": "DECOMMISSION_WORKFLOW", "class_name": "DecommissionApplicationWorkflow" }
+      ],
+      "queues": {
+        "producers": [
+          { "binding": "PROVIDER_EVENTS", "queue": "launchpad-provider-events" },
+          { "binding": "HEALTH_CHECKS", "queue": "launchpad-health-checks" }
+        ],
+        "consumers": [
+          { "queue": "launchpad-provider-events", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
+          { "queue": "launchpad-health-checks", "dead_letter_queue": "launchpad-dead-letter", "max_retries": 5 },
+          { "queue": "launchpad-dead-letter", "max_retries": 10, "retry_delay": 60 }
+        ]
+      },
+      "vars": {
+        "LAUNCHPAD_ENV": "test",
+        "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787",
+        "CONTROL_REPOSITORY": "CarterLaSalle/launchpad",
+        "CONTROL_CATALOG_ROOT": "catalog/apps",
+    "RECONCILIATION_SHARD_COUNT": "1",
+    "PROVIDER_EVENT_FANOUT_LIMIT": "100",
+    "PROVIDER_EVENT_SHARD_COUNT": "1",
+    "LAUNCHPAD_LOG_LEVEL": "info",
+    "LAUNCHPAD_ALERTS_ENABLED": "true",
+    "LAUNCHPAD_ALERT_COOLDOWN_SECONDS": "3600",
+    "LAUNCHPAD_ALERT_RECONCILIATION_THRESHOLD": "3",
+    "LAUNCHPAD_ALERT_CREDENTIAL_EXPIRY_WINDOW_DAYS": "14",
+    "LAUNCHPAD_ALERT_ERROR_RATE_THRESHOLD": "0.1",
+
+        "VERCEL_TEAM_ID": "replace-in-test",
+        "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-test",
+        "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
+        "OIDC_AUDIENCE": "https://launchpad.example.internal",
+        "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
+      },
+      "secrets_store_secrets": [
+        { "binding": "SECRETS_OPERATOR_TOKEN", "store_id": "replace-in-test", "secret_name": "launchpad-operator-token" },
+        { "binding": "SECRETS_CONTROLLER_INTERNAL_TOKEN", "store_id": "replace-in-test", "secret_name": "launchpad-controller-internal-token" },
+        { "binding": "SECRETS_VERCEL_TOKEN", "store_id": "replace-in-test", "secret_name": "launchpad-vercel-token" },
+        { "binding": "SECRETS_CLOUDFLARE_TOKEN", "store_id": "replace-in-test", "secret_name": "launchpad-cloudflare-token" },
+        { "binding": "SECRETS_GITHUB_TOKEN", "store_id": "replace-in-test", "secret_name": "launchpad-github-token" },
+        { "binding": "SECRETS_VERCEL_WEBHOOK_SECRET", "store_id": "replace-in-test", "secret_name": "launchpad-vercel-webhook-secret" }
+      ]
     }
   }
 }
