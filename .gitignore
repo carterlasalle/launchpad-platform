@@ -1,6 +1,9 @@
 node_modules/
 dist/
 coverage/
+artifacts/
+wrangler.deploy.json
+wrangler.deploy.test.json
 .wrangler/
 .yarn/install-state.gz
 .env
@@ -9,3 +12,5 @@ coverage/
 *.sqlite
 *.sqlite3
 .DS_Store
+
+.omp/

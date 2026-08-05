@@ -1,0 +1,68 @@
+{
+  "observeRepository": [
+    { "request": { "method": "GET", "path": "/repos/acme/app" }, "response": { "status": 200, "body": { "id": 42, "node_id": "R_kgD", "name": "app", "full_name": "acme/app", "private": true, "archived": false, "default_branch": "main" } } }
+  ],
+  "hasPathFile": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/contents/apps%2Fweb?ref=main" }, "response": { "status": 200, "body": { "type": "file", "encoding": "base64", "size": 12, "name": "web", "path": "apps/web", "sha": "abc123", "url": "https://api.github.com/repos/acme/app/contents/apps%2Fweb" } } }
+  ],
+  "hasPathDirectory": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/contents/apps%2Fweb?ref=main" }, "response": { "status": 200, "body": { "type": "dir", "size": 0, "name": "web", "path": "apps/web", "sha": "abc123" } } }
+  ],
+  "hasPathMissing": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/contents/apps%2Fweb?ref=main" }, "response": { "status": 404, "body": { "message": "Not Found", "documentation_url": "https://docs.github.com/rest" } } }
+  ],
+  "readFile": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/contents/apps%2Fweb%2Fapp.yaml?ref=main" }, "response": { "status": 200, "body": { "type": "file", "encoding": "base64", "size": 45, "name": "app.yaml", "path": "apps/web/app.yaml", "sha": "def456", "content": "YXBpVmVyc2lvbjogbGF1bmNocGFkLmRldi92MQpraW5kOiBBcHBsaWNhdGlvbgo=" } } }
+  ],
+  "readFileMalformed": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/contents/apps%2Fweb%2Fapp.yaml?ref=main" }, "response": { "status": 200, "body": { "type": "file", "name": "app.yaml", "path": "apps/web/app.yaml" } } }
+  ],
+  "resolveRef": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/git/ref/heads/main" }, "response": { "status": 200, "body": { "ref": "refs/heads/main", "node_id": "REF_1", "url": "https://api.github.com/repos/acme/app/git/ref/heads/main", "object": { "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "type": "commit", "url": "https://api.github.com/repos/acme/app/git/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } } }
+  ],
+  "resolveRefMalformed": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/git/ref/heads/main" }, "response": { "status": 200, "body": { "ref": "refs/heads/main", "object": {} } } }
+  ],
+  "prCommentCreate": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/issues/12/comments?per_page=100" }, "response": { "status": 200, "body": [] } },
+    { "request": { "method": "POST", "path": "/repos/acme/app/issues/12/comments" }, "response": { "status": 201, "body": { "id": 100, "html_url": "https://github.com/acme/app/pull/12#issuecomment-100" } } }
+  ],
+  "prCommentUpdate": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/issues/12/comments?per_page=100" }, "response": { "status": 200, "body": [ { "id": 55, "body": "old summary <!-- launchpad:summary -->", "html_url": "https://github.com/acme/app/pull/12#issuecomment-55" } ] } },
+    { "request": { "method": "PATCH", "path": "/repos/acme/app/issues/comments/55" }, "response": { "status": 200, "body": { "id": 55, "html_url": "https://github.com/acme/app/pull/12#issuecomment-55" } } }
+  ],
+  "createOrUpdatePr": [
+    { "request": { "method": "GET", "path": "/repos/acme/control" }, "response": { "status": 200, "body": { "id": 7, "name": "control", "full_name": "acme/control", "private": true, "archived": false, "default_branch": "main" } } },
+    { "request": { "method": "GET", "path": "/repos/acme/control/git/ref/heads/main" }, "response": { "status": 200, "body": { "ref": "refs/heads/main", "object": { "sha": "ffffffffffffffffffffffffffffffffffffffff", "type": "commit" } } } },
+    { "request": { "method": "POST", "path": "/repos/acme/control/git/refs" }, "response": { "status": 201, "body": { "ref": "refs/heads/reconcile/app/1", "node_id": "REF_2", "object": { "sha": "ffffffffffffffffffffffffffffffffffffffff", "type": "commit" } } } },
+    { "request": { "method": "GET", "path": "/repos/acme/control/contents/catalog%2Fapps%2Fapp.yaml?ref=reconcile%2Fapp%2F1" }, "response": { "status": 404, "body": { "message": "Not Found" } } },
+    { "request": { "method": "PUT", "path": "/repos/acme/control/contents/catalog%2Fapps%2Fapp.yaml" }, "response": { "status": 200, "body": { "content": { "name": "app.yaml", "path": "catalog/apps/app.yaml", "sha": "new-sha" } } } },
+    { "request": { "method": "GET", "path": "/repos/acme/control/pulls?state=open&head=acme%3Areconcile%2Fapp%2F1" }, "response": { "status": 200, "body": [] } },
+    { "request": { "method": "POST", "path": "/repos/acme/control/pulls" }, "response": { "status": 201, "body": { "number": 12, "html_url": "https://github.com/acme/control/pull/12" } } }
+  ],
+  "reuseOpenPr": [
+    { "request": { "method": "GET", "path": "/repos/acme/control" }, "response": { "status": 200, "body": { "id": 7, "name": "control", "full_name": "acme/control", "private": true, "archived": false, "default_branch": "main" } } },
+    { "request": { "method": "GET", "path": "/repos/acme/control/git/ref/heads/main" }, "response": { "status": 200, "body": { "ref": "refs/heads/main", "object": { "sha": "ffffffffffffffffffffffffffffffffffffffff", "type": "commit" } } } },
+    { "request": { "method": "POST", "path": "/repos/acme/control/git/refs" }, "response": { "status": 409, "body": { "message": "Reference already exists" } } },
+    { "request": { "method": "GET", "path": "/repos/acme/control/contents/catalog%2Fapps%2Fapp.yaml?ref=reconcile%2Fapp%2F1" }, "response": { "status": 404, "body": { "message": "Not Found" } } },
+    { "request": { "method": "PUT", "path": "/repos/acme/control/contents/catalog%2Fapps%2Fapp.yaml" }, "response": { "status": 200, "body": { "content": { "name": "app.yaml", "path": "catalog/apps/app.yaml", "sha": "new-sha" } } } },
+    { "request": { "method": "GET", "path": "/repos/acme/control/pulls?state=open&head=acme%3Areconcile%2Fapp%2F1" }, "response": { "status": 200, "body": [ { "number": 12, "html_url": "https://github.com/acme/control/pull/12" } ] } },
+    { "request": { "method": "PATCH", "path": "/repos/acme/control/pulls/12" }, "response": { "status": 200, "body": { "number": 12, "html_url": "https://github.com/acme/control/pull/12" } } }
+  ],
+  "deploymentStatusCreate": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/deployments?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&environment=preview" }, "response": { "status": 200, "body": [] } },
+    { "request": { "method": "POST", "path": "/repos/acme/app/deployments" }, "response": { "status": 201, "body": { "id": 11, "environment": "preview", "ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "url": "https://api.github.com/repos/acme/app/deployments/11" } } },
+    { "request": { "method": "POST", "path": "/repos/acme/app/deployments/11/statuses" }, "response": { "status": 201, "body": { "id": 22, "url": "https://api.github.com/repos/acme/app/deployments/11/statuses/22" } } }
+  ],
+  "deploymentStatusReuse": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/deployments?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&environment=preview" }, "response": { "status": 200, "body": [ { "id": 33, "environment": "preview", "ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "url": "https://api.github.com/repos/acme/app/deployments/33" } ] } },
+    { "request": { "method": "POST", "path": "/repos/acme/app/deployments/33/statuses" }, "response": { "status": 201, "body": { "id": 44, "url": "https://api.github.com/repos/acme/app/deployments/33/statuses/44" } } }
+  ],
+  "deploymentStatusMalformed": [
+    { "request": { "method": "GET", "path": "/repos/acme/app/deployments?ref=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&environment=preview" }, "response": { "status": 200, "body": [] } },
+    { "request": { "method": "POST", "path": "/repos/acme/app/deployments" }, "response": { "status": 201, "body": { "url": "https://api.github.com/repos/acme/app/deployments/1" } } }
+  ],
+  "errorCanary": [
+    { "request": { "method": "GET", "path": "/repos/acme/app" }, "response": { "status": 403, "body": { "message": "lp-contract-canary-body-9b2a4f6c", "documentation_url": "https://docs.github.com/rest" } } }
+  ]
+}

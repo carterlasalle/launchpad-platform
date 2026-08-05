@@ -20,6 +20,7 @@ concurrency:
 
 env:
   NODE_VERSION: '24.18.0'
+  HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
 jobs:
   schema:
@@ -29,7 +30,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with: { fetch-depth: 1 }
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 1
+      - uses: ./.github/actions/assert-pr-head
+        with:
+          repository: ${{ github.repository }}
+          pull_number: ${{ github.event.pull_request.number }}
+          expected_sha: ${{ env.HEAD_SHA }}
+          token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
       - uses: ./.github/actions/setup-launchpad
@@ -44,6 +53,15 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 1
+      - uses: ./.github/actions/assert-pr-head
+        with:
+          repository: ${{ github.repository }}
+          pull_number: ${{ github.event.pull_request.number }}
+          expected_sha: ${{ env.HEAD_SHA }}
+          token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
       - uses: ./.github/actions/setup-launchpad
@@ -58,10 +76,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 1
+      - uses: ./.github/actions/assert-pr-head
+        with:
+          repository: ${{ github.repository }}
+          pull_number: ${{ github.event.pull_request.number }}
+          expected_sha: ${{ env.HEAD_SHA }}
+          token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
       - uses: ./.github/actions/setup-launchpad
-      - run: yarn platform preflight --catalog catalog
+      - run: yarn platform preflight --catalog catalog --format json
         env:
           LAUNCHPAD_GITHUB_TOKEN: ${{ secrets.LAUNCHPAD_GITHUB_TOKEN }}
           LAUNCHPAD_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
@@ -69,56 +96,112 @@ jobs:
 
   plan:
     name: platform / plan
-    needs: [schema, catalog]
+    needs: [schema, catalog, provider-preflight]
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 1
+      - uses: ./.github/actions/assert-pr-head
+        with:
+          repository: ${{ github.repository }}
+          pull_number: ${{ github.event.pull_request.number }}
+          expected_sha: ${{ env.HEAD_SHA }}
+          token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
       - uses: ./.github/actions/setup-launchpad
-      - run: yarn platform plan --catalog catalog --format markdown --output artifacts
-      - run: yarn platform report-pr --catalog catalog --artifacts artifacts
+      - run: yarn platform plan --catalog catalog --sha ${{ env.HEAD_SHA }} --format json --output artifacts
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+          LAUNCHPAD_GITHUB_TOKEN: ${{ secrets.LAUNCHPAD_GITHUB_TOKEN }}
+          LAUNCHPAD_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with: { name: launchpad-plan, path: artifacts }
+        if: ${{ always() }}
+        continue-on-error: true
+        with:
+          name: launchpad-plan
+          path: artifacts
+          retention-days: 7
+          if-no-files-found: warn
 
   preview:
     name: platform / preview
     needs: [plan, provider-preflight]
-    if: ${{ always() && needs.plan.result == 'success' && (needs.provider-preflight.result == 'success' || needs.provider-preflight.result == 'skipped') }}
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
+    env:
+      LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
+      LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 1
+      - uses: ./.github/actions/assert-pr-head
+        with:
+          repository: ${{ github.repository }}
+          pull_number: ${{ github.event.pull_request.number }}
+          expected_sha: ${{ env.HEAD_SHA }}
+          token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
       - uses: ./.github/actions/setup-launchpad
-      - run: yarn platform preview --catalog catalog --pr ${{ github.event.pull_request.number }} --sha ${{ github.event.pull_request.head.sha }}
+      - uses: actions/download-artifact@65a9edc5881444af0b909df76e214148ea5671c6
+        with:
+          name: launchpad-plan
+          path: artifacts
+      - run: yarn platform preview --catalog catalog --sha ${{ env.HEAD_SHA }} --pr ${{ github.event.pull_request.number }} --controller "$LAUNCHPAD_CONTROLLER_URL" --plans artifacts/plans.json --output preview-artifacts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() }}
+        continue-on-error: true
+        with:
+          name: launchpad-preview
+          path: preview-artifacts
+          retention-days: 7
+          if-no-files-found: warn
 
   health:
     name: platform / health
     needs: preview
-    if: ${{ always() }}
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 1
+      - uses: ./.github/actions/assert-pr-head
+        with:
+          repository: ${{ github.repository }}
+          pull_number: ${{ github.event.pull_request.number }}
+          expected_sha: ${{ env.HEAD_SHA }}
+          token: ${{ github.token }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
       - uses: ./.github/actions/setup-launchpad
-      - run: yarn platform health --catalog catalog --pr ${{ github.event.pull_request.number }}
+      - uses: actions/download-artifact@65a9edc5881444af0b909df76e214148ea5671c6
+        continue-on-error: true
+        with:
+          name: launchpad-preview
+          path: preview-artifacts
+      - run: yarn platform health --catalog catalog --sha ${{ env.HEAD_SHA }} --preview-summary preview-artifacts/preview-summary.json --output health-artifacts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() }}
+        continue-on-error: true
+        with:
+          name: launchpad-health
+          path: health-artifacts
+          retention-days: 7
+          if-no-files-found: warn
 
   summary:
     name: platform / summary
@@ -127,9 +210,93 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
     steps:
-      - run: |
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.HEAD_SHA }}
+          fetch-depth: 1
+      - uses: ./.github/actions/assert-pr-head
+        with:
+          repository: ${{ github.repository }}
+          pull_number: ${{ github.event.pull_request.number }}
+          expected_sha: ${{ env.HEAD_SHA }}
+          token: ${{ github.token }}
+      - name: Aggregate required job results
+        shell: bash
+        run: |
           set -euo pipefail
-          for result in '${{ needs.schema.result }}' '${{ needs.catalog.result }}' '${{ needs.provider-preflight.result }}' '${{ needs.plan.result }}' '${{ needs.preview.result }}' '${{ needs.health.result }}'; do
-            if [[ "$result" == failure || "$result" == cancelled ]]; then exit 1; fi
+          failed=0
+          for entry in \
+            "schema=${{ needs.schema.result }}" \
+            "catalog=${{ needs.catalog.result }}" \
+            "provider-preflight=${{ needs.provider-preflight.result }}" \
+            "plan=${{ needs.plan.result }}" \
+            "preview=${{ needs.preview.result }}" \
+            "health=${{ needs.health.result }}"; do
+            name="${entry%%=*}"
+            result="${entry#*=}"
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::Required job '${name}' ended with '${result}'; the Launchpad PR gate is red."
+              failed=1
+            fi
           done
+          echo "LAUNCHPAD_REQUIRED_FAILED=$failed" >> "$GITHUB_ENV"
+      - name: Record required job results for the report comment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p report
+          cat > report/job-results.json <<EOF
+          {
+            "schemaVersion": "launchpad.job-results/v1",
+            "sourceCommit": "${{ env.HEAD_SHA }}",
+            "jobs": [
+              {"name": "schema", "result": "${{ needs.schema.result }}"},
+              {"name": "catalog", "result": "${{ needs.catalog.result }}"},
+              {"name": "provider-preflight", "result": "${{ needs.provider-preflight.result }}"},
+              {"name": "plan", "result": "${{ needs.plan.result }}"},
+              {"name": "preview", "result": "${{ needs.preview.result }}"},
+              {"name": "health", "result": "${{ needs.health.result }}"}
+            ]
+          }
+          EOF
+          test -s report/job-results.json
+      - uses: actions/download-artifact@65a9edc5881444af0b909df76e214148ea5671c6
+        continue-on-error: true
+        with:
+          name: launchpad-plan
+          path: report/plan
+      - uses: actions/download-artifact@65a9edc5881444af0b909df76e214148ea5671c6
+        continue-on-error: true
+        with:
+          name: launchpad-preview
+          path: report/preview
+      - uses: actions/download-artifact@65a9edc5881444af0b909df76e214148ea5671c6
+        continue-on-error: true
+        with:
+          name: launchpad-health
+          path: report/health
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: { node-version: ${{ env.NODE_VERSION }}, cache: yarn }
+      - uses: ./.github/actions/setup-launchpad
+      - name: Publish aggregated Launchpad report comment
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        env:
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: yarn platform report-pr --catalog catalog --sha ${{ env.HEAD_SHA }} --pr ${{ github.event.pull_request.number }} --artifacts report --output report
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: ${{ always() }}
+        continue-on-error: true
+        with:
+          name: launchpad-report
+          path: report
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Fail summary when any required job failed or was cancelled
+        if: ${{ always() && env.LAUNCHPAD_REQUIRED_FAILED == '1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::error::One or more required Launchpad jobs failed or were cancelled; the PR gate is red."
+          exit 1

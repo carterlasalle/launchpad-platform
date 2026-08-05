@@ -1,0 +1,79 @@
+name: Launchpad CI
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'yarn.lock'
+      - '.yarnrc.yml'
+      - '.node-version'
+      - '.nvmrc'
+      - 'renovate.json'
+      - '.github/**'
+      - 'scripts/**'
+      - 'tsconfig*.json'
+      - 'eslint.config.js'
+      - 'vitest.config.ts'
+      - 'wrangler.jsonc'
+      - 'docs/adr/**'
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'yarn.lock'
+      - '.yarnrc.yml'
+      - '.node-version'
+      - '.nvmrc'
+      - 'renovate.json'
+      - '.github/**'
+      - 'scripts/**'
+      - 'tsconfig*.json'
+      - 'eslint.config.js'
+      - 'vitest.config.ts'
+      - 'wrangler.jsonc'
+      - 'docs/adr/**'
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: launchpad-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  toolchain:
+    name: static / toolchain
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+          cache: yarn
+      - uses: ./.github/actions/setup-launchpad
+      - name: Verify toolchain decision record
+        run: node scripts/check-toolchain.mjs
+      - name: Verify action pins and workflow permissions
+        run: node scripts/check-workflows.mjs
+      - name: Verify lockfile is deduplicated
+        run: yarn dedupe --check
+
+  quality:
+    name: static / quality
+    needs: toolchain
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+          cache: yarn
+      - uses: ./.github/actions/setup-launchpad
+      - run: yarn typecheck
+      - run: yarn lint
+      - run: yarn test
+      - run: yarn build

@@ -34,9 +34,18 @@ jobs:
         env:
           LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
           LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
+          LAUNCHPAD_GITHUB_TOKEN: ${{ secrets.LAUNCHPAD_GITHUB_TOKEN }}
+          LAUNCHPAD_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
+          LAUNCHPAD_CLOUDFLARE_TOKEN: ${{ secrets.LAUNCHPAD_CLOUDFLARE_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           yarn platform validate --catalog catalog
+          # The controller reloads the merged manifest at $GITHUB_SHA and
+          # recomputes the plan itself; the CLI rebuilds the approved plan
+          # from live provider state so the fingerprint and idempotency key
+          # match before the OIDC-authenticated apply enqueues the durable
+          # workflow. PR plan artifacts are not reachable from push runs, so
+          # read-only provider tokens are required.
           yarn platform apply --catalog catalog --sha "$GITHUB_SHA" --controller "$LAUNCHPAD_CONTROLLER_URL"

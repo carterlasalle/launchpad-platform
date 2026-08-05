@@ -1,0 +1,161 @@
+{
+  "observeProject": [
+    { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } }
+  ],
+  "observeProjectMissing": [
+    { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 404, "body": { "error": { "code": "not_found", "message": "The project does not exist" } } } }
+  ],
+  "projectCreate": [
+    { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 404, "body": { "error": { "code": "not_found" } } } },
+    { "request": { "method": "POST", "path": "/v10/projects" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } }
+  ],
+  "projectUpdate": [
+    { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } },
+    { "request": { "method": "PATCH", "path": "/v9/projects/prj_1" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "remix", "rootDirectory": ".", "nodeVersion": "24.x" } } }
+  ],
+  "projectNoop": [
+    { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } },
+    { "request": { "method": "PATCH", "path": "/v9/projects/prj_1" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } }
+  ],
+  "gitConnection": [
+    { "request": { "method": "PATCH", "path": "/v9/projects/app" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "gitRepository": { "type": "github", "repo": "acme/app" }, "productionBranch": "main" } } }
+  ],
+  "environmentCreate": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/env" }, "response": { "status": 200, "body": { "envs": [] } } },
+    { "request": { "method": "POST", "path": "/v10/projects/app/env" }, "response": { "status": 200, "body": { "created": [ { "id": "env_1", "key": "DATABASE_URL", "value": "postgres://contract-db-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } ], "failed": [] } } },
+    { "request": { "method": "GET", "path": "/v9/projects/app/env/env_1" }, "response": { "status": 200, "body": { "id": "env_1", "key": "DATABASE_URL", "value": "postgres://contract-db-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } } },
+    { "request": { "method": "POST", "path": "/v10/projects/app/env" }, "response": { "status": 200, "body": { "created": [ { "id": "env_2", "key": "API_TOKEN", "value": "contract-token-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } ], "failed": [] } } },
+    { "request": { "method": "GET", "path": "/v9/projects/app/env/env_2" }, "response": { "status": 200, "body": { "id": "env_2", "key": "API_TOKEN", "value": "contract-token-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } } }
+  ],
+  "environmentUpdate": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/env" }, "response": { "status": 200, "body": { "envs": [ { "id": "env_1", "key": "DATABASE_URL", "value": "postgres://stale-value", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } ] } } },
+    { "request": { "method": "PATCH", "path": "/v9/projects/app/env/env_1" }, "response": { "status": 200, "body": { "id": "env_1", "key": "DATABASE_URL", "value": "postgres://contract-db-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } } },
+    { "request": { "method": "GET", "path": "/v9/projects/app/env/env_1" }, "response": { "status": 200, "body": { "id": "env_1", "key": "DATABASE_URL", "value": "postgres://contract-db-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } } }
+  ],
+  "environmentNoop": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/env" }, "response": { "status": 200, "body": { "envs": [ { "id": "env_1", "key": "DATABASE_URL", "value": "postgres://contract-db-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } ] } } }
+  ],
+  "environmentReadbackMismatch": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/env" }, "response": { "status": 200, "body": { "envs": [] } } },
+    { "request": { "method": "POST", "path": "/v10/projects/app/env" }, "response": { "status": 200, "body": { "created": [ { "id": "env_1", "key": "DATABASE_URL", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } ], "failed": [] } } },
+    { "request": { "method": "GET", "path": "/v9/projects/app/env/env_1" }, "response": { "status": 200, "body": { "id": "env_1", "key": "DATABASE_URL", "value": "provider-tampered-value", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } } }
+  ],
+  "environmentReadbackMissing": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/env" }, "response": { "status": 200, "body": { "envs": [] } } },
+    { "request": { "method": "POST", "path": "/v10/projects/app/env" }, "response": { "status": 200, "body": { "created": [ { "id": "env_1", "key": "DATABASE_URL", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } ], "failed": [] } } },
+    { "request": { "method": "GET", "path": "/v9/projects/app/env/env_1" }, "response": { "status": 404, "body": { "error": { "code": "not_found" } } } }
+  ],
+  "environmentListMalformed": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/env" }, "response": { "status": 200, "body": { "envs": "nope" } } }
+  ],
+  "environmentOmittedListValue": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/env" }, "response": { "status": 200, "body": { "envs": [ { "id": "env_1", "key": "DATABASE_URL", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } ] } } },
+    { "request": { "method": "GET", "path": "/v9/projects/app/env/env_1" }, "response": { "status": 200, "body": { "id": "env_1", "key": "DATABASE_URL", "value": "postgres://contract-db-secret", "type": "encrypted", "target": [ "production" ], "gitBranch": "main" } } }
+  ],
+  "domain": [
+    { "request": { "method": "POST", "path": "/v10/projects/app/domains" }, "response": { "status": 200, "body": { "id": "dom_1", "name": "app.example.com", "apexName": "example.com", "verified": false } } }
+  ],
+  "domainObserveVerified": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/domains/app.example.com" }, "response": { "status": 200, "body": { "name": "app.example.com", "apexName": "example.com", "projectId": "app", "verified": true, "verification": [], "redirect": null, "gitBranch": null, "customEnvironmentId": null } } }
+  ],
+  "domainObservePending": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/domains/app.example.com" }, "response": { "status": 200, "body": { "name": "app.example.com", "apexName": "example.com", "projectId": "app", "verified": false, "verification": [ { "type": "TXT", "domain": "_vercel.app.example.com", "value": "verify-me", "reason": "pending" } ], "redirect": null, "gitBranch": null, "customEnvironmentId": null } } }
+  ],
+  "domainObserveMissing": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/domains/app.example.com" }, "response": { "status": 404, "body": { "error": { "code": "not_found" } } } }
+  ],
+  "domainVerify": [
+    { "request": { "method": "POST", "path": "/v9/projects/app/domains/app.example.com/verify" }, "response": { "status": 200, "body": { "name": "app.example.com", "apexName": "example.com", "projectId": "app", "verified": true, "redirect": null, "gitBranch": null, "customEnvironmentId": null } } }
+  ],
+  "domainObserveMalformed": [
+    { "request": { "method": "GET", "path": "/v9/projects/app/domains/app.example.com" }, "response": { "status": 200, "body": { "name": "app.example.com", "projectId": "app", "verified": "yes" } } }
+  ],
+  "certReady": [
+    { "request": { "method": "GET", "path": "/v8/certs" }, "response": { "status": 200, "body": { "certs": [ { "id": "cert_1", "createdAt": 1782835200000, "expiresAt": 1893456000000, "autoRenew": true, "cns": [ "app.example.com" ] } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "certPending": [
+    { "request": { "method": "GET", "path": "/v8/certs" }, "response": { "status": 200, "body": { "certs": [], "pagination": { "count": 0, "next": 0, "prev": 0 } } } }
+  ],
+  "certExpired": [
+    { "request": { "method": "GET", "path": "/v8/certs" }, "response": { "status": 200, "body": { "certs": [ { "id": "cert_expired", "createdAt": 1577836800000, "expiresAt": 1609459200000, "autoRenew": false, "cns": [ "app.example.com" ] } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "certMalformed": [
+    { "request": { "method": "GET", "path": "/v8/certs" }, "response": { "status": 200, "body": { "certs": [ { "id": "cert_bad", "createdAt": 1782835200000, "expiresAt": 1893456000000, "autoRenew": true, "cns": "app.example.com" } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "dnsConfigCurrent": [
+    { "request": { "method": "GET", "path": "/v6/domains/app.example.com/config" }, "response": { "status": 200, "body": { "configuredBy": "CNAME", "acceptedChallenges": [ "dns-01" ], "recommendedIPv4": [ { "rank": 1, "value": [ "76.76.21.21" ] } ], "recommendedCNAME": [ { "rank": 1, "value": [ "cname.vercel-dns.com" ] } ], "misconfigured": false } } }
+  ],
+  "dnsConfigLegacy": [
+    { "request": { "method": "GET", "path": "/v6/domains/app.example.com/config" }, "response": { "status": 200, "body": { "configuredBy": "CNAME", "cname": "cname.vercel-dns.com", "records": { "value": "cname.vercel-dns.com" }, "misconfigured": false } } }
+  ],
+  "dnsConfigMissing": [
+    { "request": { "method": "GET", "path": "/v6/domains/app.example.com/config" }, "response": { "status": 200, "body": { "configuredBy": null, "acceptedChallenges": [], "recommendedCNAME": [], "misconfigured": true } } }
+  ],
+  "deploymentCreatePreview": [
+    { "request": { "method": "POST", "path": "/v13/deployments" }, "response": { "status": 200, "body": { "id": "dpl_1", "name": "app", "url": "app-1.vercel.app", "readyState": "QUEUED", "createdAt": 1782835200000 } } }
+  ],
+  "deploymentCreateStaged": [
+    { "request": { "method": "POST", "path": "/v13/deployments" }, "response": { "status": 200, "body": { "id": "dpl_staged", "name": "app", "url": "app-staged.vercel.app", "readyState": "QUEUED", "createdAt": 1782835200000 } } }
+  ],
+  "deploymentCreateProduction": [
+    { "request": { "method": "POST", "path": "/v13/deployments" }, "response": { "status": 200, "body": { "id": "dpl_prod", "name": "app", "url": "app-prod.vercel.app", "readyState": "QUEUED", "createdAt": 1782835200000 } } }
+  ],
+  "deploymentWaitReady": [
+    { "request": { "method": "GET", "path": "/v13/deployments/dpl_1" }, "response": { "status": 200, "body": { "id": "dpl_1", "name": "app", "readyState": "READY", "target": "staging", "createdAt": 1782835200000 } } }
+  ],
+  "deploymentWaitPolling": [
+    { "request": { "method": "GET", "path": "/v13/deployments/dpl_1" }, "response": { "status": 200, "body": { "id": "dpl_1", "readyState": "BUILDING", "createdAt": 1782835200000 } } },
+    { "request": { "method": "GET", "path": "/v13/deployments/dpl_1" }, "response": { "status": 200, "body": { "id": "dpl_1", "readyState": "READY", "createdAt": 1782835200000 } } }
+  ],
+  "deploymentWaitError": [
+    { "request": { "method": "GET", "path": "/v13/deployments/dpl_1" }, "response": { "status": 200, "body": { "id": "dpl_1", "readyState": "ERROR", "createdAt": 1782835200000 } } }
+  ],
+  "deploymentWaitTimeout": [
+    { "request": { "method": "GET", "path": "/v13/deployments/dpl_1" }, "response": { "status": 200, "body": { "id": "dpl_1", "readyState": "BUILDING", "createdAt": 1782835200000 } }, "repeat": true }
+  ],
+  "promote": [
+    { "request": { "method": "POST", "path": "/v10/projects/app/promote/dpl_1" }, "response": { "status": 201 } }
+  ],
+  "rollback": [
+    { "request": { "method": "POST", "path": "/v1/projects/app/rollback/dpl_prev" }, "response": { "status": 201 } }
+  ],
+  "shadowProjects": [
+    { "request": { "method": "GET", "path": "/v9/projects?search=lp-pr-" }, "response": { "status": 200, "body": { "projects": [ { "id": "prj_shadow", "name": "lp-pr-12-app" } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "deploymentsList": [
+    { "request": { "method": "GET", "path": "/v7/deployments?projectId=app&limit=100" }, "response": { "status": 200, "body": { "deployments": [ { "uid": "dpl_exact", "name": "app", "url": "app-exact.vercel.app", "state": "READY", "target": null, "meta": { "githubCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "deploymentsListProductionOnly": [
+    { "request": { "method": "GET", "path": "/v7/deployments?projectId=app&limit=100" }, "response": { "status": 200, "body": { "deployments": [ { "uid": "dpl_prod", "name": "app", "url": "app-prod.vercel.app", "state": "READY", "target": "production", "meta": { "githubCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "deploymentsListRepositoryMismatch": [
+    { "request": { "method": "GET", "path": "/v7/deployments?projectId=app&limit=100" }, "response": { "status": 200, "body": { "deployments": [ { "uid": "dpl_other", "name": "app", "url": "app-other.vercel.app", "state": "READY", "target": null, "meta": { "githubCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "gitRepo": "evil/app" } } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "deploymentsListPartial": [
+    { "request": { "method": "GET", "path": "/v7/deployments?projectId=app&limit=100" }, "response": { "status": 200, "body": { "deployments": [ { "name": "app", "url": "app-partial.vercel.app", "state": "READY", "target": null, "meta": { "githubCommitSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } ], "pagination": { "count": 1, "next": 0, "prev": 0 } } } }
+  ],
+  "deploymentsListMalformed": [
+    { "request": { "method": "GET", "path": "/v7/deployments?projectId=app&limit=100" }, "response": { "status": 200, "body": { "deployments": "nope" } } }
+  ],
+  "logsArray": [
+    { "request": { "method": "GET", "path": "/v3/deployments/dpl_1/events?limit=100&direction=forward" }, "response": { "status": 200, "body": [ { "type": "stdout", "created": 1782835200000, "payload": { "deploymentId": "dpl_1", "text": "build ok" } }, { "type": "command", "created": 1782835201000, "payload": { "deploymentId": "dpl_1", "command": "npm run build" } } ] } }
+  ],
+  "logsWrapper": [
+    { "request": { "method": "GET", "path": "/v3/deployments/dpl_1/events?limit=100&direction=forward" }, "response": { "status": 200, "body": { "events": [ { "type": "stdout", "created": 1782835200000, "payload": { "deploymentId": "dpl_1", "text": "legacy line" } } ] } } }
+  ],
+  "logsMalformed": [
+    { "request": { "method": "GET", "path": "/v3/deployments/dpl_1/events?limit=100&direction=forward" }, "response": { "status": 200, "body": { "events": {} } } }
+  ],
+  "projectDelete": [
+    { "request": { "method": "DELETE", "path": "/v9/projects/app" }, "response": { "status": 200, "body": { "id": "prj_1" } } }
+  ],
+  "domainRemove": [
+    { "request": { "method": "DELETE", "path": "/v9/projects/app/domains/app.example.com" }, "response": { "status": 200, "body": {} } }
+  ],
+  "deploymentDelete": [
+    { "request": { "method": "DELETE", "path": "/v13/deployments/dpl_1" }, "response": { "status": 200, "body": { "uid": "dpl_1", "state": "DELETED" } } }
+  ],
+  "errorCanary": [
+    { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 401, "body": { "error": { "code": "forbidden", "message": "lp-contract-canary-body-9b2a4f6c" } } } }
+  ]
+}

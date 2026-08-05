@@ -1,40 +1,250 @@
 name: Launchpad Reusable Application Preview
 
+# Verifies the Vercel preview deployment for the exact PR head commit and
+# reports build/health evidence to GitHub. Callable from any application
+# repository; the only credentials it needs are GitHub OIDC (id-token: write)
+# and the repository's own fine-grained GITHUB_TOKEN. No Launchpad checkout,
+# local actions, or Node/Yarn toolchain are required.
+#
+# Caller wiring (application repository):
+#
+#   permissions:
+#     contents: read
+#     id-token: write
+#     pull-requests: write
+#     deployments: write
+#   jobs:
+#     preview:
+#       uses: <org>/launchpad/.github/workflows/reusable-app-preview.yml@v1
+#       with:
+#         application_id: my-app
+#         controller_url: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
+#         oidc_audience: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
+#
+# The job conclusion IS the required check. Any missing, malformed, failed, or
+# timed-out evidence fails this workflow: it never reports green on partial
+# information.
+
 on:
   workflow_call:
     inputs:
       application_id:
-        required: false
+        required: true
+        type: string
+      controller_url:
+        required: true
+        type: string
+      oidc_audience:
+        required: true
         type: string
     outputs:
       deployment_id:
+        description: GitHub Deployment id published for the exact commit
         value: ${{ jobs.preview.outputs.deployment_id }}
       preview_url:
+        description: Exact Vercel preview URL that was verified
         value: ${{ jobs.preview.outputs.preview_url }}
+      build_state:
+        description: Terminal Vercel build state (READY, ERROR, CANCELED, TIMEOUT)
+        value: ${{ jobs.preview.outputs.build_state }}
       health_state:
+        description: Health gate result (PASSED, FAILED, ERROR)
         value: ${{ jobs.preview.outputs.health_state }}
+      operation_id:
+        description: Controller operation id for this verification
+        value: ${{ jobs.preview.outputs.operation_id }}
 
 permissions: {}
 
 jobs:
   preview:
+    name: launchpad / preview
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
-      deployment_id: ${{ steps.verify.outputs.deployment_id }}
-      preview_url: ${{ steps.verify.outputs.preview_url }}
-      health_state: ${{ steps.verify.outputs.health_state }}
+      deployment_id: ${{ steps.report.outputs.deployment_id }}
+      preview_url: ${{ steps.report.outputs.preview_url }}
+      build_state: ${{ steps.report.outputs.build_state }}
+      health_state: ${{ steps.report.outputs.health_state }}
+      operation_id: ${{ steps.report.outputs.operation_id }}
     permissions:
       contents: read
       id-token: write
       pull-requests: write
       deployments: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: '24.18.0', cache: yarn }
-      - uses: ./.github/actions/setup-launchpad
-      - id: verify
+      - name: Reject fork pull requests
+        if: ${{ github.event.pull_request.head.repo.fork == true }}
+        run: |
+          echo "LP-FORK-PR-UNSUPPORTED: launchpad preview verification only runs for pull requests from the configured application repository. Fork pull requests get no controller access and no deployment status."
+          exit 1
+
+      - name: Acquire Launchpad OIDC token
+        id: oidc
         env:
-          LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
-          LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
-        run: yarn platform app-preview --application '${{ inputs.application_id }}' --sha '${{ github.sha }}' --controller "$LAUNCHPAD_CONTROLLER_URL"
+          AUDIENCE: ${{ inputs.oidc_audience }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || -z "$AUDIENCE" ]]; then
+            echo "LP-OIDC-ENV-MISSING: ACTIONS_ID_TOKEN_REQUEST_URL/TOKEN (id-token: write) and oidc_audience are required." >&2
+            exit 1
+          fi
+          audience_encoded="$(printf '%s' "$AUDIENCE" | jq -sRr @uri)"
+          response="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$audience_encoded")"
+          token="$(printf '%s' "$response" | jq -r '.value // empty')"
+          if [[ -z "$token" ]]; then
+            echo "LP-OIDC-TOKEN-MISSING: the request-token API response did not contain a value field." >&2
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare versioned preview payload
+        id: payload
+        env:
+          APPLICATION_ID: ${{ inputs.application_id }}
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+          REPOSITORY_OWNER_ID: ${{ github.repository_owner_id }}
+          WORKFLOW_REF: ${{ github.workflow_ref || github.workflow }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$APPLICATION_ID" || -z "$SOURCE_COMMIT" || -z "$REPOSITORY" || -z "$REPOSITORY_ID" || -z "$REPOSITORY_OWNER_ID" || -z "$EVENT" ]]; then
+            echo "LP-PAYLOAD-IDENTITY-MISSING: application_id, source commit, repository identity, and event are required." >&2
+            exit 1
+          fi
+          jq -n \
+            --arg applicationId "$APPLICATION_ID" \
+            --arg sourceCommit "$SOURCE_COMMIT" \
+            --arg repository "$REPOSITORY" \
+            --arg repositoryId "$REPOSITORY_ID" \
+            --arg repositoryOwnerId "$REPOSITORY_OWNER_ID" \
+            --arg workflowRef "$WORKFLOW_REF" \
+            --arg event "$EVENT" \
+            --arg ref "$REF" \
+            '{version: 1, applicationId: $applicationId, sourceCommit: $sourceCommit, repository: $repository, repositoryId: ($repositoryId | tonumber), repositoryOwnerId: ($repositoryOwnerId | tonumber), workflowRef: $workflowRef, event: $event, ref: $ref}' > payload.json
+          if [[ -n "$PR_NUMBER" ]]; then
+            jq --arg pr "$PR_NUMBER" '. + {pullRequestNumber: $pr}' payload.json > payload.next.json
+            mv payload.next.json payload.json
+          fi
+          echo "payload ready for $REPOSITORY @ $(printf '%s' "$SOURCE_COMMIT" | cut -c1-12)"
+
+      - name: Create or reuse GitHub deployment (in progress)
+        id: deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          CONTROLLER_URL: ${{ inputs.controller_url }}
+        run: |
+          set -euo pipefail
+          existing="$(gh api "/repos/$REPOSITORY/deployments?ref=$SOURCE_COMMIT&environment=preview" --jq '.[0].id // empty')"
+          if [[ -n "$existing" ]]; then
+            deployment_id="$existing"
+          else
+            jq -n --arg ref "$SOURCE_COMMIT" '{ref: $ref, environment: "preview", description: "Launchpad preview gate", transient_environment: true, auto_merge: false, required_contexts: []}' > deployment-body.json
+            deployment_id="$(gh api --method POST "/repos/$REPOSITORY/deployments" --input deployment-body.json --jq '.id')"
+          fi
+          jq -n --arg url "$CONTROLLER_URL" '{state: "in_progress", description: "Launchpad preview verification started", environment_url: $url}' > status-body.json
+          gh api --method POST "/repos/$REPOSITORY/deployments/$deployment_id/statuses" --input status-body.json > /dev/null
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact-commit Vercel build and health
+        id: verify
+        env:
+          APPLICATION_ID: ${{ inputs.application_id }}
+          CONTROLLER_URL: ${{ inputs.controller_url }}
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          IDEMPOTENCY_KEY: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --output controller-response.json --write-out '%{http_code}' \
+            --request POST \
+            --header "Authorization: Bearer $OIDC_TOKEN" \
+            --header "Content-Type: application/json" \
+            --header "Idempotency-Key: $IDEMPOTENCY_KEY" \
+            --data-binary @payload.json \
+            "$CONTROLLER_URL/v1/applications/$APPLICATION_ID/preview/status")"
+          if [[ "$code" != "200" ]]; then
+            cp controller-response.json controller-error.json 2> /dev/null || true
+            jq -r '.error | "LP-CONTROLLER-REJECTED code=" + .code + " message=" + .message + " retryable=" + (.retryable | tostring) + " correlationId=" + (.correlationId // "null")' controller-response.json 2> /dev/null || cat controller-response.json >&2
+            exit 1
+          fi
+          jq -e . controller-response.json > /dev/null 2>&1 || { echo "LP-CONTROLLER-MALFORMED-RESPONSE: controller returned invalid JSON." >&2; exit 1; }
+          jq -e '.status and .gateState and .operationId and .sourceCommit and .commentBody and .deploymentStatus' controller-response.json > /dev/null 2>&1 || { echo "LP-EVIDENCE-INCOMPLETE: controller response is missing required evidence fields." >&2; exit 1; }
+          jq -r '"verified operation " + .operationId + " gate=" + .gateState + " build=" + (.buildState // "unavailable") + " health=" + (.healthState // "unavailable")' controller-response.json
+
+      - name: Publish deployment status and sticky comment
+        id: report
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          CONTROLLER_URL: ${{ inputs.controller_url }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          marker='<!-- launchpad:app-preview -->'
+
+          if ! jq -e '.gateState' controller-response.json > /dev/null 2>&1; then
+            # The controller was never reached, rejected the request, or returned
+            # malformed output: publish a visible failure status on the exact-commit
+            # deployment if one exists, then exit 0 (the verify step already failed).
+            deployment_id="${DEPLOYMENT_ID:-$(gh api "/repos/$REPOSITORY/deployments?ref=$SOURCE_COMMIT&environment=preview" --jq '.[0].id // empty' 2> /dev/null || true)}"
+            if [[ -n "$deployment_id" ]]; then
+              jq -n --arg url "$CONTROLLER_URL" '{state: "error", description: "Launchpad preview verification failed before evidence was produced", environment_url: $url}' > failure-status.json
+              gh api --method POST "/repos/$REPOSITORY/deployments/$deployment_id/statuses" --input failure-status.json > /dev/null || true
+            fi
+            exit 0
+          fi
+
+          gate="$(jq -r '.gateState' controller-response.json)"
+          operation_id="$(jq -r '.operationId' controller-response.json)"
+          build_state="$(jq -r '.buildState // ""' controller-response.json)"
+          health_state="$(jq -r '.healthState // ""' controller-response.json)"
+          preview_url="$(jq -r '.deployment.url // ""' controller-response.json)"
+          status_state="$(jq -r '.deploymentStatus.state // "error"' controller-response.json)"
+          description="$(jq -r '.deploymentStatus.description // "Launchpad preview gate did not pass."' controller-response.json)"
+          target_url="$(jq -r '.deploymentStatus.targetUrl // ""' controller-response.json)"
+
+          echo "deployment_id=${DEPLOYMENT_ID:-}" >> "$GITHUB_OUTPUT"
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+          echo "build_state=$build_state" >> "$GITHUB_OUTPUT"
+          echo "health_state=$health_state" >> "$GITHUB_OUTPUT"
+          echo "operation_id=$operation_id" >> "$GITHUB_OUTPUT"
+
+          deployment_id="${DEPLOYMENT_ID:-$(gh api "/repos/$REPOSITORY/deployments?ref=$SOURCE_COMMIT&environment=preview" --jq '.[0].id // empty' 2> /dev/null || true)}"
+          if [[ -n "$deployment_id" ]]; then
+            jq -n \
+              --arg state "$status_state" \
+              --arg description "$description" \
+              --arg targetUrl "$target_url" \
+              '{state: $state, description: $description, target_url: $targetUrl}' > final-status.json
+            gh api --method POST "/repos/$REPOSITORY/deployments/$deployment_id/statuses" --input final-status.json > /dev/null
+          fi
+
+          pr_number=""
+          if [[ -s payload.json ]]; then
+            pr_number="$(jq -r '.pullRequestNumber // empty' payload.json)"
+          fi
+          if [[ -n "$pr_number" ]]; then
+            jq -n --rawfile body <(jq -r '.commentBody' controller-response.json) '{body: $body}' > comment-body.json
+            existing_id="$(gh api "/repos/$REPOSITORY/issues/$pr_number/comments?per_page=100" --jq "first(.[] | select(.body | contains('$marker')) | .id) // empty" 2> /dev/null || true)"
+            if [[ -n "$existing_id" ]]; then
+              gh api --method PATCH "/repos/$REPOSITORY/issues/comments/$existing_id" --input comment-body.json > /dev/null
+            else
+              gh api --method POST "/repos/$REPOSITORY/issues/$pr_number/comments" --input comment-body.json > /dev/null
+            fi
+          fi
+
+          if [[ "$gate" != "PASSED" ]]; then
+            echo "LP-PREVIEW-GATE-FAILED: build=$build_state health=$health_state operation=$operation_id" >&2
+            exit 1
+          fi

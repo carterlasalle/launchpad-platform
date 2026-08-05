@@ -10,23 +10,91 @@ on:
       - 'workflows/**'
       - 'migrations/d1/**'
       - 'wrangler.jsonc'
+      - 'scripts/**'
+      - '.github/actions/**'
+      - '.github/rulesets/**'
+      - '.github/workflows/deploy-control-plane.yml'
   workflow_dispatch: {}
 
 permissions: {}
 
 jobs:
-  deploy:
+  verify-static-foundation:
+    name: static / foundation gate
     runs-on: ubuntu-latest
-    environment: launchpad-control-plane
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with: { node-version: '24.18.0', cache: yarn }
+        with:
+          node-version-file: .node-version
+          cache: yarn
+      - uses: ./.github/actions/setup-launchpad
+      - name: Verify toolchain decision record
+        run: node scripts/check-toolchain.mjs
+      - name: Verify action pins and workflow permissions
+        run: node scripts/check-workflows.mjs
+      - name: Verify active main ruleset
+        run: node scripts/verify-ruleset.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.LAUNCHPAD_RULESET_TOKEN || github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+  deploy:
+    needs: verify-static-foundation
+    runs-on: ubuntu-latest
+    environment: launchpad-control-plane
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: { fetch-depth: 0 }
+      - name: Verify protected-commit provenance
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "LP-UNPROTECTED-COMMIT: $GITHUB_SHA is not an ancestor of protected main"; exit 1; }
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .node-version
+          cache: yarn
       - uses: ./.github/actions/setup-launchpad
       - run: yarn typecheck && yarn test && yarn build
-      - run: yarn wrangler deploy --env production
+      - name: Render production Wrangler config from environment variables
+        run: node scripts/render-wrangler-config.mjs --env production --output wrangler.deploy.json
+        env:
+          LAUNCHPAD_D1_DATABASE_ID: ${{ vars.LAUNCHPAD_D1_DATABASE_ID }}
+          LAUNCHPAD_SECRETS_STORE_ID: ${{ vars.LAUNCHPAD_SECRETS_STORE_ID }}
+          LAUNCHPAD_VERCEL_TEAM_ID: ${{ vars.LAUNCHPAD_VERCEL_TEAM_ID }}
+          LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL: ${{ vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL }}
+      - name: Wrangler dry-run binding assertions
+        run: |
+          set -euo pipefail
+          yarn wrangler deploy --env production --config wrangler.deploy.json --dry-run --outdir "$RUNNER_TEMP/launchpad-dry-run" > "$RUNNER_TEMP/launchpad-dry-run.log" 2>&1
+          cat "$RUNNER_TEMP/launchpad-dry-run.log"
+          for binding in ASSETS DB APPLY_WORKFLOW PREVIEW_WORKFLOW APP_PREVIEW_STATUS_WORKFLOW RECONCILE_WORKFLOW DECOMMISSION_WORKFLOW PROVIDER_EVENTS HEALTH_CHECKS SECRETS_OPERATOR_TOKEN; do
+            grep -q "env.${binding} " "$RUNNER_TEMP/launchpad-dry-run.log" || { echo "Missing production binding: ${binding}"; exit 1; }
+          done
+          node scripts/assert-deploy-bindings.mjs --env production --config wrangler.deploy.json --concrete
+          node scripts/assert-deploy-bindings.mjs --env test
+      - name: Generate controller SBOM
+        run: node scripts/generate-sbom.mjs
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with: { name: launchpad-sbom, path: artifacts/launchpad-sbom.cdx.json }
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e3fe62ef559997059fe8380e7d2b4c909e2d65f4
+        with:
+          subject-path: artifacts/launchpad-sbom.cdx.json
+      - run: yarn wrangler deploy --env production --config wrangler.deploy.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

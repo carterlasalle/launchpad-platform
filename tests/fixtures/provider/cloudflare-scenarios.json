@@ -1,0 +1,86 @@
+{
+  "zone": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "zone-1", "name": "example.com", "name_servers": [ "ns1.example.net", "ns2.example.net" ], "status": "active" } ], "errors": [], "messages": [] } } }
+  ],
+  "zoneEmpty": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "body": { "success": true, "result": [], "errors": [], "messages": [] } } }
+  ],
+  "recordListEmpty": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [], "errors": [], "messages": [] } } }
+  ],
+  "recordCreate": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [], "errors": [], "messages": [] } } },
+    { "request": { "method": "POST", "path": "/zones/zone-1/dns_records" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" } ], "errors": [], "messages": [] } } }
+  ],
+  "recordUpdate": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "old.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" } ], "errors": [], "messages": [] } } },
+    { "request": { "method": "PUT", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" } ], "errors": [], "messages": [] } } }
+  ],
+  "recordNoop": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" } ], "errors": [], "messages": [] } } }
+  ],
+  "recordUnowned": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": null } ], "errors": [], "messages": [] } } }
+  ],
+  "recordReplaced": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "record-2", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" } ], "errors": [], "messages": [] } } }
+  ],
+  "recordGone": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [], "errors": [], "messages": [] } } }
+  ],
+  "recordProxied": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [], "errors": [], "messages": [] } } },
+    { "request": { "method": "POST", "path": "/zones/zone-1/dns_records" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": true, "comment": "launchpad:fp-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [ { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": true, "comment": "launchpad:fp-1" } ], "errors": [], "messages": [] } } }
+  ],
+  "recordPostconditionFail": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [], "errors": [], "messages": [] } } },
+    { "request": { "method": "POST", "path": "/zones/zone-1/dns_records" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com&type=CNAME" }, "response": { "status": 200, "body": { "success": true, "result": [], "errors": [], "messages": [] } } }
+  ],
+  "recordDelete": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "DELETE", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": null, "errors": [], "messages": [] } } }
+  ],
+  "recordDeleteUnowned": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": null }, "errors": [], "messages": [] } } }
+  ],
+  "recordDeleteUnverified": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "DELETE", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1" }, "errors": [], "messages": [] } } },
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records/record-1" }, "response": { "status": 200, "body": { "success": true, "result": { "id": "record-1", "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1, "proxied": false, "comment": "launchpad:fp-1" }, "errors": [], "messages": [] } } }
+  ],
+  "recordListMalformed": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com" }, "response": { "status": 200, "body": { "success": true, "result": {}, "errors": [], "messages": [] } } }
+  ],
+  "recordMissingFields": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com" }, "response": { "status": 200, "body": { "success": true, "result": [ { "name": "app.example.com", "type": "CNAME", "content": "target.example", "ttl": 1 } ], "errors": [], "messages": [] } } }
+  ],
+  "envelopeRateLimited": [
+    { "request": { "method": "GET", "path": "/zones/zone-1/dns_records?name=app.example.com" }, "response": { "status": 200, "body": { "success": false, "result": null, "errors": [ { "code": 1001, "message": "API rate limit exceeded" } ], "messages": [] } } }
+  ],
+  "envelopeAuth": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "body": { "success": false, "result": null, "errors": [ { "code": 9109, "message": "Invalid access token" } ], "messages": [] } } }
+  ],
+  "envelopeForbidden": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "body": { "success": false, "result": null, "errors": [ { "code": 9111, "message": "Access denied" } ], "messages": [] } } }
+  ],
+  "envelopeUnknownCode": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "body": { "success": false, "result": null, "errors": [ { "code": 9999, "message": "mystery" } ], "messages": [] } } }
+  ],
+  "envelopeNoCodes": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "body": { "success": false, "result": null, "errors": [], "messages": [] } } }
+  ],
+  "envelopeMissingSuccess": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "body": { "result": [], "errors": [], "messages": [] } } }
+  ],
+  "nonJson": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 200, "raw": "not-json" } }
+  ],
+  "errorCanary": [
+    { "request": { "method": "GET", "path": "/zones?name=example.com&status=active" }, "response": { "status": 403, "body": { "success": false, "result": null, "errors": [ { "code": 9111, "message": "lp-contract-canary-body-9b2a4f6c" } ], "messages": [] } } }
+  ]
+}

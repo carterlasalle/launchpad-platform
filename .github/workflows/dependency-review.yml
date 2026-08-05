@@ -1,0 +1,24 @@
+name: Launchpad Dependency Review
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'yarn.lock'
+      - '**/package.json'
+
+permissions: {}
+
+jobs:
+  dependency-review:
+    name: dependency / review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/dependency-review-action@1e966ba708e4b64bb0c9bfb7abb5a232840be16a
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: true

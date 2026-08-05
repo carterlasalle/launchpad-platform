@@ -1,1 +1,9 @@
-{"notFound":{"status":404},"forbidden":{"status":403},"rateLimited":{"status":429},"malformed":"not-json","transient":{"status":503}}
+{
+  "notFound": { "status": 404, "body": { "message": "not found" } },
+  "auth": { "status": 401, "body": { "message": "unauthorized" } },
+  "forbidden": { "status": 403, "body": { "message": "lp-contract-canary-body-9b2a4f6c" } },
+  "rateLimited": { "status": 429, "body": { "message": "rate limited" } },
+  "transient": { "status": 503, "body": { "message": "unavailable" } },
+  "malformed": "not-json",
+  "timeout": { "abort": true }
+}

@@ -1,0 +1,34 @@
+name: Assert PR Head
+description: Fails the run when the PR head SHA this run was dispatched for no longer matches the PR's current head (stale/superseded run guard).
+inputs:
+  repository:
+    required: true
+    description: owner/repo of the pull request
+  pull_number:
+    required: true
+    description: pull request number
+  expected_sha:
+    required: true
+    description: head SHA the run is bound to (github.event.pull_request.head.sha)
+  token:
+    required: true
+    description: github.token (read-only is sufficient)
+runs:
+  using: composite
+  steps:
+    - name: Verify PR head SHA is still current
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        expected="${{ inputs.expected_sha }}"
+        if [[ ! "$expected" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
+          exit 1
+        fi
+        actual="$(gh api "repos/${{ inputs.repository }}/pulls/${{ inputs.pull_number }}" --jq -r '.head.sha' 2>/dev/null || true)"
+        if [[ "${actual:-}" != "$expected" ]]; then
+          echo "::error::Superseded run: the PR head is now '${actual:-unknown}' but this run is bound to '$expected'. A newer run validates the current head; this run must not report a result."
+          exit 1
+        fi

@@ -1,8 +1,41 @@
+# Launchpad control repository ownership
+# Changes to the paths below require review by the owning team before merge
+# (main ruleset: require review from CODEOWNERS).
+
+# All platform code
 * @CarterLaSalle
+
+# Catalog and schema
 /catalog/ @CarterLaSalle
 /schema/ @CarterLaSalle
+
+# Core domain and policy
 /packages/core/ @CarterLaSalle
+/packages/core/policy/ @CarterLaSalle
 /packages/provider-contract/ @CarterLaSalle
+
+# Workflows and credentials surface
 /.github/ @CarterLaSalle
+/workflows/ @CarterLaSalle
 /apps/controller/ @CarterLaSalle
+
+# State and migrations
+/migrations/ @CarterLaSalle
+
+# Toolchain and dependency automation (updated only through reviewed dependency PRs)
+/package.json @CarterLaSalle
+/yarn.lock @CarterLaSalle
+/.yarnrc.yml @CarterLaSalle
+/.node-version @CarterLaSalle
+/.nvmrc @CarterLaSalle
+/renovate.json @CarterLaSalle
+/scripts/ @CarterLaSalle
+/.github/rulesets/ @CarterLaSalle
+
+# Operational documentation
+/docs/adr/ @CarterLaSalle
+/docs/runbooks/ @CarterLaSalle
+/docs/release-checklist.md @CarterLaSalle
+
+# Protect CODEOWNERS itself
 /.github/CODEOWNERS @CarterLaSalle
