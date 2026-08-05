@@ -7,7 +7,7 @@ API is unavailable; repository and review state is unknown during the outage.
 
 - Workflow runs fail at `actions/checkout` or at ruleset verification; the
   ruleset verifier reports unavailability (exit 2):
-  `LAUNCHPAD_RULESET_TOKEN=<token> GITHUB_REPOSITORY=CarterLaSalle/launchpad node scripts/verify-ruleset.mjs`
+  `LAUNCHPAD_RULESET_TOKEN=<token> GITHUB_REPOSITORY=carterlasalle/launchpad-platform node scripts/verify-ruleset.mjs`
 - `yarn platform preflight --catalog catalog` fails on the GitHub repository
   check while other providers pass.
 - Check the GitHub status page; confirm whether the outage affects the API,
@@ -30,7 +30,7 @@ API is unavailable; repository and review state is unknown during the outage.
   `yarn platform validate --catalog catalog`
   `yarn platform preflight --catalog catalog`
   `yarn platform plan --catalog catalog --format json`
-  `LAUNCHPAD_RULESET_TOKEN=<token> GITHUB_REPOSITORY=CarterLaSalle/launchpad node scripts/verify-ruleset.mjs`
+  `LAUNCHPAD_RULESET_TOKEN=<token> GITHUB_REPOSITORY=carterlasalle/launchpad-platform node scripts/verify-ruleset.mjs`
 - Compare the plan fingerprint with the one approved for the merged SHA; a
   mismatch means the plan is stale and apply must not proceed
   (`yarn platform apply --catalog catalog --sha <sha> --controller "$LAUNCHPAD_CONTROLLER_URL"` revalidates the fingerprint before writing).

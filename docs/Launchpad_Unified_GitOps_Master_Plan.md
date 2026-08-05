@@ -2813,7 +2813,7 @@ permissions:
 
 jobs:
   preview:
-    uses: CarterLaSalle/launchpad/.github/workflows/reusable-app-preview.yml@v1
+    uses: carterlasalle/launchpad-platform/.github/workflows/reusable-app-preview.yml@v1
 ```
 
 ### 11.1 Authentication

@@ -26,7 +26,7 @@ afterwards.
    representation of the change.
 3. Remove the temporary bypass and re-enable normal rules.
 4. Prove the ruleset is active and bypass-free again:
-   `LAUNCHPAD_RULESET_TOKEN=<token> GITHUB_REPOSITORY=CarterLaSalle/launchpad node scripts/verify-ruleset.mjs`
+   `LAUNCHPAD_RULESET_TOKEN=<token> GITHUB_REPOSITORY=carterlasalle/launchpad-platform node scripts/verify-ruleset.mjs`
 5. Run full validation: `yarn platform validate --catalog catalog`,
    `yarn platform preflight --catalog catalog`, and the release checklist
    gates.

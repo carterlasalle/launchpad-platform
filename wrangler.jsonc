@@ -32,7 +32,7 @@
   "vars": {
     "LAUNCHPAD_ENV": "development",
     "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787",
-    "CONTROL_REPOSITORY": "CarterLaSalle/launchpad",
+    "CONTROL_REPOSITORY": "carterlasalle/launchpad-platform",
     "CONTROL_CATALOG_ROOT": "catalog/apps",
     "RECONCILIATION_SHARD_COUNT": "1",
     "PROVIDER_EVENT_FANOUT_LIMIT": "100",
@@ -75,7 +75,7 @@
       "vars": {
         "LAUNCHPAD_ENV": "production",
         "CONTROLLER_INTERNAL_URL": "https://launchpad.example.internal",
-        "CONTROL_REPOSITORY": "CarterLaSalle/launchpad",
+        "CONTROL_REPOSITORY": "carterlasalle/launchpad-platform",
         "CONTROL_CATALOG_ROOT": "catalog/apps",
     "RECONCILIATION_SHARD_COUNT": "1",
     "PROVIDER_EVENT_FANOUT_LIMIT": "100",
@@ -126,7 +126,7 @@
       "vars": {
         "LAUNCHPAD_ENV": "test",
         "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787",
-        "CONTROL_REPOSITORY": "CarterLaSalle/launchpad",
+        "CONTROL_REPOSITORY": "carterlasalle/launchpad-platform",
         "CONTROL_CATALOG_ROOT": "catalog/apps",
     "RECONCILIATION_SHARD_COUNT": "1",
     "PROVIDER_EVENT_FANOUT_LIMIT": "100",
