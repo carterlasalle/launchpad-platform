@@ -94,8 +94,8 @@ try {
         continue;
       }
       if (rule.type === 'required_status_checks') {
-        const expectedContexts = (rule.parameters?.required_checks ?? []).map((check) => check.context).sort();
-        const liveContexts = (found.parameters?.required_checks ?? []).map((check) => check.context).sort();
+        const expectedContexts = (rule.parameters?.required_status_checks ?? []).map((check) => check.context).sort();
+        const liveContexts = (found.parameters?.required_status_checks ?? []).map((check) => check.context).sort();
         if (JSON.stringify(expectedContexts) !== JSON.stringify(liveContexts)) {
           problems.push(`required_status_checks contexts differ: spec [${expectedContexts.join(', ')}], live [${liveContexts.join(', ')}]`);
         }
@@ -129,4 +129,4 @@ if (problems.length > 0) {
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
 }
-console.log(`Ruleset verified: '${spec.name}' is active on ${repository}, enforcement=${spec.enforcement}, ${(spec.rules ?? []).length} required rule(s), ${(spec.bypass_actors ?? []).length} bypass actors, required checks: ${(spec.rules ?? []).filter((rule) => rule.type === 'required_status_checks')[0]?.parameters?.required_checks?.map((check) => check.context).join(', ') ?? 'none'}.`);
+console.log(`Ruleset verified: '${spec.name}' is active on ${repository}, enforcement=${spec.enforcement}, ${(spec.rules ?? []).length} required rule(s), ${(spec.bypass_actors ?? []).length} bypass actors, required checks: ${(spec.rules ?? []).filter((rule) => rule.type === 'required_status_checks')[0]?.parameters?.required_status_checks?.map((check) => check.context).join(', ') ?? 'none'}.`);

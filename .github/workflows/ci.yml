@@ -1,37 +1,9 @@
 name: Launchpad CI
 
 on:
-  pull_request:
-    paths:
-      - 'package.json'
-      - 'yarn.lock'
-      - '.yarnrc.yml'
-      - '.node-version'
-      - '.nvmrc'
-      - 'renovate.json'
-      - '.github/**'
-      - 'scripts/**'
-      - 'tsconfig*.json'
-      - 'eslint.config.js'
-      - 'vitest.config.ts'
-      - 'wrangler.jsonc'
-      - 'docs/adr/**'
+  pull_request: {}
   push:
     branches: [main]
-    paths:
-      - 'package.json'
-      - 'yarn.lock'
-      - '.yarnrc.yml'
-      - '.node-version'
-      - '.nvmrc'
-      - 'renovate.json'
-      - '.github/**'
-      - 'scripts/**'
-      - 'tsconfig*.json'
-      - 'eslint.config.js'
-      - 'vitest.config.ts'
-      - 'wrangler.jsonc'
-      - 'docs/adr/**'
   workflow_dispatch: {}
 
 permissions: {}
@@ -41,37 +13,114 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: static / scope
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+      docs: ${{ steps.scope.outputs.docs }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed files
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          code=false
+          docs=false
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            code=true
+            docs=true
+          else
+            changed_files="$(mktemp)"
+            if ! git diff --name-only -z "$BASE_SHA" "$HEAD_SHA" > "$changed_files"; then
+              echo "::error::Unable to determine the change scope."
+              exit 1
+            fi
+            while IFS= read -r -d '' file; do
+              case "$file" in
+                docs/adr/0007-toolchain-node-yarn.md) code=true; docs=true ;;
+                docs/*|README.md|AGENTS.md|CONTRIBUTING.md) docs=true ;;
+                *) code=true ;;
+              esac
+            done < "$changed_files"
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "docs=$docs" >> "$GITHUB_OUTPUT"
+
   toolchain:
     name: static / toolchain
+    needs: changes
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - name: Fail when change classification failed
+        if: needs.changes.result != 'success'
+        run: |
+          echo "::error::Static change classification did not complete successfully."
+          exit 1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+        if: needs.changes.outputs.code == 'true'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        if: needs.changes.outputs.code == 'true'
         with:
           node-version-file: .node-version
       - uses: ./.github/actions/setup-launchpad
+        if: needs.changes.outputs.code == 'true'
       - name: Verify toolchain decision record
+        if: needs.changes.outputs.code == 'true'
         run: node scripts/check-toolchain.mjs
       - name: Verify action pins and workflow permissions
+        if: needs.changes.outputs.code == 'true'
         run: node scripts/check-workflows.mjs
       - name: Verify lockfile is deduplicated
+        if: needs.changes.outputs.code == 'true'
         run: yarn dedupe --check
 
   quality:
     name: static / quality
-    needs: toolchain
+    needs: [changes, toolchain]
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - name: Fail when a static prerequisite failed
+        if: needs.changes.result != 'success' || needs.toolchain.result != 'success'
+        run: |
+          echo "::error::A required static prerequisite did not complete successfully."
+          exit 1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+        if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
         with:
           node-version-file: .node-version
       - uses: ./.github/actions/setup-launchpad
+        if: needs.changes.outputs.code == 'true'
       - run: yarn typecheck
+        if: needs.changes.outputs.code == 'true'
       - run: yarn lint
+        if: needs.changes.outputs.code == 'true'
+      - name: Verify documentation
+        if: needs.changes.outputs.docs == 'true'
+        run: node scripts/check-docs.mjs
       - run: yarn test
+        if: needs.changes.outputs.code == 'true'
       - run: yarn build
+        if: needs.changes.outputs.code == 'true'

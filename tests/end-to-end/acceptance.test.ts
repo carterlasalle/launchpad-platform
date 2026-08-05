@@ -2187,10 +2187,11 @@ it('SEC-RULESET-CONFIG: the main ruleset config protects main and is wired as a 
     expect(review?.require_last_push_approval).toBe(true);
     expect(review?.required_review_thread_resolution).toBe(true);
     expect(review?.dismiss_stale_reviews_on_push).toBe(true);
+    expect(review?.allowed_merge_methods).toEqual(['squash']);
     const checks = ruleset.rules.find((rule) => rule.type === 'required_status_checks')?.parameters as Record<string, unknown> | undefined;
-    const contexts = ((checks?.required_checks as Array<{ context: string }> | undefined) ?? []).map((check) => check.context);
+    const contexts = ((checks?.required_status_checks as Array<{ context: string }> | undefined) ?? []).map((check) => check.context);
     expect(checks?.strict_required_status_checks_policy).toBe(true);
-    expect(contexts).toEqual(['platform / schema', 'platform / catalog', 'platform / provider-preflight', 'platform / plan', 'platform / preview', 'platform / health', 'dependency / review']);
+    expect(contexts).toEqual(['static / toolchain', 'static / quality', 'platform / summary', 'dependency / review']);
     expect(ruleset.repository.squash_merge_only).toBe(true);
     expect(ruleset.repository.default_branch).toBe('main');
 

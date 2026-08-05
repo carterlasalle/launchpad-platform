@@ -17,7 +17,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  control-plane-mode:
+    name: control plane / mode
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      enabled: ${{ steps.mode.outputs.enabled }}
+    steps:
+      - name: Resolve control-plane mode
+        id: mode
+        shell: bash
+        env:
+          ENABLED: ${{ vars.LAUNCHPAD_CONTROL_PLANE_ENABLED }}
+        run: |
+          set -euo pipefail
+          case "$ENABLED" in
+            true)
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Launchpad control plane is enabled."
+              ;;
+            false|'')
+              echo "enabled=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Launchpad control plane is disabled. Follow docs/guides/deployment.md before setting LAUNCHPAD_CONTROL_PLANE_ENABLED=true."
+              ;;
+            *)
+              echo "::error::LP-CONTROL-PLANE-MODE-INVALID: LAUNCHPAD_CONTROL_PLANE_ENABLED must be exactly true or false."
+              exit 1
+              ;;
+          esac
+
   apply:
+    needs: control-plane-mode
+    if: needs.control-plane-mode.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment: launchpad-production
     permissions:
@@ -25,9 +56,9 @@ jobs:
       id-token: write
       deployments: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with: { fetch-depth: 2 }
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with: { node-version: '24.18.0' }
       - uses: ./.github/actions/setup-launchpad
       - name: Revalidate and apply
@@ -36,6 +67,7 @@ jobs:
           LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
           LAUNCHPAD_GITHUB_TOKEN: ${{ secrets.LAUNCHPAD_GITHUB_TOKEN }}
           LAUNCHPAD_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
+          LAUNCHPAD_VERCEL_TEAM_ID: ${{ vars.LAUNCHPAD_VERCEL_TEAM_ID }}
           LAUNCHPAD_CLOUDFLARE_TOKEN: ${{ secrets.LAUNCHPAD_CLOUDFLARE_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_SHA: ${{ github.sha }}

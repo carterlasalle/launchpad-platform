@@ -9,24 +9,72 @@ on:
       - 'packages/**'
       - 'workflows/**'
       - 'migrations/d1/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.node-version'
+      - '.yarnrc.yml'
+      - 'tsconfig*.json'
       - 'wrangler.jsonc'
       - 'scripts/**'
       - '.github/actions/**'
       - '.github/rulesets/**'
       - '.github/workflows/deploy-control-plane.yml'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: Deploy the control plane while automatic apply and reconciliation remain disabled
+        required: true
+        type: boolean
+        default: false
 
 permissions: {}
 
 jobs:
+  control-plane-mode:
+    name: control plane / mode
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      enabled: ${{ steps.mode.outputs.enabled }}
+    steps:
+      - name: Resolve control-plane mode
+        id: mode
+        shell: bash
+        env:
+          ENABLED: ${{ vars.LAUNCHPAD_CONTROL_PLANE_ENABLED }}
+          BOOTSTRAP: ${{ inputs.bootstrap }}
+        run: |
+          set -euo pipefail
+          case "$ENABLED" in
+            true)
+              echo "enabled=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::Launchpad control plane is enabled."
+              ;;
+            false|'')
+              if [[ "$BOOTSTRAP" == "true" ]]; then
+                echo "enabled=true" >> "$GITHUB_OUTPUT"
+                echo "::notice::Explicit manual bootstrap accepted; automatic apply and reconciliation remain disabled."
+              else
+                echo "enabled=false" >> "$GITHUB_OUTPUT"
+                echo "::notice::Launchpad control plane is disabled. Follow docs/guides/deployment.md, then dispatch this workflow with bootstrap=true."
+              fi
+              ;;
+            *)
+              echo "::error::LP-CONTROL-PLANE-MODE-INVALID: LAUNCHPAD_CONTROL_PLANE_ENABLED must be exactly true or false."
+              exit 1
+              ;;
+          esac
+
   verify-static-foundation:
+    needs: control-plane-mode
+    if: needs.control-plane-mode.outputs.enabled == 'true'
     name: static / foundation gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version-file: .node-version
       - uses: ./.github/actions/setup-launchpad
@@ -49,7 +97,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with: { fetch-depth: 0 }
       - name: Verify protected-commit provenance
         run: |
@@ -57,7 +105,7 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
             || { echo "LP-UNPROTECTED-COMMIT: $GITHUB_SHA is not an ancestor of protected main"; exit 1; }
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version-file: .node-version
       - uses: ./.github/actions/setup-launchpad
@@ -69,6 +117,9 @@ jobs:
           LAUNCHPAD_SECRETS_STORE_ID: ${{ vars.LAUNCHPAD_SECRETS_STORE_ID }}
           LAUNCHPAD_VERCEL_TEAM_ID: ${{ vars.LAUNCHPAD_VERCEL_TEAM_ID }}
           LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL: ${{ vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL }}
+          LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
+          LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
+          LAUNCHPAD_CONTROL_PLANE_ENABLED: ${{ vars.LAUNCHPAD_CONTROL_PLANE_ENABLED }}
       - name: Wrangler dry-run binding assertions
         run: |
           set -euo pipefail
@@ -86,12 +137,17 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_WORKFLOW: ${{ github.workflow }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with: { name: launchpad-sbom, path: artifacts/launchpad-sbom.cdx.json }
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@e3fe62ef559997059fe8380e7d2b4c909e2d65f4
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
         with:
           subject-path: artifacts/launchpad-sbom.cdx.json
+      - name: Apply production D1 migrations
+        run: yarn wrangler d1 migrations apply DB --env production --config wrangler.deploy.json --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: yarn wrangler deploy --env production --config wrangler.deploy.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

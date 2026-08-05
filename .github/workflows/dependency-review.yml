@@ -1,11 +1,7 @@
 name: Launchpad Dependency Review
 
 on:
-  pull_request:
-    paths:
-      - 'package.json'
-      - 'yarn.lock'
-      - '**/package.json'
+  pull_request: {}
 
 permissions: {}
 
@@ -15,10 +11,31 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: actions/dependency-review-action@1e966ba708e4b64bb0c9bfb7abb5a232840be16a
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          fail-on-severity: high
-          comment-summary-in-pr: true
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect dependency changes
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- package.json yarn.lock ':(glob)**/package.json'; then
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        if: steps.scope.outputs.relevant == 'true'
+        with:
+          node-version-file: .node-version
+      - name: Enable Corepack without installing pull-request dependencies
+        if: steps.scope.outputs.relevant == 'true'
+        run: corepack enable
+      - name: Audit dependency graph
+        if: steps.scope.outputs.relevant == 'true'
+        run: yarn npm audit --all --recursive --severity high

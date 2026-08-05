@@ -15,7 +15,7 @@ name: Launchpad Reusable Application Preview
 #     deployments: write
 #   jobs:
 #     preview:
-#       uses: <org>/launchpad/.github/workflows/reusable-app-preview.yml@v1
+#       uses: carterlasalle/launchpad-platform/.github/workflows/reusable-app-preview.yml@<reviewed-release-tag>
 #       with:
 #         application_id: my-app
 #         controller_url: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
