@@ -2,7 +2,7 @@ apiVersion: launchpad.dev/v1
 kind: ReconciliationRequest
 metadata:
   app: tokentest
-  observedAt: 2026-08-06T12:27:20.788Z
+  observedAt: 2026-08-06T12:30:32.423Z
 spec:
   desiredGeneration: 0
   reason: external-drift
