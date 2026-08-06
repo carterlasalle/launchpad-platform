@@ -258,7 +258,9 @@ export class VercelAdapter implements ProjectProvider {
 
   async ensureProject(spec: ProjectSpec, ctx: ProviderContext): Promise<MutationResult<ObservedResource>> {
     const before = await this.observeProject({ projectId: spec.id, teamId: spec.teamId }, ctx);
-    const body = { name: spec.name, framework: spec.framework, rootDirectory: spec.rootDirectory, nodeVersion: spec.nodeVersion, installCommand: spec.build.installCommand, buildCommand: spec.build.buildCommand, outputDirectory: spec.build.outputDirectory, gitRepository: spec.repository, productionBranch: spec.productionBranch, ...spec.settings };
+    const baseBody = { name: spec.name, framework: spec.framework, rootDirectory: spec.rootDirectory, installCommand: spec.build.installCommand, buildCommand: spec.build.buildCommand, outputDirectory: spec.build.outputDirectory, gitRepository: { type: 'github', repo: spec.repository }, productionBranch: spec.productionBranch, ...spec.settings };
+    // Vercel's create contract does not accept nodeVersion; the PATCH path does.
+    const body = before ? { ...baseBody, nodeVersion: spec.nodeVersion } : baseBody;
     const afterResponse = before ? await this.client.request<unknown>(this.client.withTeam(`/v9/projects/${encodeURIComponent(before.providerResourceId)}`), { method: 'PATCH', body: JSON.stringify(body), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-project', spec.id, canonicalJson(body)) }) : await this.client.request<unknown>(this.client.withTeam('/v10/projects'), { method: 'POST', body: JSON.stringify(body), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-project', spec.id, canonicalJson(body)) });
     const observed = { provider: 'vercel' as const, resourceType: 'vercel.project', resourceKey: spec.id, providerResourceId: text(record(afterResponse).id) ?? before?.providerResourceId ?? spec.id, configuration: record(afterResponse), ownershipFingerprint: text(record(afterResponse).id) ?? spec.id, observedAt: new Date().toISOString() };
     const changed = before === null || canonicalJson(before.configuration) !== canonicalJson(observed.configuration);
