@@ -63,6 +63,28 @@ it('creates redacted machine-readable artifacts with bounded size', () => {
   expect(bounded.endsWith('ok')).toBe(true);
 });
 
+it('preserves shared references in plan artifacts (plan-review attestation parity)', () => {
+  // The same health spec object is referenced by the candidate, health, and
+  // post-health operations. A global dedupe pass would corrupt these shared
+  // payloads with literal "[Circular]" strings; the artifact must stay
+  // faithful so the plan-review attestation binds exactly what a fresh plan
+  // computes.
+  const health = { path: '/', method: 'GET', expectedStatus: [200] };
+  const sharedPlan: PlatformPlan = {
+    ...plan,
+    operations: [
+      { ...plan.operations[0]!, resourceKey: 'production.candidate', after: { enabled: true, health, release: { strategy: 'staged-production' }, rollback: { enabled: true } } },
+      { ...plan.operations[0]!, resourceKey: 'production.health', after: { path: '/', method: 'GET', expectedStatus: [200] } },
+      { ...plan.operations[0]!, resourceKey: 'production.post-health', after: health },
+    ],
+  };
+  const content = requireArtifact(artifactFiles({ plans: [sharedPlan] }), 'plans.json');
+  expect(content).not.toContain('[Circular]');
+  const decoded = JSON.parse(content) as PlatformPlan[];
+  expect(decoded[0]?.operations[0]?.after).toMatchObject({ enabled: true, health: { path: '/', method: 'GET', expectedStatus: [200] }, release: { strategy: 'staged-production' } });
+  expect(decoded[0]?.operations[2]?.after).toEqual({ path: '/', method: 'GET', expectedStatus: [200] });
+});
+
 it('degrades oversized plans to a bounded minimal projection instead of failing', () => {
   const bloated = Array.from({ length: 400 }, (_, index): PlannedOperation => ({ id: `op-${index}`, resourceKey: `resource.${index}`, provider: 'vercel', resourceType: 'project', action: 'UPDATE_IN_PLACE', before: { payload: 'b'.repeat(2000) }, after: { payload: 'c'.repeat(2000) }, prerequisites: [], invalidates: [], idempotencyKey: `key-${index}`, destructive: false, retryClass: 'NONE' }));
   const oversized: PlatformPlan = { ...plan, operations: bloated, downstreamEffects: [], policyResults: [] };

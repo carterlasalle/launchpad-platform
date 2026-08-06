@@ -75,18 +75,26 @@ export function isSensitiveValue(value: unknown): value is SensitiveValue<unknow
 }
 
 export function redactValue(value: unknown): unknown {
-  const seen = new WeakSet<object>();
+  // Ancestor-stack guard: only genuine cycles are replaced. Shared references
+  // (e.g. the same health spec used by several plan operations) must
+  // serialize fully — a global seen-set would corrupt the plan artifact that
+  // the plan-review attestation binds.
+  const ancestors = new WeakSet<object>();
   const redact = (current: unknown): unknown => {
     if (isSensitiveValue(current)) return '[REDACTED]';
     if (Array.isArray(current)) {
-      if (seen.has(current)) return '[Circular]';
-      seen.add(current);
-      return current.map((item) => redact(item));
+      if (ancestors.has(current)) return '[Circular]';
+      ancestors.add(current);
+      const out = current.map((item) => redact(item));
+      ancestors.delete(current);
+      return out;
     }
     if (current !== null && typeof current === 'object') {
-      if (seen.has(current)) return '[Circular]';
-      seen.add(current);
-      return Object.fromEntries(Object.entries(current).map(([key, item]) => [key, redact(item)]));
+      if (ancestors.has(current)) return '[Circular]';
+      ancestors.add(current);
+      const out = Object.fromEntries(Object.entries(current).map(([key, item]) => [key, redact(item)]));
+      ancestors.delete(current);
+      return out;
     }
     return current;
   };

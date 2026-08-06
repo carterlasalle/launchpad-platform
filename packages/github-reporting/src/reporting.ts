@@ -127,18 +127,31 @@ function truncateString(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max)}…[truncated]` : value;
 }
 
-/** Recursively bounds every string, scrubs credential-shaped text, and drops circular references; output stays JSON-safe and redaction-safe. */
-function boundStrings(value: unknown, seen = new WeakSet<object>()): unknown {
+/**
+ * Recursively bounds every string, scrubs credential-shaped text, and guards
+ * genuine reference cycles; output stays JSON-safe and redaction-safe.
+ *
+ * Only ANCESTOR cycles are replaced with `[Circular]`: plan payloads share
+ * references across operations (e.g. the same health spec in the candidate,
+ * health, and post-health operations), and a global seen-set would corrupt
+ * those shared payloads — the corrupted artifact would then be bound by the
+ * plan-review attestation, which no freshly computed plan could match.
+ */
+function boundStrings(value: unknown, ancestors = new WeakSet<object>()): unknown {
   if (typeof value === 'string') return truncateString(redactText(value), MAX_STRING_CHARS);
   if (Array.isArray(value)) {
-    if (seen.has(value)) return '[Circular]';
-    seen.add(value);
-    return value.map((item) => boundStrings(item, seen));
+    if (ancestors.has(value)) return '[Circular]';
+    ancestors.add(value);
+    const out = value.map((item) => boundStrings(item, ancestors));
+    ancestors.delete(value);
+    return out;
   }
   if (value !== null && typeof value === 'object') {
-    if (seen.has(value)) return '[Circular]';
-    seen.add(value);
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, boundStrings(item, seen)]));
+    if (ancestors.has(value)) return '[Circular]';
+    ancestors.add(value);
+    const out = Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, boundStrings(item, ancestors)]));
+    ancestors.delete(value);
+    return out;
   }
   return value;
 }
