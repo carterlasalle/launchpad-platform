@@ -619,6 +619,16 @@ describe('claim-scoped operation polling', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ sourceCommit: HEAD_SHA });
   });
+
+  it('uses the pull request ref when the OIDC claim omits pull_request_number', async () => {
+    const harness = createHarness();
+    fetchHandler = () => new Response(JSON.stringify({ number: 42, head: { sha: HEAD_SHA } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const prTokenClaims = prClaims({ pull_request_number: undefined });
+    const { operationId } = await startOperation(harness, prTokenClaims, baseBody({ event: 'pull_request', prNumber: 42, sourceCommit: HEAD_SHA, ref: 'refs/pull/42/merge' }));
+    const token = await signToken(prTokenClaims);
+    const response = await request(harness, `/v1/operations/${operationId}`, { headers: bearer(token) });
+    expect(response.status).toBe(200);
+  });
 });
 
 describe('internal workflow dispatch', () => {

@@ -141,7 +141,7 @@ function bindingMissing(field: string): OidcBindingError {
  * (the route calls `verifyPullRequestHead`). For every other event the token
  * `sha` claim must equal the request's `sourceCommit` exactly.
  */
-function pullRequestNumberFromClaims(claims: GithubOidcClaims): string | null {
+export function pullRequestNumberFromClaims(claims: GithubOidcClaims): string | null {
   if (claims.pull_request_number !== undefined) return claims.pull_request_number;
   const match = /^refs\/pull\/(\d+)\/merge$/.exec(claims.ref ?? '');
   return match?.[1] ?? null;

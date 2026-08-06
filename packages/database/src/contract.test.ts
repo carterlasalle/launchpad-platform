@@ -728,11 +728,14 @@ export function runStoreContractSuite(name: string, harness: StoreContractHarnes
         const replay = await store.savePlanReviewAttestation(baseAttestation());
         expect(replay.inserted).toBe(false);
         expect(replay.attestation.id).toBe(first.attestation.id);
-        // A replay that keeps the same review fingerprint but changes the
-        // desired-state binding fails closed.
+        // A replay that changes only the source-commit-specific plan fingerprint
+        // remains valid because reviewFingerprint is source-commit neutral.
+        const equivalentPlanReplay = await store.savePlanReviewAttestation({ ...baseAttestation(), planFingerprint: 'plan-fp-2' });
+        expect(equivalentPlanReplay.inserted).toBe(false);
+        expect(equivalentPlanReplay.attestation.planFingerprint).toBe('plan-fp-1');
+        // Replays with a different desired-state binding still fail closed.
         await expect(store.savePlanReviewAttestation({ ...baseAttestation(), desiredHash: 'e'.repeat(64) })).rejects.toThrow();
         await expect(store.savePlanReviewAttestation({ ...baseAttestation(), generation: 9 })).rejects.toThrow();
-        await expect(store.savePlanReviewAttestation({ ...baseAttestation(), planFingerprint: 'plan-fp-2' })).rejects.toThrow();
         await expect(store.savePlanReviewAttestation({ ...baseAttestation(), repository: 'evil/demo' })).rejects.toThrow();
         expect(await store.getPlanReviewAttestation('app-demo', 'review-fp-1')).toMatchObject({ desiredHash: 'd'.repeat(64) });
         expect(await store.getPlanReviewAttestation('app-demo', 'review-fp-other')).toBeNull();

@@ -930,7 +930,7 @@ export class D1LaunchpadStore implements LaunchpadStore {
     const existingRow = await this.db.prepare('SELECT id, application_id, pr_head_source_commit, desired_hash, generation, plan_fingerprint, review_fingerprint, repository, actor, workflow_ref, created_at FROM plan_review_attestations WHERE application_id = ? AND review_fingerprint = ?').bind(input.applicationId, input.reviewFingerprint).first<SqlPlanReviewAttestationRow>();
     if (existingRow) {
       const existing = this.toPlanReviewAttestation(existingRow);
-      if (existing.desiredHash !== input.desiredHash || existing.generation !== input.generation || existing.planFingerprint !== input.planFingerprint || existing.repository !== input.repository) {
+      if (existing.desiredHash !== input.desiredHash || existing.generation !== input.generation || existing.repository !== input.repository) {
         throw conflict('LP-DB-PLAN-REVIEW-REPLAY-CONFLICT', `A reviewed-plan attestation for review fingerprint '${input.reviewFingerprint}' is already stored for '${input.applicationId}' with a different desired-state binding`, { applicationId: input.applicationId, reviewFingerprint: input.reviewFingerprint });
       }
       return { inserted: false, attestation: existing };
@@ -943,7 +943,7 @@ export class D1LaunchpadStore implements LaunchpadStore {
       const raced = await this.db.prepare('SELECT id, application_id, pr_head_source_commit, desired_hash, generation, plan_fingerprint, review_fingerprint, repository, actor, workflow_ref, created_at FROM plan_review_attestations WHERE application_id = ? AND review_fingerprint = ?').bind(input.applicationId, input.reviewFingerprint).first<SqlPlanReviewAttestationRow>();
       if (raced) {
         const existing = this.toPlanReviewAttestation(raced);
-        if (existing.desiredHash !== input.desiredHash || existing.generation !== input.generation || existing.planFingerprint !== input.planFingerprint || existing.repository !== input.repository) {
+        if (existing.desiredHash !== input.desiredHash || existing.generation !== input.generation || existing.repository !== input.repository) {
           throw conflict('LP-DB-PLAN-REVIEW-REPLAY-CONFLICT', `A reviewed-plan attestation for review fingerprint '${input.reviewFingerprint}' is already stored for '${input.applicationId}' with a different desired-state binding`, { applicationId: input.applicationId, reviewFingerprint: input.reviewFingerprint });
         }
         return { inserted: false, attestation: existing };
