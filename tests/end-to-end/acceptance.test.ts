@@ -606,11 +606,11 @@ it('GH-ARCHIVED: archived repositories are surfaced as archived for the access g
 // Shadow preview scenarios (plan sections 13.4/36/47, 33)
 // ---------------------------------------------------------------------------
 
-function previewTransport(projectName: string, deployment: { id: string; state: string; url: string; logLines?: string[] }, commit = COMMIT_A): RecordedSandboxTransport {
+function previewTransport(projectName: string, deployment: { id: string; state: string; url: string; logLines?: string[] }, commit = COMMIT_A, repository = ACCEPTANCE_REPOSITORY): RecordedSandboxTransport {
   const entries: Array<Record<string, unknown> & { id: string }> = [
     { id: 'preview.project.get.404', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${projectName}`, status: 404, json: { error: { code: 'not_found' } }, times: 1 },
-    { id: 'preview.project.get', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${projectName}`, json: { id: 'prj_shadow', name: projectName, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID } } },
-    { id: 'preview.project.create', method: 'POST', url: 'https://vercel.sandbox.test/v10/projects', json: { id: 'prj_shadow', name: projectName, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 1 } } },
+    { id: 'preview.project.get', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${projectName}`, json: { id: 'prj_shadow', name: projectName, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID }, link: { repo: repository, productionBranch: 'main' } } },
+    { id: 'preview.project.create', method: 'POST', url: 'https://vercel.sandbox.test/v10/projects', json: { id: 'prj_shadow', name: projectName, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 1 }, link: { repo: repository, productionBranch: 'main' } } },
     { id: 'preview.git.patch', method: 'PATCH', url: `https://vercel.sandbox.test/v9/projects/${projectName}`, json: {} },
     { id: 'preview.env.create', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${projectName}/env`, json: { key: 'LAUNCHPAD_ENV', id: 'env_preview_1' } },
     { id: 'preview.deployment.create', method: 'POST', url: 'https://vercel.sandbox.test/v13/deployments', json: { id: deployment.id, url: deployment.url, state: 'QUEUED' } },
@@ -713,7 +713,7 @@ it('PRV-INVALID-ROOT: an incorrect root directory fails the preview with the Ver
       const transport = previewTransport(projectName, {
         id: 'dpl_invalid_root', state: 'ERROR', url: `${projectName}.vercel.sandbox.test`,
         logLines: ['Error: Could not find "apps/missing/package.json"'],
-      });
+      }, COMMIT_A, 'example/invalid-root');
       const provider = compositeFor(transport);
       const result = await runPreviewWorkflow({
         store: harness.store,
@@ -752,18 +752,18 @@ it('PRV-SUPERSEDE: a new revision supersedes the prior shadow preview and cleans
       const name2 = shadowProjectName({ applicationId: ACCEPTANCE_APP_ID, pullRequestNumber: 7, repositoryId: ACCEPTANCE_REPOSITORY_ID, revision: 2, commitSha: COMMIT_B });
       const transport = new RecordedSandboxTransport([
         { id: 'supersede.project1.get.404', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${name1}`, status: 404, json: { error: { code: 'not_found' } }, times: 1 },
-        { id: 'supersede.project1.create', method: 'POST', url: 'https://vercel.sandbox.test/v10/projects', json: { id: 'prj_shadow_1', name: name1, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 1 } } },
+        { id: 'supersede.project1.create', method: 'POST', url: 'https://vercel.sandbox.test/v10/projects', json: { id: 'prj_shadow_1', name: name1, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 1 }, link: { repo: ACCEPTANCE_REPOSITORY, productionBranch: 'main' } } },
         { id: 'supersede.project1.git', method: 'PATCH', url: `https://vercel.sandbox.test/v9/projects/${name1}`, json: {} },
         { id: 'supersede.project1.env', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${name1}/env`, json: { key: 'LAUNCHPAD_ENV', id: 'env_preview_1' } },
         { id: 'supersede.deployment1.create', method: 'POST', url: 'https://vercel.sandbox.test/v13/deployments', json: { id: 'dpl_preview_1', url: `${name1}.vercel.sandbox.test`, state: 'QUEUED' } },
         { id: 'supersede.deployment1.wait', method: 'GET', url: 'https://vercel.sandbox.test/v13/deployments/dpl_preview_1', json: { id: 'dpl_preview_1', projectId: name1, url: `${name1}.vercel.sandbox.test`, state: 'READY', target: null, meta: { gitCommitSha: COMMIT_A } } },
         // Revision 2 supersedes revision 1: cleanup re-observes the prior
         // shadow project (ownership check) before deleting it.
-        { id: 'supersede.project1.get', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${name1}`, json: { id: 'prj_shadow_1', name: name1, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 1 } } },
+        { id: 'supersede.project1.get', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${name1}`, json: { id: 'prj_shadow_1', name: name1, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 1 }, link: { repo: ACCEPTANCE_REPOSITORY, productionBranch: 'main' } } },
         { id: 'supersede.project1.delete', method: 'DELETE', url: 'https://vercel.sandbox.test/v9/projects/prj_shadow_1', json: {} },
         { id: 'supersede.project2.get.404', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${name2}`, status: 404, json: { error: { code: 'not_found' } }, times: 1 },
-        { id: 'supersede.project2.get', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${name2}`, json: { id: 'prj_shadow_2', name: name2, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID } } },
-        { id: 'supersede.project2.create', method: 'POST', url: 'https://vercel.sandbox.test/v10/projects', json: { id: 'prj_shadow_2', name: name2, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 2 } } },
+        { id: 'supersede.project2.get', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${name2}`, json: { id: 'prj_shadow_2', name: name2, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID }, link: { repo: ACCEPTANCE_REPOSITORY, productionBranch: 'main' } } },
+        { id: 'supersede.project2.create', method: 'POST', url: 'https://vercel.sandbox.test/v10/projects', json: { id: 'prj_shadow_2', name: name2, settings: { launchpadApplicationId: ACCEPTANCE_APP_ID, launchpadPullRequest: 7, launchpadRevision: 2 }, link: { repo: ACCEPTANCE_REPOSITORY, productionBranch: 'main' } } },
         { id: 'supersede.project2.git', method: 'PATCH', url: `https://vercel.sandbox.test/v9/projects/${name2}`, json: {} },
         { id: 'supersede.project2.env', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${name2}/env`, json: { key: 'LAUNCHPAD_ENV', id: 'env_preview_2' } },
         { id: 'supersede.deployment.create', method: 'POST', url: 'https://vercel.sandbox.test/v13/deployments', json: { id: 'dpl_preview_2', url: `${name2}.vercel.sandbox.test`, state: 'QUEUED' } },

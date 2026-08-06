@@ -270,7 +270,7 @@ export class VercelAdapter implements ProjectProvider {
   async ensureProject(spec: ProjectSpec, ctx: ProviderContext): Promise<MutationResult<ObservedResource>> {
     const before = await this.observeProject({ projectId: spec.id, teamId: spec.teamId }, ctx);
     const baseBody = {
-      ...(before ? {} : { name: spec.name }),
+      ...(before ? {} : { name: spec.name, gitRepository: { type: 'github', repo: spec.repository } }),
       framework: spec.framework,
       ...(spec.rootDirectory === '.' ? {} : { rootDirectory: spec.rootDirectory }),
       installCommand: spec.build.installCommand,
@@ -288,8 +288,14 @@ export class VercelAdapter implements ProjectProvider {
   }
 
   async ensureGitConnection(spec: GitConnectionSpec, ctx: ProviderContext): Promise<MutationResult<ObservedResource>> {
-    const response = await this.client.request<unknown>(this.client.withTeam(`/v9/projects/${encodeURIComponent(spec.projectId)}`), { method: 'PATCH', body: JSON.stringify({ gitRepository: { type: 'github', repo: spec.repository }, productionBranch: spec.productionBranch }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-git', spec.projectId, spec.repository, spec.productionBranch) });
-    return { resource: { provider: 'vercel', resourceType: 'vercel.git', resourceKey: spec.projectId, providerResourceId: spec.projectId, configuration: record(response), ownershipFingerprint: spec.projectId, observedAt: new Date().toISOString() }, changed: true, operationId: idempotencyKey('vercel-git-operation', spec.projectId, spec.repository) };
+    const project = await this.observeProject({ projectId: spec.projectId }, ctx);
+    if (project === null) throw new ProviderRequestError({ code: 'LP-VERCEL-PROJECT-MISSING', class: 'NOT_FOUND', provider: 'vercel', message: `Vercel project '${spec.projectId}' was not found while verifying Git connection.`, retryable: false });
+    const link = record(project.configuration.link);
+    const repository = text(link.repo);
+    const productionBranch = text(link.productionBranch);
+    if (repository !== spec.repository || productionBranch !== spec.productionBranch) throw new ProviderRequestError({ code: 'LP-VERCEL-GIT-CONNECTION-UNSUPPORTED', class: 'UNSUPPORTED', provider: 'vercel', message: `Vercel project '${spec.projectId}' is not connected to '${spec.repository}' on branch '${spec.productionBranch}'; the current API has no supported project-update Git-link operation.`, retryable: false });
+    const configuration = { repository, productionBranch };
+    return { resource: { provider: 'vercel', resourceType: 'vercel.git', resourceKey: spec.projectId, providerResourceId: spec.projectId, configuration, ownershipFingerprint: spec.projectId, observedAt: new Date().toISOString() }, changed: false, operationId: idempotencyKey('vercel-git-operation', spec.projectId, spec.repository) };
   }
 
   /**
