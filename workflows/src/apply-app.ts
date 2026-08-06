@@ -591,10 +591,13 @@ export async function applyVerifyTls(input: { base: ApplyBase; provider: Project
   return { skipped: false, domains };
 }
 
-export async function applyCreateCandidate(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; locks: HeldLocks; context: ProviderContext }): Promise<CreateCandidateResult> {
+export async function applyCreateCandidate(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; locks: HeldLocks; context: ProviderContext; appCommit?: string }): Promise<CreateCandidateResult> {
   await refreshLocks(input.store, input.locks);
   const project = projectSpec(input.desired);
-  const candidate = await input.provider.createDeployment({ projectId: project.id, environment: 'production', repository: project.repository, commitSha: input.base.sourceCommit, desiredGeneration: input.plan.desiredGeneration, staged: true, rootDirectory: project.rootDirectory }, input.context);
+  // The staged candidate builds the APPLICATION repository at its production
+  // branch HEAD (resolved by the controller), never the control-repository
+  // commit that triggered the apply.
+  const candidate = await input.provider.createDeployment({ projectId: project.id, environment: 'production', repository: project.repository, commitSha: input.appCommit ?? input.base.sourceCommit, desiredGeneration: input.plan.desiredGeneration, staged: true, rootDirectory: project.rootDirectory }, input.context);
   await input.store.recordDeployment({ id: candidate.id, applicationId: input.base.applicationId, projectId: project.id, environment: 'production', repository: project.repository, commitSha: candidate.commitSha, desiredGeneration: candidate.desiredGeneration, state: candidate.state, url: candidate.url, createdAt: candidate.createdAt });
   return { candidate };
 }
@@ -668,7 +671,7 @@ export async function applyCandidateHealth(input: { base: ApplyBase; store: Laun
   return { health };
 }
 
-export async function applyPromote(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; candidate: DeploymentRecord; locks: HeldLocks; context: ProviderContext }): Promise<PromotePhaseResult> {
+export async function applyPromote(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; candidate: DeploymentRecord; locks: HeldLocks; context: ProviderContext; appCommit?: string }): Promise<PromotePhaseResult> {
   await refreshLocks(input.store, input.locks);
   if (input.desired.lifecycle.state !== 'active') {
     throw new WorkflowFailure('LP-PROMOTION-LIFECYCLE-BLOCKED', `Promotion is disabled while the application lifecycle is '${input.desired.lifecycle.state}'; decommissioning keeps the service running but stops new production promotion.`);
@@ -677,10 +680,11 @@ export async function applyPromote(input: { base: ApplyBase; store: LaunchpadSto
   if (input.candidate.projectId !== project.id) throw new WorkflowFailure('LP-PROMOTION-PROJECT-MISMATCH', `Candidate '${input.candidate.id}' belongs to project '${input.candidate.projectId}', expected '${project.id}'.`);
   if (input.candidate.environment !== 'production') throw new WorkflowFailure('LP-PROMOTION-ENVIRONMENT-MISMATCH', `Candidate '${input.candidate.id}' targets '${input.candidate.environment}', expected 'production'.`);
   if (input.candidate.repository !== project.repository) throw new WorkflowFailure('LP-PROMOTION-REPOSITORY-MISMATCH', `Candidate '${input.candidate.id}' came from '${input.candidate.repository}', expected '${project.repository}'.`);
-  if (input.candidate.commitSha !== input.base.sourceCommit) throw new WorkflowFailure('LP-PROMOTION-COMMIT-MISMATCH', `Candidate '${input.candidate.id}' is at ${input.candidate.commitSha}, expected ${input.base.sourceCommit}.`);
+  const expectedCommit = input.appCommit ?? input.base.sourceCommit;
+  if (input.candidate.commitSha !== expectedCommit) throw new WorkflowFailure('LP-PROMOTION-COMMIT-MISMATCH', `Candidate '${input.candidate.id}' is at ${input.candidate.commitSha}, expected ${expectedCommit}.`);
   if (input.candidate.desiredGeneration !== input.plan.desiredGeneration) throw new WorkflowFailure('LP-PROMOTION-GENERATION-MISMATCH', `Candidate '${input.candidate.id}' has generation ${input.candidate.desiredGeneration}, expected ${input.plan.desiredGeneration}.`);
   if (!['READY', 'STAGED'].includes(input.candidate.state)) throw new WorkflowFailure('LP-PROMOTION-CANDIDATE-NOT-READY', `Candidate '${input.candidate.id}' is '${input.candidate.state}', not ready for promotion.`);
-  const promotion = await input.provider.promote({ projectId: project.id, deploymentId: input.candidate.id, expectedCommitSha: input.base.sourceCommit }, input.context);
+  const promotion = await input.provider.promote({ projectId: project.id, deploymentId: input.candidate.id, expectedCommitSha: expectedCommit }, input.context);
   if (promotion.deployment.state !== 'CURRENT') throw new WorkflowFailure('LP-PROMOTION-READBACK-FAILED', `Promotion did not yield a CURRENT deployment (${promotion.deployment.state}).`);
   await input.store.recordPromotion({ applicationId: input.base.applicationId, deploymentId: promotion.deployment.id, previousDeploymentId: promotion.previousDeploymentId, result: 'PROMOTED' });
   return { promotion };
@@ -793,6 +797,8 @@ export interface ApplyStepContext {
   productionHealth?: HealthCheckRecord | null;
   failure?: { failedStep: string; error: unknown };
   summary?: ApplyReportSummary;
+  /** Application-repository commit the production candidate must build (resolved from the app branch; falls back to base.sourceCommit for tests). */
+  appCommit?: string;
 }
 
 export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableStep {
@@ -847,7 +853,7 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
     case 'verify-tls':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async () => applyVerifyTls({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), context: ctx.context }) };
     case 'create-candidate':
-      return mutationStep(name, ctx, (locks) => applyCreateCandidate({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context }));
+      return mutationStep(name, ctx, (locks) => applyCreateCandidate({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context, ...(ctx.appCommit !== undefined ? { appCommit: ctx.appCommit } : {}) }));
     case 'wait-candidate':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, candidateId: ctx.candidate?.id ?? null }), retry: { maxAttempts: 3, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async () => {
         if (!ctx.candidate) throw new WorkflowFailure('LP-CANDIDATE-MISSING', 'Candidate deployment was not created.');
@@ -867,7 +873,7 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
     case 'promote':
       return mutationStep(name, ctx, (locks) => {
         if (!ctx.candidate) throw new WorkflowFailure('LP-CANDIDATE-MISSING', 'Candidate deployment is unavailable for promotion.');
-        return applyPromote({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), candidate: ctx.candidate, locks, context: ctx.context });
+        return applyPromote({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), candidate: ctx.candidate, locks, context: ctx.context, ...(ctx.appCommit !== undefined ? { appCommit: ctx.appCommit } : {}) });
       });
     case 'production-health':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, candidateId: ctx.candidate?.id ?? null }), run: async () => {

@@ -48,6 +48,7 @@ function run(input: { provider?: ProjectProvider; desired?: DesiredApplication; 
   return runPreviewWorkflow({
     store: input.store ?? new InMemoryLaunchpadStore(),
     provider: input.provider ?? new FakeProvider(),
+    source: (input.provider ?? new FakeProvider()) as never,
     desired: input.desired ?? desired(),
     pullRequestNumber,
     repositoryId: 12345,

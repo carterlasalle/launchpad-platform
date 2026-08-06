@@ -7,7 +7,7 @@ import { ApplyApplicationWorkflow } from '../../apps/controller/src/workflows.js
 import { EnvironmentSecretProvider } from '@launchpad/provider-secrets';
 import { pushClaims, signGithubToken } from '../fixtures/oidc.js';
 import { cfRecord, expectedDnsOwnership, manifestYamlFrom, vercelProject } from '../fixtures/providers.js';
-import { CONTROL_REPOSITORY, HEAD_SHA, MANIFEST_PATH, SOURCE_COMMIT, createHarness, type ControllerHarness } from './harness.js';
+import { CONTROL_REPOSITORY, HEAD_SHA, MAIN_SHA, MANIFEST_PATH, SOURCE_COMMIT, createHarness, type ControllerHarness } from './harness.js';
 
 vi.mock('cloudflare:workers', () => ({
   WorkflowEntrypoint: class WorkflowEntrypoint {
@@ -141,7 +141,7 @@ describe('merged apply flow (integration)', () => {
     // Exact-commit candidate creation and exact promotion (no canary/traffic-split anywhere).
     const deploymentCalls = harness.transport.jsonBodies('POST', '/v13/deployments');
     expect(deploymentCalls).toHaveLength(1);
-    expect((deploymentCalls[0] as Record<string, unknown>).gitSource).toMatchObject({ sha: SOURCE_COMMIT, ref: SOURCE_COMMIT });
+    expect((deploymentCalls[0] as Record<string, unknown>).gitSource).toMatchObject({ sha: MAIN_SHA, ref: MAIN_SHA });
     expect(harness.states.vercel.promoteCalls).toEqual([{ projectId: 'fixture-app', deploymentId: 'dpl_10' }]);
     // Every declared variable is reconciled through the official env surface:
     // one list read, one create per variable, one decrypt-capable readback per create.
@@ -176,9 +176,9 @@ describe('merged apply flow (integration)', () => {
     // Persisted outcomes: CURRENT deployment + known-good, passed health, SYNCED/HEALTHY status, released locks.
     const knownGood = await harness.store.getKnownGoodDeployment('fixture-app', 'production');
     expect(knownGood?.id).toBe('dpl_10');
-    expect(knownGood?.commitSha).toBe(SOURCE_COMMIT);
+    expect(knownGood?.commitSha).toBe(MAIN_SHA);
     const deployment = await harness.store.getDeployment('dpl_10');
-    expect(deployment).toMatchObject({ state: 'CURRENT', commitSha: SOURCE_COMMIT, environment: 'production', url: 'https://fixture-app-dpl_10.vercel.app' });
+    expect(deployment).toMatchObject({ state: 'CURRENT', commitSha: MAIN_SHA, environment: 'production', url: 'https://fixture-app-dpl_10.vercel.app' });
     const health = await harness.store.listHealthChecks('fixture-app', { environment: 'production' });
     expect(health).toHaveLength(2);
     expect(health.every((check) => check.result === 'PASSED')).toBe(true);

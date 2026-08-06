@@ -627,6 +627,9 @@ function previewRun(store: Awaited<ReturnType<typeof createD1Store>>['store'], p
   return runPreviewWorkflow({
     store,
     provider,
+    // The shadow preview builds the application repository at its production
+    // branch HEAD; the fake source resolves it to the scenario commit.
+    source: { resolveRef: async () => ({ sha: COMMIT_A }) } as never,
     desired,
     pullRequestNumber: 7,
     repositoryId: ACCEPTANCE_REPOSITORY_ID,
@@ -719,6 +722,7 @@ it('PRV-INVALID-ROOT: an incorrect root directory fails the preview with the Ver
       const result = await runPreviewWorkflow({
         store: harness.store,
         provider,
+        source: { resolveRef: async () => ({ sha: COMMIT_A }) } as never,
         desired,
         pullRequestNumber: 7,
         repositoryId: ACCEPTANCE_REPOSITORY_ID,

@@ -14,6 +14,7 @@ metadata:
 # Credential sanitation is deployed before this retry.
 # Full provider error details are now recorded.
 # Global fetch binding is preserved in provider clients.
+# Vercel API contract repair is deployed before this apply.
   owners:
     - "@CarterLaSalle"
   labels:
