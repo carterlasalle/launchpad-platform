@@ -16,6 +16,7 @@
     { "path": "workflows" },
     { "path": "apps/cli" },
     { "path": "apps/controller" },
-    { "path": "apps/dashboard" }
+    { "path": "apps/dashboard" },
+    { "path": "apps/dns-resolver" }
   ]
 }

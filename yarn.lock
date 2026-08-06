@@ -953,6 +953,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@launchpad/dns-resolver@workspace:apps/dns-resolver":
+  version: 0.0.0-use.local
+  resolution: "@launchpad/dns-resolver@workspace:apps/dns-resolver"
+  dependencies:
+    typescript: "npm:5.8.3"
+    vitest: "npm:3.2.6"
+  languageName: unknown
+  linkType: soft
+
 "@launchpad/github-reporting@workspace:*, @launchpad/github-reporting@workspace:packages/github-reporting":
   version: 0.0.0-use.local
   resolution: "@launchpad/github-reporting@workspace:packages/github-reporting"
