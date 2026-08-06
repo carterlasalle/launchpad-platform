@@ -16,6 +16,10 @@ export class ProviderHttpClient {
     this.provider = options.provider;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 30_000;
+    // CR/LF can never be legitimate token characters; a paste artifact with
+    // embedded newlines would otherwise throw TypeError on Headers.set and
+    // surface as a misleading provider NETWORK failure.
+    this.token = options.token === undefined ? undefined : options.token.replace(/[\r\n]+/g, '').trim();
   }
 
   async request<T>(path: string, init: RequestInit & { correlationId?: string; idempotencyKey?: string } = {}): Promise<T> {

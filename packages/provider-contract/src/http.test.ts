@@ -21,6 +21,17 @@ describe('provider HTTP client', () => {
     await expect(malformedClient.request('/malformed')).rejects.toMatchObject({ code: 'LP-GITHUB-MALFORMED-RESPONSE' });
   });
 
+  it('strips CR/LF contamination from credential values so header setting never throws', async () => {
+    const seen: string[] = [];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      seen.push(new Headers(init?.headers).get('authorization') ?? '');
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const client = new ProviderHttpClient({ baseUrl: 'https://provider.test', token: 'abc\r\ndef\n', provider: 'github', fetchImpl });
+    await expect(client.request('/v1')).resolves.toEqual({ ok: true });
+    expect(seen[0]).toBe('Bearer abcdef');
+  });
+
   it('names the underlying exception class in network failures', async () => {
     const failing: typeof fetch = async () => { throw new TypeError('fetch failed'); };
     const client = new ProviderHttpClient({ baseUrl: 'https://provider.test', token: 'token', provider: 'github', fetchImpl: failing });
