@@ -904,7 +904,9 @@ describe('controller token selection', () => {
       { match: /\/v1\/plans\/verify$/, response: (url, init) => {
         expect(bearerOf(init)).toBe(`Bearer ${oidcJwt}`);
         expect(JSON.parse(String(init?.body))).toMatchObject({ repositoryId: 123, ownerId: 456 });
-        expect(JSON.parse(String(init?.body)).manifestPath).toMatch(/apps\/invalid-root\.yaml$/);
+        const manifestPath = JSON.parse(String(init?.body)).manifestPath as string;
+        expect(manifestPath).toMatch(/apps\/invalid-root\.yaml$/);
+        expect(manifestPath.startsWith('..')).toBe(false);
         return jsonResponse({ accepted: true, deduplicated: false, attestationId: 'att-1' });
       } },
       { match: /\/v1\/applications\/invalid-root\/preview\/verify$/, response: (url, init) => {
@@ -933,7 +935,9 @@ describe('controller token selection', () => {
       { match: /\/v1\/applications\/invalid-root\/apply$/, response: (url, init) => {
         expect(bearerOf(init)).toBe(`Bearer ${oidcJwt}`);
         expect(JSON.parse(String(init?.body))).toMatchObject({ repositoryId: 123, ownerId: 456 });
-        expect(JSON.parse(String(init?.body)).manifestPath).toMatch(/apps\/invalid-root\.yaml$/);
+        const manifestPath = JSON.parse(String(init?.body)).manifestPath as string;
+        expect(manifestPath).toMatch(/apps\/invalid-root\.yaml$/);
+        expect(manifestPath.startsWith('..')).toBe(false);
         return jsonResponse({ workflowId: 'wf-1', operationId: 'op-1', status: 'QUEUED' }, 202);
       } },
       { match: /\/v1\/operations\/op-1$/, response: () => jsonResponse({ operationId: 'op-1', workflowId: 'wf-1', applicationId: 'invalid-root', kind: 'apply', status: 'SUCCEEDED', errorCode: null, sourceCommit: sha, result: {} }) },

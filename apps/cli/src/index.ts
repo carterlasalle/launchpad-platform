@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadCatalog, parseZoneRegistry, ZONE_REGISTRY_FILE, type CatalogIssue } from '@launchpad/catalog';
 import { buildPlan, buildResourceGraph, desiredStateHash, renderPlanMarkdown, type DeploymentRecord, type DesiredApplication, type HealthCheckRecord, type ObservedApplication, type ObservedResource, type PlatformPlan, type ResourceGraph } from '@launchpad/core';
@@ -258,14 +258,16 @@ async function pollOperation(controller: string, operationId: string, token: str
 function readCatalogFiles(root: string): Array<{ path: string; content: string }> {
   const files: Array<{ path: string; content: string }> = [];
   const workspaceRoot = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
+  const catalogRoot = resolve(workspaceRoot, root);
+  const sourceRoot = dirname(catalogRoot);
   const visit = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
       const fullPath = join(directory, entry.name);
       if (entry.isDirectory()) visit(fullPath);
-      else if (entry.isFile() && /\.ya?ml$/i.test(entry.name)) files.push({ path: relative(workspaceRoot, fullPath), content: readFileSync(fullPath, 'utf8') });
+      else if (entry.isFile() && /\.ya?ml$/i.test(entry.name)) files.push({ path: relative(sourceRoot, fullPath), content: readFileSync(fullPath, 'utf8') });
     }
   };
-  visit(resolve(workspaceRoot, root));
+  visit(catalogRoot);
   return files.filter((file) => file.path.includes('/apps/') || file.path.includes('apps/'));
 }
 
