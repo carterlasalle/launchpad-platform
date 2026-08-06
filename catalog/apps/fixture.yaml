@@ -7,6 +7,7 @@ metadata:
 # Activation evidence is tracked through the protected apply workflow.
 # Controller identity parser deployed before this retry.
 # Retry after successful control-plane deployment.
+# Manifest source path is now controller-bound.
   owners:
     - "@CarterLaSalle"
   labels:
