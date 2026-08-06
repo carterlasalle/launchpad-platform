@@ -4,6 +4,7 @@ export * from './diff.js';
 export * from './errors.js';
 export * from './fingerprints.js';
 export * from './graph.js';
+export * from './plan-observation.js';
 export * from './plan.js';
 export * from './policy.js';
 export * from './render.js';

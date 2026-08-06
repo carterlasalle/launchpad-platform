@@ -46,7 +46,7 @@ async function computeApplyFingerprint(harness: ControllerHarness, desired: Desi
   const composite = new CompositeProvider(harness.vercel, harness.cloudflare);
   const base = await makeApplyBase({ applicationId: 'fixture-app', sourceCommit: SOURCE_COMMIT, planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'precompute', workflowId: 'precompute-wf' });
   const loaded = await applyLoadDesired({ base, source: harness.github, controlRepository: CONTROL_REPOSITORY, manifestPath: MANIFEST_PATH, context: harness.context('precompute-wf') });
-  const live = await applyObserveLiveState({ base, store: harness.store, provider: composite, desired: loaded.desired, context: harness.context('precompute-wf') });
+  const live = await applyObserveLiveState({ base, provider: composite, desired: loaded.desired, context: harness.context('precompute-wf') });
   const plan = await buildPlan({ desired: loaded.desired, observed: live.observed, capabilities: live.capabilities, sourceCommit: base.sourceCommit, desiredGeneration: base.desiredGeneration, ownership: {}, mode: 'apply', now: '2026-08-04T00:00:00.000Z' });
   if (plan.result !== 'READY') {
     const blocks = plan.policyResults.filter((result) => result.result === 'BLOCK').map((result) => result.message).join(' | ');

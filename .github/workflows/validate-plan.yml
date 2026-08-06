@@ -238,6 +238,7 @@ jobs:
           LAUNCHPAD_GITHUB_TOKEN: ${{ secrets.LAUNCHPAD_GITHUB_TOKEN }}
           LAUNCHPAD_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
           LAUNCHPAD_VERCEL_TEAM_ID: ${{ vars.LAUNCHPAD_VERCEL_TEAM_ID }}
+          LAUNCHPAD_CLOUDFLARE_TOKEN: ${{ secrets.LAUNCHPAD_CLOUDFLARE_TOKEN }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: ${{ always() }}
         continue-on-error: true

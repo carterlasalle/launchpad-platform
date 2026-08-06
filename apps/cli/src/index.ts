@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadCatalog, parseZoneRegistry, ZONE_REGISTRY_FILE, type CatalogIssue } from '@launchpad/catalog';
-import { buildPlan, buildResourceGraph, desiredStateHash, renderPlanMarkdown, type DeploymentRecord, type DesiredApplication, type HealthCheckRecord, type ObservedApplication, type ObservedResource, type PlatformPlan, type ResourceGraph } from '@launchpad/core';
+import { buildPlan, buildPlanObservedState, buildResourceGraph, desiredStateHash, renderPlanMarkdown, type DeploymentRecord, type DesiredApplication, type HealthCheckRecord, type ObservedApplication, type ObservedResource, type PlanDnsObservation, type PlatformPlan, type ResourceGraph } from '@launchpad/core';
 import { checkHealth } from '@launchpad/health';
 import { artifactFiles, escapeHtml, renderDotGraph, renderFailureStickyComment, renderStickyComment, type HealthSummary, type JobResult, type PreviewSummary, type ProviderErrorSummary } from '@launchpad/github-reporting';
 import { boundStickyCommentBody, canonicalJson, redactText, sha256Hex } from '@launchpad/shared';
@@ -296,30 +296,17 @@ function emptyObserved(applicationId: string): ObservedApplication {
   return { applicationId, observedAt: new Date().toISOString(), desiredGeneration: 0, desiredHash: '', observedHash: '', resources: [], deployments: [], health: { status: 'UNKNOWN', latest: null } };
 }
 
-/** Real observed state assembled from live provider responses; absence of a project/deployment is a genuine observation, never fabricated. */
-function observedFrom(application: DesiredApplication, project: ObservedResource | null, deployment: DeploymentRecord | null): ObservedApplication {
-  return {
-    applicationId: application.metadata.id,
-    observedAt: new Date().toISOString(),
-    desiredGeneration: 0,
-    desiredHash: '',
-    observedHash: '',
-    resources: project ? [project] : [],
-    deployments: deployment ? [deployment] : [],
-    health: { status: 'UNKNOWN', latest: null },
-  };
-}
-
 interface PlanAdapters { github: GitHubAdapter; vercel: VercelAdapter; cloudflare: CloudflareAdapter; }
 
 function providerPlanAdapters(): PlanAdapters {
   const githubToken = process.env.LAUNCHPAD_GITHUB_TOKEN;
   const vercelToken = process.env.LAUNCHPAD_VERCEL_TOKEN;
-  if (!githubToken || !vercelToken) throw new CliFailure('LP-PROVIDER-STATE-UNAVAILABLE', 'Planning requires live provider state: set LAUNCHPAD_GITHUB_TOKEN and LAUNCHPAD_VERCEL_TOKEN (read-only credentials).');
+  const cloudflareToken = process.env.LAUNCHPAD_CLOUDFLARE_TOKEN;
+  if (!githubToken || !vercelToken || !cloudflareToken) throw new CliFailure('LP-PROVIDER-STATE-UNAVAILABLE', 'Planning requires live provider state: set LAUNCHPAD_GITHUB_TOKEN, LAUNCHPAD_VERCEL_TOKEN, and LAUNCHPAD_CLOUDFLARE_TOKEN (read-only credentials).');
   return {
     github: new GitHubAdapter({ token: githubToken }),
     vercel: new VercelAdapter({ token: vercelToken, ...(process.env.LAUNCHPAD_VERCEL_TEAM_ID ? { teamId: process.env.LAUNCHPAD_VERCEL_TEAM_ID } : {}) }),
-    cloudflare: new CloudflareAdapter({ token: process.env.LAUNCHPAD_CLOUDFLARE_TOKEN }),
+    cloudflare: new CloudflareAdapter({ token: cloudflareToken }),
   };
 }
 
@@ -461,7 +448,16 @@ async function buildPlans(applications: readonly DesiredApplication[], sha: stri
     if (root === 'missing') throw new CliFailure('LP-GITHUB-ROOT-MISSING', `Root directory '${application.vercel.project.rootDirectory}' does not exist in ${application.repository.name}@${application.repository.deploymentRef}.`);
     const project = await adapters.vercel.observeProject({ projectId: application.metadata.id }, context);
     const deployment = project === null ? null : await adapters.vercel.findDeploymentByCommit(application.metadata.id, sha, context);
-    const observed = observedFrom(application, project, deployment);
+    // Same projection the apply machine's replan gate computes
+    // (buildPlanObservedState in @launchpad/core): provider-visible state only,
+    // so the approved plan fingerprint is satisfiable by the durable apply.
+    const dns: PlanDnsObservation[] = [];
+    for (const domain of application.domains.filter((candidate) => candidate.environment === 'production')) {
+      const zone = await adapters.cloudflare.observeZone(domain.cloudflare.zoneRef, context);
+      const record = await adapters.cloudflare.observeRecord(zone.zoneId, domain.hostname, context);
+      dns.push({ domain, zoneId: zone.zoneId, record });
+    }
+    const observed = buildPlanObservedState({ applicationId: application.metadata.id, desired: application, project, deployment, dns });
     plans.push(await buildPlan({ desired: application, observed, capabilities, sourceCommit: sha, desiredGeneration: 1 }));
     graphs.push(buildResourceGraph(application, observed));
     providerState[application.metadata.id] = { repository: { id: repository.repositoryId, archived: repository.archived, defaultBranch: repository.defaultBranch }, root, project: project?.configuration ?? null, deployment: deployment ?? null };

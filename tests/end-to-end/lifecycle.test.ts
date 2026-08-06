@@ -51,10 +51,10 @@ it('proves catalog, preview, apply, drift, reconciliation, and safe deletion', a
   desired.vercel.project.regions.functions = [];
   desired.vercel.project.build.developmentCommand = null;
   const applyBase = await makeApplyBase({ applicationId: desired.metadata.id, sourceCommit: 'b'.repeat(40), planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'e2e-apply', workflowId: 'e2e-apply-wf' });
-  const live = await applyObserveLiveState({ base: applyBase, store, provider, desired, context });
-  const ownership: Record<string, string> = {};
-  for (const resource of await store.listResources(desired.metadata.id)) ownership[resource.resourceKey] = resource.ownershipFingerprint ?? '';
-  const plan = await buildPlan({ desired, observed: live.observed, capabilities: live.capabilities, sourceCommit: applyBase.sourceCommit, desiredGeneration: 1, now: NOW, ownership });
+  const live = await applyObserveLiveState({ base: applyBase, provider, desired, context });
+  // Ownership parity with the CLI-approved plan and the machine's replan gate
+  // (both build with an empty ownership map).
+  const plan = await buildPlan({ desired, observed: live.observed, capabilities: live.capabilities, sourceCommit: applyBase.sourceCommit, desiredGeneration: 1, now: NOW });
   // Record the reviewed-plan attestation the apply gate requires (the PR-head
   // review evidence for this exact plan and desired state).
   await store.savePlanReviewAttestation({ applicationId: desired.metadata.id, prHeadSourceCommit: plan.sourceCommit, desiredHash: await desiredStateHash(desired), generation: plan.desiredGeneration, planFingerprint: plan.fingerprint, reviewFingerprint: await planReviewFingerprint(plan), repository: 'acme/fixture', actor: 'e2e', workflowRef: 'acme/fixture/.github/workflows/apply.yml@refs/heads/main' });

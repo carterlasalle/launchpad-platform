@@ -57,7 +57,7 @@ async function planFor(provider: FakeProvider, store: InMemoryLaunchpadStore, op
   const desiredApp = options.desiredOverride ?? desired;
   const sourceCommit = options.sourceCommit ?? 'a'.repeat(40);
   const base = await makeApplyBase({ applicationId: desiredApp.metadata.id, sourceCommit, planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: idempotencyKey('apply', desiredApp.metadata.id, sourceCommit, '1'), workflowId: 'apply-wf' });
-  const live = await applyObserveLiveState({ base, store, provider, desired: desiredApp, context });
+  const live = await applyObserveLiveState({ base, provider, desired: desiredApp, context });
   const observedState = options.observedOverride ?? live.observed;
   const plan = await buildPlan({ desired: desiredApp, observed: observedState, capabilities: live.capabilities, sourceCommit, desiredGeneration: 1, now: '2026-08-04T00:00:00.000Z' });
   if (options.attest !== false) {
@@ -461,7 +461,7 @@ it('blocks apply when the provider drifted after review (no attestation for the 
   // different root directory.
   await provider.ensureProject(projectSpec, context);
   provider.mutateProject('app', { rootDirectory: 'apps/changed' });
-  const drifted = await applyObserveLiveState({ base: await makeApplyBase({ applicationId: 'app', sourceCommit: 'b'.repeat(40), planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'drift-apply', workflowId: 'apply-drift' }), store, provider, desired, context });
+  const drifted = await applyObserveLiveState({ base: await makeApplyBase({ applicationId: 'app', sourceCommit: 'b'.repeat(40), planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'drift-apply', workflowId: 'apply-drift' }), provider, desired, context });
   const driftedPlan = await buildPlan({ desired, observed: drifted.observed, capabilities: drifted.capabilities, sourceCommit: 'b'.repeat(40), desiredGeneration: 1, now: '2026-08-04T00:00:00.000Z' });
   expect(await planReviewFingerprint(driftedPlan)).not.toBe(await planReviewFingerprint(plan));
   // The merged apply is fresh against the drifted state but was never reviewed for it.
@@ -483,7 +483,7 @@ it('blocks apply when the merged desired state differs from the reviewed PR-head
   // before merge): the desired framework now differs.
   const changedDesired: DesiredApplication = { ...desired, vercel: { ...desired.vercel, project: { ...desired.vercel.project, framework: 'remix' } } };
   const changedBase = await makeApplyBase({ applicationId: 'app', sourceCommit: 'b'.repeat(40), planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'changed-apply', workflowId: 'apply-changed' });
-  const changedLive = await applyObserveLiveState({ base: changedBase, store, provider, desired: changedDesired, context });
+  const changedLive = await applyObserveLiveState({ base: changedBase, provider, desired: changedDesired, context });
   const changedPlan = await buildPlan({ desired: changedDesired, observed: changedLive.observed, capabilities: changedLive.capabilities, sourceCommit: 'b'.repeat(40), desiredGeneration: 1, now: '2026-08-04T00:00:00.000Z' });
   expect(await planReviewFingerprint(changedPlan)).not.toBe(await planReviewFingerprint(plan));
   provider.calls.length = 0;

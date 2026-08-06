@@ -219,6 +219,10 @@ function applyTransport(options: ApplyTransportOptions = {}): RecordedSandboxTra
     },
     { id: 'cf.record.create', method: 'POST', url: 'https://cloudflare.sandbox.test/zones/zone_acceptance_1/dns_records', json: cfEnvelope(record) },
     { id: 'vercel.deployment.create', method: 'POST', url: 'https://vercel.sandbox.test/v13/deployments', json: { id: deploymentId, name: ACCEPTANCE_APP_ID, url: 'acceptance-app.vercel.sandbox.test', state: 'QUEUED' } },
+    // Observe-time deployment evidence (applyObserveLiveState): the provider
+    // deployment list at the source commit; catalog commits normally match
+    // nothing, so the plan gate's observed deployments are empty.
+    { id: 'vercel.deployments.list', method: 'GET', url: /\/v7\/deployments\?projectId=/, json: { deployments: options.deployments ?? [] } },
     {
       id: 'vercel.deployment.wait', method: 'GET', url: `https://vercel.sandbox.test/v13/deployments/${deploymentId}`,
       json: {
@@ -295,14 +299,16 @@ async function planFor(
     idempotencyKey: idempotencyKey('apply', desired.metadata.id, sourceCommit, String(generation)),
     workflowId: 'acceptance-plan',
   });
-  const live = await applyObserveLiveState({ base, store, provider, desired, context: acceptanceContext('acceptance-plan', desired.metadata.id) });
+  const live = await applyObserveLiveState({ base, provider, desired, context: acceptanceContext('acceptance-plan', desired.metadata.id) });
   const plan = await buildPlan({
     desired,
     observed: live.observed,
     capabilities: live.capabilities,
     sourceCommit,
     desiredGeneration: generation,
-    ownership: await ownershipFromStore(store, desired.metadata.id),
+    // Ownership parity with the approving CLI plan and the machine's replan
+    // gate: both build with an empty ownership map, so the acceptance plan
+    // must too or the replan fingerprint is unsatisfiable.
     mode: 'apply',
     now,
   });
@@ -1567,7 +1573,6 @@ it('DEL-NORMAL-APPLY-BLOCKS-DESTROY: normal apply refuses a DESTROY plan before 
       const provider = compositeFor(transport);
       const live = await applyObserveLiveState({
         base: await makeApplyBase({ applicationId: ACCEPTANCE_APP_ID, sourceCommit: COMMIT_A, planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'apply-destroy', workflowId: 'apply-destroy' }),
-        store: harness.store,
         provider,
         desired,
         context: acceptanceContext('apply-destroy'),
@@ -2367,8 +2372,8 @@ it('PLAN-REVIEW-DESIRED-DRIFT-BLOCKS: changed desired state or generation after 
       // before merge): the root directory now differs.
       const changedDesired = { ...desired, vercel: { ...desired.vercel, project: { ...desired.vercel.project, rootDirectory: 'apps/changed' } } } as DesiredApplication;
       const changedBase = await makeApplyBase({ applicationId: ACCEPTANCE_APP_ID, sourceCommit: COMMIT_B, planFingerprint: 'pending', desiredGeneration: 2, idempotencyKey: idempotencyKey('apply', ACCEPTANCE_APP_ID, COMMIT_B, '2'), workflowId: 'apply-review-desired' });
-      const changedLive = await applyObserveLiveState({ base: changedBase, store: harness.store, provider, desired: changedDesired, context: acceptanceContext('apply-review-desired') });
-      const changed = await buildPlan({ desired: changedDesired, observed: changedLive.observed, capabilities: changedLive.capabilities, sourceCommit: COMMIT_B, desiredGeneration: 2, ownership: await ownershipFromStore(harness.store), mode: 'apply', now: NOW });
+      const changedLive = await applyObserveLiveState({ base: changedBase, provider, desired: changedDesired, context: acceptanceContext('apply-review-desired') });
+      const changed = await buildPlan({ desired: changedDesired, observed: changedLive.observed, capabilities: changedLive.capabilities, sourceCommit: COMMIT_B, desiredGeneration: 2, mode: 'apply', now: NOW });
       expect(await planReviewFingerprint(changed)).not.toBe(await planReviewFingerprint(plan));
       const result = await runApply(harness.store, provider, changedDesired, changed, changedLive.observed, { sourceCommit: COMMIT_B, workflowId: 'apply-review-desired' });
       expect(result.status).toBe('FAILED');

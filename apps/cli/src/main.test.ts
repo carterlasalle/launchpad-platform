@@ -225,6 +225,7 @@ describe('plan', () => {
     const outputDir = tempDir('launchpad-cli-plan-');
     vi.stubEnv('LAUNCHPAD_GITHUB_TOKEN', 'github-token');
     vi.stubEnv('LAUNCHPAD_VERCEL_TOKEN', 'vercel-token');
+    vi.stubEnv('LAUNCHPAD_CLOUDFLARE_TOKEN', 'cf-token');
     stubFetch([
       { match: /\/repos\/example\/invalid-root$/, response: () => jsonResponse({ id: 42, archived: false, private: true, default_branch: 'main' }) },
       { match: /\/contents\//, response: () => jsonResponse({ message: 'Not Found' }, 404) },
@@ -242,6 +243,7 @@ describe('plan', () => {
     let deploymentLookups = 0;
     vi.stubEnv('LAUNCHPAD_GITHUB_TOKEN', 'github-token');
     vi.stubEnv('LAUNCHPAD_VERCEL_TOKEN', 'vercel-token');
+    vi.stubEnv('LAUNCHPAD_CLOUDFLARE_TOKEN', 'cf-token');
     stubFetch([
       { match: /\/repos\/example\/invalid-root$/, response: () => jsonResponse({ id: 42, archived: false, private: true, default_branch: 'main' }) },
       { match: /\/contents\//, response: () => jsonResponse({ type: 'dir' }) },
@@ -302,11 +304,14 @@ lifecycle:
     const outputDir = tempDir('launchpad-cli-plan-');
     vi.stubEnv('LAUNCHPAD_GITHUB_TOKEN', 'github-token');
     vi.stubEnv('LAUNCHPAD_VERCEL_TOKEN', 'vercel-token');
+    vi.stubEnv('LAUNCHPAD_CLOUDFLARE_TOKEN', 'cf-token');
     stubFetch([
       { match: /\/repos\/example\/valid-app$/, response: () => jsonResponse({ id: 42, archived: false, private: true, default_branch: 'main' }) },
       { match: /\/contents\//, response: () => jsonResponse({ type: 'dir' }) },
       { match: /\/v9\/projects\//, response: () => jsonResponse({ id: 'valid-app', name: 'valid-app', framework: 'nextjs', rootDirectory: 'apps/web', nodeVersion: '24.x', installCommand: 'yarn install --immutable', buildCommand: 'yarn build', outputDirectory: null, autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false }) },
       { match: /\/v7\/deployments\?/, response: () => jsonResponse({ deployments: [] }) },
+      { match: /\/zones\?name=example\.com/, response: () => jsonResponse({ result: [{ id: 'zone_cf_1', name: 'example.com', name_servers: ['ns1.example.com'], status: 'active' }], success: true }) },
+      { match: /\/zones\/zone_cf_1\/dns_records\?name=app\.example\.com/, response: () => jsonResponse({ result: [], success: true }) },
     ]);
     const out = writer();
     const exitCode = await runCli(['plan', '--catalog', catalog, '--app', 'valid-app', '--sha', sha, '--format', 'json', '--output', outputDir], out);
