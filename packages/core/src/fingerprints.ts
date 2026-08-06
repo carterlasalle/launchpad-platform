@@ -52,8 +52,9 @@ export function redactEnvironmentSpec(spec: EnvironmentSpec, environment: string
 
 /** Manifest projection safe for plans, graphs, and artifacts. */
 export function redactDesired(desired: DesiredApplication): unknown {
+  const { sourcePath: _sourcePath, ...manifest } = desired;
   return {
-    ...desired,
+    ...manifest,
     environments: Object.fromEntries(
       Object.entries(desired.environments).map(([environment, spec]) => [environment, spec ? redactEnvironmentSpec(spec, environment) : spec]),
     ),

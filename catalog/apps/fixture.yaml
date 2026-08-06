@@ -8,6 +8,7 @@ metadata:
 # Controller identity parser deployed before this retry.
 # Retry after successful control-plane deployment.
 # Manifest source path is now controller-bound.
+# Final activation attempt uses normalized source paths.
   owners:
     - "@CarterLaSalle"
   labels:
