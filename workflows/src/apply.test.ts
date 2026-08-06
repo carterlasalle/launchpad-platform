@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { buildPlan, desiredStateHash, planReviewFingerprint, type DesiredApplication, type DeploymentRecord, type FieldCapability, type HealthCheckRecord, type ObservedApplication, type PlatformPlan, type ProviderCapabilities } from '@launchpad/core';
 import { FakeProvider } from '@launchpad/provider-testkit';
 import { InMemoryLaunchpadStore } from '@launchpad/database';
-import { idempotencyKey, sha256Hex, SensitiveValue } from '@launchpad/shared';
+import { idempotencyKey, sha256Hex, SensitiveValue, stableId } from '@launchpad/shared';
 import { applyNoDestroyGate, applyObserveLiveState, applyPromote, applyRecoverOnFailure, applyStep, errorCodeOf, makeApplyBase, runApplyPhase, runApplyWorkflow, WorkflowFailure, type ApplyRuntime, type ApplyWorkflowResult, type EnsureEnvironmentsResult, type HeldLocks, type RecoverOnFailureResult, type ResolveSecretsResult } from './index.js';
 import type { ProviderContext, ProxyCompatibilityRequest, ProxyCompatibilityResult, RequiredDnsRecord, SecretProvider } from '@launchpad/provider-contract';
 
@@ -118,6 +118,37 @@ it('rejects a stale plan before any provider read or write', async () => {
   expect(result.errorCode).toBe('LP-PLAN-STALE');
   expect(provider.calls).toEqual([]);
   expect(await store.getLock('application:app')).toBeNull();
+});
+
+it('hydrates prior phase outputs in the per-phase dispatch path (canonical project id for domains)', async () => {
+  const provider = testProvider();
+  const store = await seededStore();
+  const base = await makeApplyBase({ applicationId: 'app', sourceCommit: 'a'.repeat(40), planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'phase-hydration', workflowId: 'apply-phase-hydration' });
+  const runtime: ApplyRuntime = { store, provider };
+  const plan = await buildPlan({ desired, observed: observed(), capabilities: FULL_CAPABILITIES, sourceCommit: 'a'.repeat(40), desiredGeneration: 1, now: '2026-08-04T00:00:00.000Z' });
+  const locks: HeldLocks = { applicationId: 'app', ownerId: 'apply-phase-hydration', leaseSeconds: 900, application: 'application:app', domains: [] };
+  const projectStep = applyStep('ensure-project', { base, context, runtime, desired, plan, locks });
+  const projectOutcome = await runApplyPhase({ store, base, context, step: projectStep });
+  expect(projectOutcome.status).toBe('SUCCEEDED');
+  // The persisted readback carries the canonical Vercel project id (the run
+  // id is the deterministic idempotency-key-derived workflow id).
+  await store.recordWorkflowStep({ workflowId: stableId('workflow-run', 'app', base.idempotencyKey), stepId: 'ensure-project', status: 'SUCCEEDED', attempt: 1, preconditionHash: projectStep.preconditionHash, result: { mutation: { changed: true, operationId: 'op' }, verified: { provider: 'vercel', resourceType: 'vercel.project', resourceKey: 'app', providerResourceId: 'prj_canonical', configuration: { id: 'prj_canonical' }, ownershipFingerprint: 'prj_canonical', observedAt: 't' } } });
+  let ensuredProjectId: string | null = null;
+  const recording: FakeProvider = new Proxy(provider, {
+    get(target, prop, receiver) {
+      if (prop === 'ensureDomain') {
+        return async (spec: { projectId: string; hostname: string }): Promise<unknown> => {
+          ensuredProjectId = spec.projectId;
+          return { resource: { provider: 'vercel', resourceType: 'vercel.domain', resourceKey: spec.hostname, providerResourceId: 'dom_1', configuration: { name: spec.hostname, projectId: spec.projectId }, ownershipFingerprint: spec.projectId, observedAt: 't' }, changed: false, operationId: 'op' };
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as FakeProvider;
+  const step = applyStep('ensure-domains', { base, context, runtime: { store, provider: recording }, desired, plan, locks });
+  const outcome = await runApplyPhase({ store, base, context, step });
+  expect(outcome.status).toBe('SUCCEEDED');
+  expect(ensuredProjectId).toBe('prj_canonical');
 });
 
 it('resumes from persisted granular boundaries without duplicate writes or missing local state', async () => {
