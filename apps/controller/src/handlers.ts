@@ -164,11 +164,25 @@ function createApplyPhaseHandlers(env: ControllerEnv['Bindings'], provider: Comp
       case 'ensure-settings':
       case 'ensure-domains':
       case 'ensure-dns':
-      case 'create-candidate':
         ctx.desired = requiredPayload<DesiredApplication>(payload, 'desired');
         ctx.plan = requiredPayload<PlatformPlan>(payload, 'plan');
         ctx.locks = requiredPayload<HeldLocks>(payload, 'locks');
         break;
+      case 'create-candidate': {
+        ctx.desired = requiredPayload<DesiredApplication>(payload, 'desired');
+        ctx.plan = requiredPayload<PlatformPlan>(payload, 'plan');
+        ctx.locks = requiredPayload<HeldLocks>(payload, 'locks');
+        // The staged production candidate builds the APPLICATION repository at
+        // its production branch HEAD; the control-repository commit that
+        // triggered the apply does not exist in the application repository.
+        const desired = ctx.desired;
+        const ref = await github.resolveRef(desired.repository.name, desired.repository.productionBranch, context);
+        if (!ref || typeof ref.sha !== 'string' || !/^[0-9a-f]{40}$/.test(ref.sha)) {
+          throw new HandlerFailure('LP-APPLY-COMMIT-UNRESOLVABLE', `The application repository branch '${desired.repository.productionBranch}' could not be resolved for the production candidate.`);
+        }
+        ctx.appCommit = ref.sha;
+        break;
+      }
       case 'resolve-secrets':
         ctx.desired = requiredPayload<DesiredApplication>(payload, 'desired');
         break;
@@ -189,12 +203,18 @@ function createApplyPhaseHandlers(env: ControllerEnv['Bindings'], provider: Comp
         ctx.desired = requiredPayload<DesiredApplication>(payload, 'desired');
         ctx.candidate = requiredPayload<DeploymentRecord>(payload, 'candidate');
         break;
-      case 'promote':
+      case 'promote': {
         ctx.desired = requiredPayload<DesiredApplication>(payload, 'desired');
         ctx.plan = requiredPayload<PlatformPlan>(payload, 'plan');
         ctx.locks = requiredPayload<HeldLocks>(payload, 'locks');
         ctx.candidate = requiredPayload<DeploymentRecord>(payload, 'candidate');
+        // The candidate was built from the application repository branch; the
+        // promotion gate compares against the same resolved commit.
+        const desiredForPromote = ctx.desired;
+        const ref = await github.resolveRef(desiredForPromote.repository.name, desiredForPromote.repository.productionBranch, context);
+        if (ref && typeof ref.sha === 'string' && /^[0-9a-f]{40}$/.test(ref.sha)) ctx.appCommit = ref.sha;
         break;
+      }
       case 'production-health':
         ctx.desired = requiredPayload<DesiredApplication>(payload, 'desired');
         ctx.candidate = requiredPayload<DeploymentRecord>(payload, 'candidate');
