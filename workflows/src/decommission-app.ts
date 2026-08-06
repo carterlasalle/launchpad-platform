@@ -444,7 +444,8 @@ export async function loadRegisteredCatalog(input: {
   const rows = await input.store.listApplications();
   const files: Array<{ path: string; content: string }> = [];
   for (const row of rows) {
-    const path = `${input.catalogRoot.replace(/\/$/, '')}/${row.application}.yaml`;
+    const registered = await input.store.getApplication(row.application);
+    const path = registered?.sourcePath ?? `${input.catalogRoot.replace(/\/$/, '')}/${row.application}.yaml`;
     try {
       files.push({ path, content: await input.source.readFile(input.controlRepository, 'main', path, input.context) });
     } catch {
