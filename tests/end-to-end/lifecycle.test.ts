@@ -33,7 +33,7 @@ const FULL_CAPABILITIES: ProviderCapabilities = {
 };
 
 it('proves catalog, preview, apply, drift, reconciliation, and safe deletion', async () => {
-  const catalog = loadCatalog([{ path: 'catalog/apps/fixture.yaml', content: readFileSync('catalog/apps/fixture.yaml', 'utf8') }]);
+  const catalog = loadCatalog([{ path: 'tests/fixtures/catalog/fixture-app.yaml', content: readFileSync('tests/fixtures/catalog/fixture-app.yaml', 'utf8') }]);
   expect(catalog.issues).toEqual([]);
   const desired = catalog.applications[0];
   if (!desired) throw new Error('Fixture application missing');
