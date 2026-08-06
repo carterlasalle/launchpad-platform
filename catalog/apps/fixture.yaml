@@ -33,7 +33,7 @@ vercel:
       installCommand: yarn install --immutable
       buildCommand: yarn build
       outputDirectory: null
-      developmentCommand: yarn dev
+      developmentCommand: null
       ignoredBuildStep: null
     git:
       connected: true
@@ -44,13 +44,9 @@ vercel:
       rollingRelease: null
       skewProtection: false
     regions:
-      functions: [iad1]
-    protection:
-      preview: public
-      production: public
-    settings:
-      webAnalytics: true
-      speedInsights: true
+      functions: []
+    protection: {}
+    settings: {}
 environments:
   preview:
     enabled: true

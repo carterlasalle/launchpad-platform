@@ -277,7 +277,12 @@ vercel:
 environments:
   preview: {enabled: true, health: {path: /api/health, method: GET, expectedStatus: [200], timeoutSeconds: 10, attempts: 1, intervalSeconds: 0}}
   production: {enabled: true, health: {path: /api/health, method: GET, expectedStatus: [200], timeoutSeconds: 10, attempts: 1, intervalSeconds: 0}}
-domains: []
+domains:
+  - hostname: app.example.com
+    environment: production
+    canonical: true
+    cloudflare: {zoneRef: config://cloudflare/example.com, mode: dns-only, ttl: auto}
+    redirects: []
 secrets: []
 dependencies: {applications: [], external: []}
 policies:
@@ -305,7 +310,7 @@ lifecycle:
     ]);
     const out = writer();
     const exitCode = await runCli(['plan', '--catalog', catalog, '--app', 'valid-app', '--sha', sha, '--format', 'json', '--output', outputDir], out);
-    expect(exitCode).toBe(0);
+    expect(exitCode, out.text).toBe(0);
     const plans = JSON.parse(out.text) as PlatformPlan[];
     expect(plans).toHaveLength(1);
     expect(plans[0]?.applicationId).toBe('valid-app');
