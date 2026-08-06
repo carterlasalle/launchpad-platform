@@ -872,7 +872,7 @@ export class InMemoryLaunchpadStore implements LaunchpadStore {
     this.requireApplication(input.applicationId);
     for (const existing of this.planReviewAttestations.values()) {
       if (existing.application_id === input.applicationId && existing.review_fingerprint === input.reviewFingerprint) {
-        if (existing.desired_hash !== input.desiredHash || existing.generation !== input.generation || existing.plan_fingerprint !== input.planFingerprint || existing.repository !== input.repository) {
+        if (existing.desired_hash !== input.desiredHash || existing.generation !== input.generation || existing.repository !== input.repository) {
           throw conflict('LP-DB-PLAN-REVIEW-REPLAY-CONFLICT', `A reviewed-plan attestation for review fingerprint '${input.reviewFingerprint}' is already stored for '${input.applicationId}' with a different desired-state binding`, { applicationId: input.applicationId, reviewFingerprint: input.reviewFingerprint });
         }
         return { inserted: false, attestation: this.copyPlanReviewAttestation(existing) };
