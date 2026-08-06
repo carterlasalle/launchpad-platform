@@ -1,0 +1,11 @@
+apiVersion: launchpad.dev/v1
+kind: ReconciliationRequest
+metadata:
+  app: tokentest
+  observedAt: 2026-08-06T11:00:35.008Z
+spec:
+  desiredGeneration: 0
+  reason: external-drift
+  operation: restore-desired-state
+  driftFingerprint: sha256:e800f3bcde51a192b2108a39340e31e711e210a9ec496bde08202d9664359d8c
+  sourceCommit: 3b3cc2b264a45322af2fc529440c8d7cbee15363
