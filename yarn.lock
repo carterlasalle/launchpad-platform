@@ -957,6 +957,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@launchpad/dns-resolver@workspace:apps/dns-resolver"
   dependencies:
+    "@types/node": "npm:22.15.0"
     typescript: "npm:5.8.3"
     vitest: "npm:3.2.6"
   languageName: unknown
