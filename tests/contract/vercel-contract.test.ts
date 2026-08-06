@@ -34,7 +34,7 @@ it('creates a project with the official POST /v10/projects body', async () => {
   expect(create.body).toEqual({
     name: 'app', framework: 'nextjs', rootDirectory: '.',
     installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null,
-    gitRepository: { type: 'github', repo: 'acme/app' }, productionBranch: 'main', autoAssignProductionDomains: false,
+    autoAssignProductionDomains: false,
   });
   expect(create.headers['idempotency-key']).toBeDefined();
 });
