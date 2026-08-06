@@ -321,7 +321,16 @@ function cleanupJobIdFor(applicationId: string, providerResourceId: string, expi
 function shadowProjectApplicationId(projectName: string): string | null {
   const segments = projectName.split('-');
   if (segments.length < 6 || segments[0] !== 'lp' || segments[1] !== 'pr') return null;
-  return segments[3] ?? null;
+  if (!/^\d+$/.test(segments[2] ?? '')) return null;
+  // The trailing segments are fixed-shape (repoId-commit-revision), so the
+  // application id is everything between them — which keeps sanitized ids
+  // containing dashes (e.g. `my-app`) parseable.
+  const repoId = segments[segments.length - 3] ?? '';
+  const commit = segments[segments.length - 2] ?? '';
+  const revision = segments[segments.length - 1] ?? '';
+  if (!/^\d+$/.test(repoId) || !/^(?:[0-9a-f]{8}|none)$/.test(commit) || !/^\d+$/.test(revision)) return null;
+  const applicationId = segments.slice(3, segments.length - 3).join('-');
+  return applicationId.length > 0 ? applicationId : null;
 }
 
 // ---------------------------------------------------------------------------

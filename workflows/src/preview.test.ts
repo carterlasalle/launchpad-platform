@@ -317,6 +317,19 @@ it('keeps cleanup failures visible after retries are exhausted', async () => {
   expect(cleanupRuns.some((candidate) => candidate.status === 'FAILED')).toBe(true);
 });
 
+it('cleans shadow projects whose application id contains a dash', async () => {
+  const provider = new FakeProvider();
+  const store = new InMemoryLaunchpadStore();
+  await store.upsertApplication({ id: 'my-app', displayName: 'My App', sourcePath: 'catalog/apps/my-app.yaml', desiredGeneration: 1, desiredHash: '', syncStatus: 'SYNCED', healthStatus: 'UNKNOWN', lifecycleState: 'active', owners: ['@platform'] });
+  const projectName = 'lp-pr-7-my-app-12345-aaaaaaaa-1';
+  await provider.ensureProject({ id: projectName, name: projectName, teamId: null, framework: 'nextjs', rootDirectory: '.', nodeVersion: '24.x', build: { installCommand: null, buildCommand: null, outputDirectory: null }, repository: 'acme/my-app', productionBranch: 'main', settings: {} }, context);
+  const expiresAt = new Date(Date.now() - 1000).toISOString();
+  const job = await store.enqueueCleanupJob({ id: stableId('cleanup-job', 'my-app', projectName, expiresAt), applicationId: 'my-app', providerResourceId: projectName, expiresAt });
+  const result = await cleanupShadowProject({ store, provider, context, applicationId: 'my-app', projectId: projectName, providerResourceId: projectName, reason: 'PR_CLOSED', cleanupJobId: job.id });
+  expect(result.status).toBe('CLEANED');
+  expect(provider.projects.has(projectName)).toBe(false);
+});
+
 it('sweeps expired shadow projects tracked by cleanup jobs and leaves untracked projects untouched', async () => {
   const provider = new FakeProvider();
   const store = new InMemoryLaunchpadStore();

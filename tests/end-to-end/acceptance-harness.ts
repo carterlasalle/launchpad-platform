@@ -372,7 +372,7 @@ export function acceptanceManifest(overrides: { domainMode?: 'dns-only' | 'proxi
         nodeVersion: '24.x',
         build: { installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null, developmentCommand: null, ignoredBuildStep: null },
         git: { connected: true, productionBranch: 'main' },
-        deployment: { autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false },
+        deployment: { autoAssignProductionDomains: false },
         regions: { functions: [] },
         protection: {},
         settings: { autoAssignProductionDomains: false },
