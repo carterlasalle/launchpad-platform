@@ -121,7 +121,7 @@ check(Array.isArray(environment.triggers?.crons) && environment.triggers.crons.i
 // deploy and the raw template unsafe.
 if (concrete) {
   const placeholder = /replace-in-/i;
-  const hexId = /^[a-fA-F0-9]{32}$/;
+  const resourceId = /^(?:[a-fA-F0-9]{32}|[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$/;
   const teamId = /^(?:team_[A-Za-z0-9-]{1,64}|[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)$/;
 
   const walk = (value, path) => {
@@ -143,12 +143,12 @@ if (concrete) {
 
   for (const database of environment.d1_databases ?? []) {
     if (!placeholder.test(database.database_id)) {
-      check(hexId.test(database.database_id), `[${envName}] d1_databases ${database.binding} database_id must be a 32-hex-character id, got '${database.database_id}'.`);
+      check(resourceId.test(database.database_id), `[${envName}] d1_databases ${database.binding} database_id must be a 32-hex-character or UUID id, got '${database.database_id}'.`);
     }
   }
   for (const binding of environment.secrets_store_secrets ?? []) {
     if (!placeholder.test(binding.store_id)) {
-      check(hexId.test(binding.store_id), `[${envName}] secrets_store_secrets ${binding.binding} store_id must be a 32-hex-character id, got '${binding.store_id}'.`);
+    check(resourceId.test(binding.store_id), `[${envName}] secrets_store_secrets ${binding.binding} store_id must be a 32-hex-character or UUID id, got '${binding.store_id}'.`);
     }
   }
   if (!placeholder.test(vars.VERCEL_TEAM_ID)) {

@@ -29,8 +29,8 @@ const readRendered = () => JSON.parse(readFileSync(RENDERED_PATH, 'utf8')) as Wr
 
 const secretNames = ['OPERATOR_TOKEN', 'CONTROLLER_INTERNAL_TOKEN', 'VERCEL_TOKEN', 'CLOUDFLARE_TOKEN', 'GITHUB_TOKEN', 'VERCEL_WEBHOOK_SECRET'];
 
-const D1_ID = '0123456789abcdef0123456789abcdef';
-const STORE_ID = 'fedcba9876543210fedcba9876543210';
+const D1_ID = 'dcf86e42-6afe-4179-87c5-77c7dd003f4c';
+const STORE_ID = 'd32d57347ebf4f378598d3f6bb9e6945';
 const TEAM_ID = 'team_launchpad-production';
 const RESOLVER_URL = 'https://dns-resolver.launchpad.internal/v1/dns';
 const CONTROLLER_URL = 'https://launchpad-control-plane.example.workers.dev';

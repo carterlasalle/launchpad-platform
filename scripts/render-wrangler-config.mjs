@@ -43,7 +43,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATE = 'wrangler.jsonc';
 const VALID_ENVS = new Set(['production', 'test']);
 const PLACEHOLDER_RE = /replace-in-/i;
-const HEX_ID_RE = /^[a-fA-F0-9]{32}$/;
+const RESOURCE_ID_RE = /^(?:[a-fA-F0-9]{32}|[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})$/;
 const VERCEL_TEAM_ID_RE = /^(?:team_[A-Za-z0-9-]{1,64}|[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)$/;
 const OUTPUT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const FORBIDDEN_OUTPUTS = new Set(['wrangler.jsonc', 'wrangler.json']);
@@ -132,8 +132,8 @@ if (FORBIDDEN_OUTPUTS.has(options.output)) {
 
 const controlPlaneEnabled = readControlPlaneEnabled();
 const identifiers = [
-  readIdentifier('LAUNCHPAD_D1_DATABASE_ID', HEX_ID_RE, 'a 32-hex-character id', (value) => value.toLowerCase()),
-  readIdentifier('LAUNCHPAD_SECRETS_STORE_ID', HEX_ID_RE, 'a 32-hex-character id', (value) => value.toLowerCase()),
+  readIdentifier('LAUNCHPAD_D1_DATABASE_ID', RESOURCE_ID_RE, 'a 32-hex-character or UUID resource id', (value) => value.toLowerCase()),
+  readIdentifier('LAUNCHPAD_SECRETS_STORE_ID', RESOURCE_ID_RE, 'a 32-hex-character or UUID resource id', (value) => value.toLowerCase()),
   readIdentifier('LAUNCHPAD_VERCEL_TEAM_ID', VERCEL_TEAM_ID_RE, 'a "team_..." id or lowercase slug', (value) => value),
   readIdentifier('LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
   readIdentifier('LAUNCHPAD_CONTROLLER_URL', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
