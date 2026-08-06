@@ -217,10 +217,10 @@ function stepOutput<T>(outputs: Readonly<Record<string, unknown>>, stepId: strin
  */
 function canonicalProjectIdOf(outputs: Readonly<Record<string, unknown>>, base: ApplyBase): string {
   const ensured = outputs['ensure-project'];
-  if (ensured !== null && typeof ensured === 'object' && 'verified' in ensured) {
-    const verified = (ensured as { verified?: unknown }).verified;
-    if (verified !== null && typeof verified === 'object' && 'providerResourceId' in verified) {
-      const id = (verified as { providerResourceId?: unknown }).providerResourceId;
+  if (ensured !== null && typeof ensured === 'object' && !Array.isArray(ensured) && 'verified' in ensured) {
+    const verified = (ensured as Record<string, unknown>).verified;
+    if (verified !== null && typeof verified === 'object' && !Array.isArray(verified) && 'providerResourceId' in verified) {
+      const id = (verified as Record<string, unknown>).providerResourceId;
       if (typeof id === 'string' && id.length > 0) return id;
     }
   }
@@ -573,19 +573,21 @@ export async function applyVerifyTls(input: { base: ApplyBase; provider: Project
   return { skipped: false, domains };
 }
 
-export async function applyCreateCandidate(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; locks: HeldLocks; context: ProviderContext; appCommit?: string }): Promise<CreateCandidateResult> {
+export async function applyCreateCandidate(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; locks: HeldLocks; context: ProviderContext; appCommit?: string; projectId?: string }): Promise<CreateCandidateResult> {
   await refreshLocks(input.store, input.locks);
   const project = projectSpec(input.desired);
+  const projectId = input.projectId ?? project.id;
   // The staged candidate builds the APPLICATION repository at its production
   // branch HEAD (resolved by the controller), never the control-repository
-  // commit that triggered the apply.
-  const candidate = await input.provider.createDeployment({ projectId: project.id, environment: 'production', repository: project.repository, commitSha: input.appCommit ?? input.base.sourceCommit, desiredGeneration: input.plan.desiredGeneration, staged: true, rootDirectory: project.rootDirectory }, input.context);
-  await input.store.recordDeployment({ id: candidate.id, applicationId: input.base.applicationId, projectId: project.id, environment: 'production', repository: project.repository, commitSha: candidate.commitSha, desiredGeneration: candidate.desiredGeneration, state: candidate.state, url: candidate.url, createdAt: candidate.createdAt });
+  // commit that triggered the apply. The canonical Vercel project id is used
+  // so the deployment record (and the promotion gate) compares like-for-like.
+  const candidate = await input.provider.createDeployment({ projectId, environment: 'production', repository: project.repository, commitSha: input.appCommit ?? input.base.sourceCommit, desiredGeneration: input.plan.desiredGeneration, staged: true, rootDirectory: project.rootDirectory }, input.context);
+  await input.store.recordDeployment({ id: candidate.id, applicationId: input.base.applicationId, projectId, environment: 'production', repository: project.repository, commitSha: candidate.commitSha, desiredGeneration: candidate.desiredGeneration, state: candidate.state, url: candidate.url, createdAt: candidate.createdAt });
   return { candidate };
 }
 
-export async function applyWaitCandidate(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; candidate: DeploymentRecord; context: ProviderContext }): Promise<WaitCandidateResult> {
-  const ready = await input.provider.waitForDeployment({ projectId: input.base.applicationId, deploymentId: input.candidate.id, timeoutMs: CANDIDATE_WAIT_TIMEOUT_MS, pollMs: CANDIDATE_WAIT_POLL_MS }, input.context);
+export async function applyWaitCandidate(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; candidate: DeploymentRecord; context: ProviderContext; projectId?: string }): Promise<WaitCandidateResult> {
+  const ready = await input.provider.waitForDeployment({ projectId: input.projectId ?? input.base.applicationId, deploymentId: input.candidate.id, timeoutMs: CANDIDATE_WAIT_TIMEOUT_MS, pollMs: CANDIDATE_WAIT_POLL_MS }, input.context);
   if (!['READY', 'STAGED'].includes(ready.state)) {
     let logExcerpt: string | null = null;
     if (input.provider.fetchDeploymentLogs) {
@@ -653,20 +655,23 @@ export async function applyCandidateHealth(input: { base: ApplyBase; store: Laun
   return { health };
 }
 
-export async function applyPromote(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; candidate: DeploymentRecord; locks: HeldLocks; context: ProviderContext; appCommit?: string }): Promise<PromotePhaseResult> {
+export async function applyPromote(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; candidate: DeploymentRecord; locks: HeldLocks; context: ProviderContext; appCommit?: string; projectId?: string }): Promise<PromotePhaseResult> {
   await refreshLocks(input.store, input.locks);
   if (input.desired.lifecycle.state !== 'active') {
     throw new WorkflowFailure('LP-PROMOTION-LIFECYCLE-BLOCKED', `Promotion is disabled while the application lifecycle is '${input.desired.lifecycle.state}'; decommissioning keeps the service running but stops new production promotion.`);
   }
   const project = projectSpec(input.desired);
-  if (input.candidate.projectId !== project.id) throw new WorkflowFailure('LP-PROMOTION-PROJECT-MISMATCH', `Candidate '${input.candidate.id}' belongs to project '${input.candidate.projectId}', expected '${project.id}'.`);
+  // The canonical Vercel project id: the candidate's record carries it (the
+  // provider echoes the requested id), so the gate compares like-for-like.
+  const projectId = input.projectId ?? project.id;
+  if (input.candidate.projectId !== projectId) throw new WorkflowFailure('LP-PROMOTION-PROJECT-MISMATCH', `Candidate '${input.candidate.id}' belongs to project '${input.candidate.projectId}', expected '${projectId}'.`);
   if (input.candidate.environment !== 'production') throw new WorkflowFailure('LP-PROMOTION-ENVIRONMENT-MISMATCH', `Candidate '${input.candidate.id}' targets '${input.candidate.environment}', expected 'production'.`);
   if (input.candidate.repository !== project.repository) throw new WorkflowFailure('LP-PROMOTION-REPOSITORY-MISMATCH', `Candidate '${input.candidate.id}' came from '${input.candidate.repository}', expected '${project.repository}'.`);
   const expectedCommit = input.appCommit ?? input.base.sourceCommit;
   if (input.candidate.commitSha !== expectedCommit) throw new WorkflowFailure('LP-PROMOTION-COMMIT-MISMATCH', `Candidate '${input.candidate.id}' is at ${input.candidate.commitSha}, expected ${expectedCommit}.`);
   if (input.candidate.desiredGeneration !== input.plan.desiredGeneration) throw new WorkflowFailure('LP-PROMOTION-GENERATION-MISMATCH', `Candidate '${input.candidate.id}' has generation ${input.candidate.desiredGeneration}, expected ${input.plan.desiredGeneration}.`);
   if (!['READY', 'STAGED'].includes(input.candidate.state)) throw new WorkflowFailure('LP-PROMOTION-CANDIDATE-NOT-READY', `Candidate '${input.candidate.id}' is '${input.candidate.state}', not ready for promotion.`);
-  const promotion = await input.provider.promote({ projectId: project.id, deploymentId: input.candidate.id, expectedCommitSha: expectedCommit }, input.context);
+  const promotion = await input.provider.promote({ projectId, deploymentId: input.candidate.id, expectedCommitSha: expectedCommit }, input.context);
   if (promotion.deployment.state !== 'CURRENT') throw new WorkflowFailure('LP-PROMOTION-READBACK-FAILED', `Promotion did not yield a CURRENT deployment (${promotion.deployment.state}).`);
   await input.store.recordPromotion({ applicationId: input.base.applicationId, deploymentId: promotion.deployment.id, previousDeploymentId: promotion.previousDeploymentId, result: 'PROMOTED' });
   return { promotion };
@@ -699,7 +704,7 @@ export async function applyReleaseLocks(input: { base: ApplyBase; store: Launchp
   return result;
 }
 
-export async function applyRecoverOnFailure(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; context: ProviderContext; failure: { failedStep: string; error: unknown }; candidate: DeploymentRecord | null; knownGood: DeploymentRecord | null; productionHealth: HealthCheckRecord | null; fetchImpl?: typeof fetch; sleep?: (delayMs: number) => Promise<void> }): Promise<RecoverOnFailureResult> {
+export async function applyRecoverOnFailure(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; context: ProviderContext; failure: { failedStep: string; error: unknown }; candidate: DeploymentRecord | null; knownGood: DeploymentRecord | null; productionHealth: HealthCheckRecord | null; projectId?: string; fetchImpl?: typeof fetch; sleep?: (delayMs: number) => Promise<void> }): Promise<RecoverOnFailureResult> {
   const policy = input.desired.environments.production?.rollback;
   const candidate = input.candidate;
   // The observed projection is provider-visible only (catalog commits never
@@ -709,6 +714,10 @@ export async function applyRecoverOnFailure(input: { base: ApplyBase; store: Lau
   // another path can trigger a rollback.
   const observedKnownGood = input.knownGood ?? (await input.store.getKnownGoodDeployment(input.base.applicationId, 'production'));
   const project = projectSpec(input.desired);
+  // The canonical Vercel project id: deployment and known-good records carry
+  // it (the provider echoes the requested id), so corroboration compares
+  // like-for-like.
+  const projectId = input.projectId ?? project.id;
   let rollback: RollbackResult | null = null;
   let rollbackError: { name: string; message: string } | null = null;
   let recoveryOutcome: RecoveryOutcome;
@@ -730,11 +739,11 @@ export async function applyRecoverOnFailure(input: { base: ApplyBase; store: Lau
     const stored = await input.store.getKnownGoodDeployment(input.base.applicationId, 'production');
     if (stored === null) {
       recoveryOutcome = { kind: 'NO_ROLLBACK', reason: 'KNOWN_GOOD_ABSENT' };
-    } else if (stored.projectId !== project.id || stored.environment !== 'production' || stored.id !== observedKnownGood.id) {
+    } else if (stored.projectId !== projectId || stored.environment !== 'production' || stored.id !== observedKnownGood.id) {
       recoveryOutcome = { kind: 'NO_ROLLBACK', reason: 'KNOWN_GOOD_MISMATCH' };
     } else {
       try {
-        rollback = await input.provider.rollback({ projectId: project.id, deploymentId: candidate.id, previousKnownGoodId: stored.id }, input.context);
+        rollback = await input.provider.rollback({ projectId, deploymentId: candidate.id, previousKnownGoodId: stored.id }, input.context);
         await input.store.recordKnownGoodDeployment(input.base.applicationId, 'production', stored.id);
         await input.store.recordPromotion({ applicationId: input.base.applicationId, deploymentId: stored.id, previousDeploymentId: candidate.id, result: 'ROLLED_BACK' });
         await input.store.updateApplicationStatus(input.base.applicationId, { syncStatus: 'RECONCILING', healthStatus: 'DEGRADED' });
@@ -840,11 +849,11 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
     case 'verify-tls':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async () => applyVerifyTls({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), context: ctx.context }) };
     case 'create-candidate':
-      return mutationStep(name, ctx, (locks) => applyCreateCandidate({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context, ...(ctx.appCommit !== undefined ? { appCommit: ctx.appCommit } : {}) }));
+      return mutationStep(name, ctx, (locks, outputs) => applyCreateCandidate({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context, projectId: canonicalProjectIdOf(outputs, base), ...(ctx.appCommit !== undefined ? { appCommit: ctx.appCommit } : {}) }));
     case 'wait-candidate':
-      return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, candidateId: ctx.candidate?.id ?? null }), retry: { maxAttempts: 3, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async () => {
+      return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, candidateId: ctx.candidate?.id ?? null }), retry: { maxAttempts: 3, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async (_attempt, stepContext) => {
         if (!ctx.candidate) throw new WorkflowFailure('LP-CANDIDATE-MISSING', 'Candidate deployment was not created.');
-        return applyWaitCandidate({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), candidate: ctx.candidate, context: ctx.context });
+        return applyWaitCandidate({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), candidate: ctx.candidate, context: ctx.context, projectId: canonicalProjectIdOf(stepContext.outputs, base) });
       } };
     case 'proxy-compatibility':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, candidateId: ctx.candidate?.id ?? null }), run: async () => {
@@ -858,9 +867,9 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
         return applyCandidateHealth({ base, store: runtime.store, desired: requireDesired(ctx), candidate: ctx.candidate, context: ctx.context, ...(runtime.fetchImpl !== undefined ? { fetchImpl: runtime.fetchImpl } : {}), ...(runtime.sleep !== undefined ? { sleep: runtime.sleep } : {}) });
       } };
     case 'promote':
-      return mutationStep(name, ctx, (locks) => {
+      return mutationStep(name, ctx, (locks, outputs) => {
         if (!ctx.candidate) throw new WorkflowFailure('LP-CANDIDATE-MISSING', 'Candidate deployment is unavailable for promotion.');
-        return applyPromote({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), candidate: ctx.candidate, locks, context: ctx.context, ...(ctx.appCommit !== undefined ? { appCommit: ctx.appCommit } : {}) });
+        return applyPromote({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), candidate: ctx.candidate, locks, context: ctx.context, projectId: canonicalProjectIdOf(outputs, base), ...(ctx.appCommit !== undefined ? { appCommit: ctx.appCommit } : {}) });
       });
     case 'production-health':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, candidateId: ctx.candidate?.id ?? null }), run: async () => {
@@ -884,10 +893,10 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
         return applyReleaseLocks({ base, store: requireRuntime(ctx).store, locks: ctx.locks });
       } };
     case 'recover-on-failure':
-      return { id: name, preconditionHash: canonicalJson({ failedStep: ctx.failure?.failedStep ?? null, error: ctx.failure ? serializableFailure(ctx.failure.error).name : null, candidateId: ctx.candidate?.id ?? null, knownGoodId: ctx.knownGood?.id ?? null }), run: async () => {
+      return { id: name, preconditionHash: canonicalJson({ failedStep: ctx.failure?.failedStep ?? null, error: ctx.failure ? serializableFailure(ctx.failure.error).name : null, candidateId: ctx.candidate?.id ?? null, knownGoodId: ctx.knownGood?.id ?? null }), run: async (_attempt, stepContext) => {
         if (!ctx.failure) throw new WorkflowFailure('LP-WORKFLOW-PAYLOAD-MISSING', 'recover-on-failure requires the failure context.');
         const runtime = requireRuntime(ctx);
-        return applyRecoverOnFailure({ base, store: runtime.store, provider: runtime.provider, desired: requireDesired(ctx), context: ctx.context, failure: ctx.failure, candidate: ctx.candidate ?? null, knownGood: ctx.knownGood ?? null, productionHealth: ctx.productionHealth ?? null, ...(runtime.fetchImpl !== undefined ? { fetchImpl: runtime.fetchImpl } : {}), ...(runtime.sleep !== undefined ? { sleep: runtime.sleep } : {}) });
+        return applyRecoverOnFailure({ base, store: runtime.store, provider: runtime.provider, desired: requireDesired(ctx), context: ctx.context, failure: ctx.failure, candidate: ctx.candidate ?? null, knownGood: ctx.knownGood ?? null, productionHealth: ctx.productionHealth ?? null, projectId: canonicalProjectIdOf(stepContext.outputs, base), ...(runtime.fetchImpl !== undefined ? { fetchImpl: runtime.fetchImpl } : {}), ...(runtime.sleep !== undefined ? { sleep: runtime.sleep } : {}) });
       } };
   }
 }
@@ -1049,13 +1058,13 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
     {
       id: 'create-candidate',
       preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, desiredGeneration: base.desiredGeneration, planFingerprint: base.planFingerprint }),
-      run: async (_attempt, stepContext) => applyCreateCandidate({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, plan: stepOutput<ReplanVerifyResult>(stepContext.outputs, 'replan-verify').plan, locks: stepOutput<AcquireLocksResult>(stepContext.outputs, 'acquire-locks').locks, context }),
+      run: async (_attempt, stepContext) => applyCreateCandidate({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, plan: stepOutput<ReplanVerifyResult>(stepContext.outputs, 'replan-verify').plan, locks: stepOutput<AcquireLocksResult>(stepContext.outputs, 'acquire-locks').locks, context, projectId: canonicalProjectIdOf(stepContext.outputs, base) }),
     },
     {
       id: 'wait-candidate',
       preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit }),
       retry: { maxAttempts: 3, baseDelayMs: 5_000, maxDelayMs: 30_000 },
-      run: async (_attempt, stepContext) => applyWaitCandidate({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, candidate: stepOutput<CreateCandidateResult>(stepContext.outputs, 'create-candidate').candidate, context }),
+      run: async (_attempt, stepContext) => applyWaitCandidate({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, candidate: stepOutput<CreateCandidateResult>(stepContext.outputs, 'create-candidate').candidate, context, projectId: canonicalProjectIdOf(stepContext.outputs, base) }),
     },
     {
       id: 'proxy-compatibility',
@@ -1070,7 +1079,7 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
     {
       id: 'promote',
       preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, planFingerprint: base.planFingerprint }),
-      run: async (_attempt, stepContext) => applyPromote({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, plan: stepOutput<ReplanVerifyResult>(stepContext.outputs, 'replan-verify').plan, candidate: stepOutput<WaitCandidateResult>(stepContext.outputs, 'wait-candidate').candidate, locks: stepOutput<AcquireLocksResult>(stepContext.outputs, 'acquire-locks').locks, context }),
+      run: async (_attempt, stepContext) => applyPromote({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, plan: stepOutput<ReplanVerifyResult>(stepContext.outputs, 'replan-verify').plan, candidate: stepOutput<WaitCandidateResult>(stepContext.outputs, 'wait-candidate').candidate, locks: stepOutput<AcquireLocksResult>(stepContext.outputs, 'acquire-locks').locks, context, projectId: canonicalProjectIdOf(stepContext.outputs, base) }),
     },
     {
       id: 'production-health',
@@ -1118,6 +1127,7 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
       candidate: promotion?.promotion.deployment ?? waited?.candidate ?? created?.candidate ?? null,
       knownGood: live ? knownGoodOf(live.observed) : null,
       productionHealth: productionHealth?.health ?? null,
+      projectId: canonicalProjectIdOf(failure.outputs, base),
       ...(runtime.fetchImpl !== undefined ? { fetchImpl: runtime.fetchImpl } : {}),
       ...(runtime.sleep !== undefined ? { sleep: runtime.sleep } : {}),
     });
