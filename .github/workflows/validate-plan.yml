@@ -259,6 +259,8 @@ jobs:
     env:
       LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_SMOKE_URL }}
       LAUNCHPAD_OIDC_AUDIENCE: ${{ vars.LAUNCHPAD_OIDC_AUDIENCE }}
+      GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+      GITHUB_REPOSITORY_OWNER_ID: ${{ github.repository_owner_id }}
     steps:
       - name: Checkout trusted platform implementation
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09

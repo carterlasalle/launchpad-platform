@@ -285,3 +285,23 @@ it('classifies a toolchain decision-record update as a code change', () => {
   const source = readFileSync(join(workflowDirectory, 'ci.yml'), 'utf8');
   expect(source).toContain('docs/adr/0007-toolchain-node-yarn.md) code=true; docs=true ;;');
 });
+
+
+it('passes GitHub repository identity to OIDC-authenticated controller jobs', () => {
+  const validate = parse(readFileSync(join(workflowDirectory, 'validate-plan.yml'), 'utf8')) as {
+    jobs: Record<string, { env?: Record<string, string> }>;
+  };
+  const apply = parse(readFileSync(join(workflowDirectory, 'apply.yml'), 'utf8')) as {
+    jobs: Record<string, { steps?: Array<{ name?: string; env?: Record<string, string> }> }>;
+  };
+
+  expect(validate.jobs.preview?.env).toMatchObject({
+    GITHUB_REPOSITORY_ID: '${{ github.repository_id }}',
+    GITHUB_REPOSITORY_OWNER_ID: '${{ github.repository_owner_id }}',
+  });
+  const applyStep = apply.jobs.apply?.steps?.find((step) => step.name === 'Revalidate and apply');
+  expect(applyStep?.env).toMatchObject({
+    GITHUB_REPOSITORY_ID: '${{ github.repository_id }}',
+    GITHUB_REPOSITORY_OWNER_ID: '${{ github.repository_owner_id }}',
+  });
+});
