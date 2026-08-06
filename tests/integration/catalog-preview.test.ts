@@ -125,6 +125,9 @@ describe('catalog PR preview flow (integration)', () => {
     expect((createCalls[0] as Record<string, unknown>).gitSource).toMatchObject({ sha: HEAD_SHA, ref: HEAD_SHA });
     const projectCalls = harness.transport.jsonBodies('POST', '/v10/projects');
     expect((projectCalls[0] as Record<string, unknown>).name).toMatch(/^lp-pr-42-/);
+    // The string repositoryId from the OIDC binding must reach the shadow
+    // project name; otherwise the workflow falls back to a GitHub observe.
+    expect((projectCalls[0] as Record<string, unknown>).name).toContain('123456789');
     expect(harness.transport.allBodies().toLowerCase()).not.toContain('canary');
   });
 
