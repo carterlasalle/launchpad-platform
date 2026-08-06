@@ -184,6 +184,7 @@ if (!ENABLED) {
         const spec = projectSpec({ settings: { autoAssignProductionDomains: false } });
         created = baselineProject === null;
         const mutation = await vercel.ensureProject(spec, context);
+        await vercel.ensureGitConnection({ projectId, repository, productionBranch: 'main' }, context);
         const verified = await vercel.observeProject({ projectId }, context);
         if (verified === null) throw new Error('LP_LIVE_READBACK: project not observed after ensure');
         return {
