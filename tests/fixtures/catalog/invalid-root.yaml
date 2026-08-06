@@ -25,7 +25,7 @@ vercel:
       developmentCommand: yarn dev
       ignoredBuildStep: null
     git: {connected: true, productionBranch: main}
-    deployment: {autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false}
+    deployment: {autoAssignProductionDomains: false}
     regions: {functions: []}
     protection: {preview: public, production: public}
     settings: {}

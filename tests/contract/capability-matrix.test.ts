@@ -220,17 +220,21 @@ describe('planner boundary with real capability snapshots', () => {
     // The fixture manifest sets fields outside the real matrix
     // (developmentCommand, regions.functions, protection.*, and settings
     // keys the matrix never advertises like webAnalytics/speedInsights) —
-    // none may be guessed. Fields the matrix does advertise
-    // (autoAssignProductionDomains, prioritizeProductionBuilds, rollingRelease,
-    // skewProtection) must NOT be reported as unsupported.
+    // none may be guessed. The dashboard-only deployment settings
+    // (prioritizeProductionBuilds, rollingRelease, skewProtection) are not
+    // exposed by the Vercel project API, so the matrix does not advertise
+    // them and they are reported as unsupported.
     expect(messages).toContain('project.build.developmentCommand');
     expect(messages).toContain('project.regions.functions');
     expect(messages).toContain('project.protection.preview');
     expect(messages).toContain('project.settings.webAnalytics');
     expect(messages).toContain('project.settings.speedInsights');
-    expect(messages).not.toContain('project.settings.prioritizeProductionBuilds');
-    expect(messages).not.toContain('project.settings.rollingRelease');
-    expect(messages).not.toContain('project.settings.skewProtection');
+    expect(messages).not.toContain('project.settings.autoAssignProductionDomains');
+    // The dashboard-only deployment settings are not representable in the
+    // catalog model at all: declaring them fails catalog validation
+    // (LP-SCHEMA-UNKNOWN-FIELD) before planning ever runs.
+    const invalidManifest = await loadCatalog([{ path: 'catalog/apps/blocked.yaml', content: 'apiVersion: launchpad.dev/v1\nkind: Application\nmetadata: { id: "blocked", displayName: "Blocked", owners: [] }\nrepository: { provider: github, name: acme/app, productionBranch: main }\nvercel:\n  scope: {}\n  project:\n    name: blocked\n    deployment:\n      autoAssignProductionDomains: false\n      prioritizeProductionBuilds: true\n' }]);
+    expect(invalidManifest.issues.some((issue) => issue.code === 'LP-SCHEMA-UNKNOWN-FIELD' && issue.path.includes('prioritizeProductionBuilds'))).toBe(true);
     // The plan is BLOCKED end to end: no operation on a blocked field may
     // ever be applied, because the controller refuses BLOCKED plans.
     expect(plan.blockedReason).toBe('LP-UNSUPPORTED-FIELD');
@@ -249,7 +253,7 @@ describe('planner boundary with real capability snapshots', () => {
         project: {
           ...desired.vercel.project,
           build: { ...desired.vercel.project.build, developmentCommand: null },
-          deployment: { ...desired.vercel.project.deployment, prioritizeProductionBuilds: false, skewProtection: false },
+          deployment: { ...desired.vercel.project.deployment },
           regions: { functions: [] },
           protection: {},
           settings: { autoAssignProductionDomains: false },

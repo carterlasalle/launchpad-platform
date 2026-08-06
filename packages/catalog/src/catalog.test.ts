@@ -33,9 +33,6 @@ vercel:
     git: {connected: true, productionBranch: main}
     deployment:
       autoAssignProductionDomains: false
-      prioritizeProductionBuilds: true
-      rollingRelease: null
-      skewProtection: false
     regions: {functions: [iad1]}
     protection: {preview: public, production: public}
     settings: {webAnalytics: true}
@@ -455,7 +452,7 @@ vercel:
     settings: {}
     protection: {}
     regions: {functions: []}
-    deployment: {autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false}
+    deployment: {autoAssignProductionDomains: false}
     git: {connected: true, productionBranch: main}
     build: {installCommand: null, buildCommand: null, outputDirectory: null, developmentCommand: null, ignoredBuildStep: null}
     nodeVersion: null

@@ -547,9 +547,6 @@ export function adoptObservedState(input: { desired: DesiredApplication; observe
     deployment: {
       ...projectSpec.deployment,
       autoAssignProductionDomains: pick('autoAssignProductionDomains', projectSpec.deployment.autoAssignProductionDomains) as boolean,
-      prioritizeProductionBuilds: pick('prioritizeProductionBuilds', projectSpec.deployment.prioritizeProductionBuilds) as boolean,
-      rollingRelease: pick('rollingRelease', projectSpec.deployment.rollingRelease) as string | null,
-      skewProtection: pick('skewProtection', projectSpec.deployment.skewProtection) as boolean,
     },
     regions: { ...projectSpec.regions, functions: pick('functions', projectSpec.regions.functions) as string[] },
     protection: pickPrefixed('protection.', projectSpec.protection) as Record<string, string>,

@@ -25,7 +25,7 @@ function desired(overrides: { revision?: number; previewVariables?: Record<strin
     kind: 'Application',
     metadata: { id: 'app', displayName: 'App', owners: ['@platform'], labels: {}, annotations: {} },
     repository: { provider: 'github', name: 'acme/app', productionBranch: 'main', deploymentRef: 'main' },
-    vercel: { scope: {}, project: { name: 'app', framework: 'nextjs', rootDirectory: 'apps/web', nodeVersion: '24.x', build: { installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null, developmentCommand: null, ignoredBuildStep: null }, git: { connected: true, productionBranch: 'main' }, deployment: { autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false }, regions: { functions: [] }, protection: {}, settings: {} } },
+    vercel: { scope: {}, project: { name: 'app', framework: 'nextjs', rootDirectory: 'apps/web', nodeVersion: '24.x', build: { installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null, developmentCommand: null, ignoredBuildStep: null }, git: { connected: true, productionBranch: 'main' }, deployment: { autoAssignProductionDomains: false}, regions: { functions: [] }, protection: {}, settings: {} } },
     environments: {
       preview: { enabled: true, ...(overrides.cleanup ? { cleanup: overrides.cleanup } : {}), variables: overrides.previewVariables ?? { PREVIEW_TOKEN: 'preview-only-value' }, health },
       production: { enabled: true, health: { path: '/health', method: 'GET', expectedStatus: [200], timeoutSeconds: 1, attempts: 1, intervalSeconds: 0 }, release: { strategy: 'staged-production', promoteExactBuild: true, autoPromoteAfterChecks: true }, rollback: { enabled: true, onFailedHealthCheck: true, previousKnownGood: true } },
@@ -317,27 +317,46 @@ it('keeps cleanup failures visible after retries are exhausted', async () => {
   expect(cleanupRuns.some((candidate) => candidate.status === 'FAILED')).toBe(true);
 });
 
-it('sweeps expired shadow projects and completes bookkeeping for gone resources', async () => {
+it('cleans shadow projects whose application id contains a dash', async () => {
+  const provider = new FakeProvider();
+  const store = new InMemoryLaunchpadStore();
+  await store.upsertApplication({ id: 'my-app', displayName: 'My App', sourcePath: 'catalog/apps/my-app.yaml', desiredGeneration: 1, desiredHash: '', syncStatus: 'SYNCED', healthStatus: 'UNKNOWN', lifecycleState: 'active', owners: ['@platform'] });
+  const projectName = 'lp-pr-7-my-app-12345-aaaaaaaa-1';
+  await provider.ensureProject({ id: projectName, name: projectName, teamId: null, framework: 'nextjs', rootDirectory: '.', nodeVersion: '24.x', build: { installCommand: null, buildCommand: null, outputDirectory: null }, repository: 'acme/my-app', productionBranch: 'main', settings: {} }, context);
+  const expiresAt = new Date(Date.now() - 1000).toISOString();
+  const job = await store.enqueueCleanupJob({ id: stableId('cleanup-job', 'my-app', projectName, expiresAt), applicationId: 'my-app', providerResourceId: projectName, expiresAt });
+  const result = await cleanupShadowProject({ store, provider, context, applicationId: 'my-app', projectId: projectName, providerResourceId: projectName, reason: 'PR_CLOSED', cleanupJobId: job.id });
+  expect(result.status).toBe('CLEANED');
+  expect(provider.projects.has(projectName)).toBe(false);
+});
+
+it('sweeps expired shadow projects tracked by cleanup jobs and leaves untracked projects untouched', async () => {
   const provider = new FakeProvider();
   const store = new InMemoryLaunchpadStore();
   const first = await run({ provider, store, pullRequestNumber: 11, revision: 1, sourceCommit: shaA });
-  // An untracked (orphaned) expired shadow project that only exists on the provider.
-  const orphanName = 'lp-pr-99-orphan-1-deadbeef-1';
-  await provider.ensureProject({ id: orphanName, name: orphanName, teamId: null, framework: 'nextjs', rootDirectory: '.', nodeVersion: '24.x', build: { installCommand: null, buildCommand: null, outputDirectory: null }, repository: 'acme/app', productionBranch: 'main', settings: { launchpadShadow: true, launchpadApplicationId: 'app', launchpadPullRequest: 99, launchpadExpiresAt: new Date(Date.now() - 60_000).toISOString() } }, context);
-  // An expired unowned project must never be force-deleted.
-  const unownedName = 'lp-pr-100-unknown-1-cafebabe-1';
-  await provider.ensureProject({ id: unownedName, name: unownedName, teamId: null, framework: 'nextjs', rootDirectory: '.', nodeVersion: '24.x', build: { installCommand: null, buildCommand: null, outputDirectory: null }, repository: 'acme/app', productionBranch: 'main', settings: { launchpadShadow: true, launchpadExpiresAt: new Date(Date.now() - 60_000).toISOString() } }, context);
+  // A leaked expired shadow project with no durable cleanup job: the provider
+  // API stores no metadata, so without the job there is no provable expiry or
+  // ownership — it must never be force-deleted.
+  const untrackedName = 'lp-pr-99-orphan-1-deadbeef-1';
+  await provider.ensureProject({ id: untrackedName, name: untrackedName, teamId: null, framework: 'nextjs', rootDirectory: '.', nodeVersion: '24.x', build: { installCommand: null, buildCommand: null, outputDirectory: null }, repository: 'acme/app', productionBranch: 'main', settings: {} }, context);
 
-  const sweep = await sweepExpiredPreviewResources({ store, provider, context, now: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) });
-
-  expect(sweep.cleaned).toEqual(expect.arrayContaining([first.projectName, orphanName]));
-  expect(sweep.failed).toHaveLength(1);
-  expect(sweep.failed[0]?.errorCode).toBe('LP-PREVIEW-CLEANUP-UNOWNED');
+  const firstSweep = await sweepExpiredPreviewResources({ store, provider, context, now: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) });
+  expect(firstSweep.cleaned).toEqual([first.projectName]);
+  expect(firstSweep.failed).toEqual([]);
+  expect(provider.projects.has(untrackedName)).toBe(true);
   expect(provider.projects.has(first.projectName)).toBe(false);
-  expect(provider.projects.has(orphanName)).toBe(false);
-  expect(provider.projects.has(unownedName)).toBe(true);
   expect((await store.listResources('app', { includeReleased: true })).find((resource) => resource.resourceKey === first.projectName)?.status).toBe('RELEASED');
   expect((await store.listCleanupJobs('app'))[0]?.status).toBe('SUCCEEDED');
+
+  // A leaked project that gains a durable cleanup job IS swept once due.
+  const trackedName = 'lp-pr-99-app-1-deadbeef-1';
+  await provider.ensureProject({ id: trackedName, name: trackedName, teamId: null, framework: 'nextjs', rootDirectory: '.', nodeVersion: '24.x', build: { installCommand: null, buildCommand: null, outputDirectory: null }, repository: 'acme/app', productionBranch: 'main', settings: {} }, context);
+  const expiresAt = new Date(Date.now() - 60_000).toISOString();
+  await store.enqueueCleanupJob({ id: stableId('cleanup-job', 'app', trackedName, expiresAt), applicationId: 'app', providerResourceId: trackedName, expiresAt });
+
+  const secondSweep = await sweepExpiredPreviewResources({ store, provider, context, now: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) });
+  expect(secondSweep.cleaned).toContain(trackedName);
+  expect(provider.projects.has(trackedName)).toBe(false);
 });
 
 it('resumes a restart without duplicate resources or repeated provider writes', async () => {

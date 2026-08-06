@@ -43,7 +43,7 @@ function defaults(value: Record<string, unknown>): Record<string, unknown> {
     nodeVersion: project.nodeVersion ?? null,
     build: { installCommand: null, buildCommand: null, outputDirectory: null, developmentCommand: null, ignoredBuildStep: null, ...build },
     git: { connected: true, productionBranch: repository.productionBranch ?? 'main', ...git },
-    deployment: { autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false, ...deployment },
+    deployment: { autoAssignProductionDomains: false, ...deployment },
     regions: { functions: [], ...asRecord(project.regions) },
     protection: asRecord(project.protection),
     settings: asRecord(project.settings),

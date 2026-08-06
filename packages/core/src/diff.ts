@@ -165,9 +165,6 @@ const PROJECT_CAPABILITY_KEYS: Record<string, string> = {
   developmentCommand: 'project.build.developmentCommand',
   ignoredBuildStep: 'project.build.ignoredBuildStep',
   autoAssignProductionDomains: 'project.settings.autoAssignProductionDomains',
-  prioritizeProductionBuilds: 'project.settings.prioritizeProductionBuilds',
-  rollingRelease: 'project.settings.rollingRelease',
-  skewProtection: 'project.settings.skewProtection',
   functions: 'project.regions.functions',
 };
 
@@ -183,9 +180,6 @@ function projectFlat(project: DesiredApplication['vercel']['project']): Record<s
     developmentCommand: project.build.developmentCommand,
     ignoredBuildStep: project.build.ignoredBuildStep,
     autoAssignProductionDomains: project.deployment.autoAssignProductionDomains,
-    prioritizeProductionBuilds: project.deployment.prioritizeProductionBuilds,
-    rollingRelease: project.deployment.rollingRelease,
-    skewProtection: project.deployment.skewProtection,
     functions: project.regions.functions,
   };
 }
