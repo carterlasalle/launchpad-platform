@@ -33,6 +33,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           EXPECTED_SHA: ${{ env.HEAD_SHA }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
@@ -41,7 +42,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
@@ -86,6 +87,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           EXPECTED_SHA: ${{ env.HEAD_SHA }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
@@ -94,7 +96,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
@@ -124,6 +126,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           EXPECTED_SHA: ${{ env.HEAD_SHA }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
@@ -132,7 +135,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
