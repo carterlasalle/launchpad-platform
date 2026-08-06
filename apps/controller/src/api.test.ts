@@ -555,6 +555,18 @@ describe('claim-scoped operation polling', () => {
     return response.json() as Promise<{ operationId: string }>;
   }
 
+  it('projects granular preview stage results into the polled operation result', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims());
+    const { operationId } = await startOperation(harness, baseClaims(), baseBody());
+    await harness.store.updateWorkflowRun(operationId, { status: 'READY', completedAt: new Date().toISOString() });
+    await harness.store.recordWorkflowStep({ workflowId: operationId, stepId: 'wait-for-build', status: 'SUCCEEDED', attempt: 1, preconditionHash: 'h', result: { deployment: { id: 'dpl_1', url: 'https://lp.example', state: 'READY' } } });
+    await harness.store.recordWorkflowStep({ workflowId: operationId, stepId: 'health-check', status: 'SUCCEEDED', attempt: 1, preconditionHash: 'h', result: { result: 'PASSED' } });
+    const response = await request(harness, `/v1/operations/${operationId}`, { headers: bearer(token) });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ status: 'READY', result: { previewUrl: 'https://lp.example', buildState: 'READY', healthState: 'PASSED' } });
+  });
+
   it('returns safe status for the operation bound to the caller', async () => {
     const harness = createHarness();
     const { operationId } = await startOperation(harness, baseClaims(), baseBody());
