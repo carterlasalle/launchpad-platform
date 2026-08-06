@@ -21,6 +21,7 @@ metadata:
 # Plan artifacts are faithful; fresh attestation will bind this revision.
 # Root-directory normalization is deployed; retry apply.
 # Idempotent domain adoption is deployed; retry apply.
+# Phase output hydration is deployed; retry apply.
   owners:
     - "@CarterLaSalle"
   labels:
