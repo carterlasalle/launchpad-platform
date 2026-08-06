@@ -24,6 +24,7 @@ metadata:
 # Phase output hydration is deployed; retry apply.
 # DNS target extraction is deployed; retry apply.
 # DNS exists; TLS issuance window elapsed; retry apply.
+# Canonical promotion targeting is deployed; retry apply.
   owners:
     - "@CarterLaSalle"
   labels:
