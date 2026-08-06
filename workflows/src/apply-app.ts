@@ -1133,7 +1133,18 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
 /** Runs a single durable phase through the store (controller internal dispatch path). */
 export async function runApplyPhase(input: { store: LaunchpadStore; base: ApplyBase; context: ProviderContext; step: DurableStep; sleep?: (delayMs: number) => Promise<void> }, options: { complete?: boolean } = {}): Promise<StepOutcome> {
   const runner = new DurableOperationRunner(input.store);
-  return runner.executeStep({ applicationId: input.base.applicationId, workflowId: input.base.workflowId, action: 'APPLY', idempotencyKey: input.base.idempotencyKey, payloadHash: input.base.payloadHash, steps: [input.step], ...(input.sleep !== undefined ? { sleep: input.sleep } : {}) }, input.step, undefined, options);
+  // Hydrate the persisted outputs of prior phases (the composed-machine path
+  // rehydrates through the runner; the per-phase dispatch path must too, or
+  // steps reading prior outputs — e.g. the canonical project id observed by
+  // ensure-project — silently fall back to their defaults). Steps persist
+  // under the run id, which is the deterministic idempotency-derived id the
+  // runner's startRun produces — never the workflow instance id.
+  const runId = stableId('workflow-run', input.base.applicationId, input.base.idempotencyKey);
+  const outputs: Record<string, unknown> = {};
+  for (const row of await input.store.listWorkflowSteps(runId)) {
+    if (row.status === 'SUCCEEDED' && row.result !== null && row.result !== undefined) outputs[row.stepId] = row.result;
+  }
+  return runner.executeStep({ applicationId: input.base.applicationId, workflowId: input.base.workflowId, action: 'APPLY', idempotencyKey: input.base.idempotencyKey, payloadHash: input.base.payloadHash, steps: [input.step], ...(input.sleep !== undefined ? { sleep: input.sleep } : {}) }, input.step, outputs, options);
 }
 
 export async function runApplyWorkflow(input: ApplyWorkflowInput): Promise<ApplyWorkflowResult> {
