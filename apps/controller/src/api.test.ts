@@ -221,6 +221,14 @@ describe('OIDC authentication', () => {
     expect(response.status).toBe(200);
   });
 
+  it('accepts numeric repository identity fields from the CLI payload', async () => {
+    const harness = createHarness();
+    const token = await signToken(prClaims());
+    fetchHandler = () => new Response(JSON.stringify({ number: 42, head: { sha: HEAD_SHA } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const response = await request(harness, '/v1/plans/verify', { method: 'POST', body: JSON.stringify(reviewBody({ repositoryId: Number(REPOSITORY_ID), ownerId: Number(OWNER_ID) })), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(response.status).toBe(200);
+  });
+
   it('returns 503 when OIDC is not configured', async () => {
     const harness = createHarness({ oidc: undefined });
     const response = await request(harness, '/v1/plans/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json' } });
