@@ -47,7 +47,8 @@ export class ProviderHttpClient {
     } catch (error) {
       if (error instanceof ProviderRequestError) throw error;
       if (error instanceof DOMException && error.name === 'AbortError') throw new ProviderRequestError({ code: `LP-${this.provider.toUpperCase()}-TIMEOUT`, class: 'TIMEOUT', provider: this.provider, message: 'Provider request timed out.', retryable: true });
-      throw new ProviderRequestError({ code: `LP-${this.provider.toUpperCase()}-NETWORK`, class: 'TRANSIENT_PROVIDER', provider: this.provider, message: 'Provider request failed before a response was received.', retryable: true, safeDetails: { cause: error instanceof Error ? error.name : 'unknown' } });
+      const cause = error instanceof Error ? error.name : 'unknown';
+      throw new ProviderRequestError({ code: `LP-${this.provider.toUpperCase()}-NETWORK`, class: 'TRANSIENT_PROVIDER', provider: this.provider, message: `Provider request failed before a response was received (cause: ${cause}).`, retryable: true, safeDetails: { cause } });
     } finally {
       clearTimeout(timeout);
     }
