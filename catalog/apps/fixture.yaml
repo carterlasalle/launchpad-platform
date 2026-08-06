@@ -11,6 +11,7 @@ metadata:
 # Final activation attempt uses normalized source paths.
 # Hash normalization is now deployed before this retry.
 # Provider fetch causes are now instrumented.
+# Credential sanitation is deployed before this retry.
   owners:
     - "@CarterLaSalle"
   labels:
