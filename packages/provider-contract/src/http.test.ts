@@ -32,10 +32,10 @@ describe('provider HTTP client', () => {
     expect(seen[0]).toBe('Bearer abcdef');
   });
 
-  it('names the underlying exception class in network failures', async () => {
+  it('names the underlying exception class and message in network failures', async () => {
     const failing: typeof fetch = async () => { throw new TypeError('fetch failed'); };
     const client = new ProviderHttpClient({ baseUrl: 'https://provider.test', token: 'token', provider: 'github', fetchImpl: failing });
-    await expect(client.request('/v1')).rejects.toMatchObject({ code: 'LP-GITHUB-NETWORK', message: expect.stringContaining('TypeError') });
+    await expect(client.request('/v1')).rejects.toMatchObject({ code: 'LP-GITHUB-NETWORK', message: expect.stringContaining('TypeError: fetch failed') });
   });
 
   it('fails closed when credentials are missing', async () => {
