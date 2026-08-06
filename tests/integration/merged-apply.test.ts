@@ -293,7 +293,7 @@ describe('merged apply flow (integration)', () => {
     // Exactly-once provider writes across both runs.
     expect(harness.states.vercel.promoteCalls).toEqual([{ projectId: 'fixture-app', deploymentId: 'dpl_10' }]);
     expect(harness.transport.count('POST', '/v13/deployments')).toBe(1);
-    expect(harness.transport.count('PATCH', '/v9/projects/fixture-app')).toBe(2);
+    expect(harness.transport.count('PATCH', '/v9/projects/fixture-app')).toBe(1);
     expect(harness.transport.count('POST', '/v10/projects/fixture-app/env')).toBe(3);
     expect(harness.transport.count('POST', '/v10/projects/fixture-app/domains')).toBe(1);
     expect(harness.transport.count('POST', '/v10/projects/fixture-app/promote')).toBe(1);
