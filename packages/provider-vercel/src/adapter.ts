@@ -10,6 +10,10 @@ function canonicalProjectConfiguration(value: unknown): Record<string, unknown> 
   const project = { ...record(value) };
   if (!('autoAssignProductionDomains' in project) && 'autoAssignCustomDomains' in project) project.autoAssignProductionDomains = project.autoAssignCustomDomains;
   delete project.autoAssignCustomDomains;
+  // Vercel represents the project-root default as null/empty; the manifest's
+  // canonical form is '.'. Normalize so the planner diff and the apply
+  // settings readback compare equal values for the same intent.
+  if (project.rootDirectory === null || project.rootDirectory === undefined || project.rootDirectory === '') project.rootDirectory = '.';
   return project;
 }
 

@@ -36,6 +36,16 @@ it('skips exact-commit deployments whose declared repository mismatches', async 
   await expect(adapter.findDeploymentByCommit('app', COMMIT, ctx, { expectedRepository: 'acme/app' })).resolves.toBeNull();
 });
 
+it('normalizes the Vercel root-directory default to the manifest canonical form', async () => {
+  for (const rootDirectory of [null, '', undefined]) {
+    const body: Record<string, unknown> = { id: 'prj_root', name: 'app', framework: 'nextjs', nodeVersion: '24.x' };
+    if (rootDirectory !== undefined) body.rootDirectory = rootDirectory;
+    const adapter = new VercelAdapter({ token: 'token', teamId: 'team', fetchImpl: async (input) => (String(input).includes(`/v9/projects/prj_root`) ? new Response(JSON.stringify(body), { status: 200 }) : new Response('{}', { status: 404 })) });
+    const observed = await adapter.observeProject({ projectId: 'prj_root' }, ctx);
+    expect(observed?.configuration.rootDirectory, `rootDirectory=${String(rootDirectory)}`).toBe('.');
+  }
+});
+
 it('fails closed when the deployments list is malformed', async () => {
   const adapter = new VercelAdapter({ token: 'token', fetchImpl: async (input) => (String(input).includes('/v7/deployments') ? new Response(JSON.stringify({ deployments: 'nope' }), { status: 200 }) : new Response('{}', { status: 200 })) });
   await expect(adapter.findDeploymentByCommit('app', COMMIT, ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DEPLOYMENTS-MALFORMED' });
