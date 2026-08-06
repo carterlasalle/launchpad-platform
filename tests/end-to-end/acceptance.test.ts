@@ -197,7 +197,7 @@ function applyTransport(options: ApplyTransportOptions = {}): RecordedSandboxTra
     { id: 'vercel.env.create', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_APP_ID}/env`, json: { key: 'LAUNCHPAD_ENV', id: 'env_acceptance_1' } },
     { id: 'vercel.domain.attach', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_PROJECT_ID}/domains`, json: { id: 'dom_acceptance_1', name: ACCEPTANCE_DOMAIN } },
     {
-      id: 'vercel.promote', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_APP_ID}/promote`,
+      id: 'vercel.promote', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_PROJECT_ID}/promote`,
       json: {
         desiredGeneration: generation,
         deployment: { id: options.promoteDeploymentId ?? deploymentId, state: 'CURRENT', url: 'acceptance-app.vercel.sandbox.test' },
@@ -226,13 +226,13 @@ function applyTransport(options: ApplyTransportOptions = {}): RecordedSandboxTra
     {
       id: 'vercel.deployment.wait', method: 'GET', url: `https://vercel.sandbox.test/v13/deployments/${deploymentId}`,
       json: {
-        id: deploymentId, projectId: ACCEPTANCE_APP_ID, url: 'acceptance-app.vercel.sandbox.test',
+        id: deploymentId, projectId: ACCEPTANCE_PROJECT_ID, url: 'acceptance-app.vercel.sandbox.test',
         state: options.deploymentState ?? 'STAGED', target: 'production',
         meta: { gitCommitSha: commit, desiredGeneration: generation, repo: ACCEPTANCE_REPOSITORY },
       },
     },
     ...(options.includeRollback === true
-      ? [{ id: 'vercel.rollback', method: 'POST', url: `https://vercel.sandbox.test/v1/projects/${ACCEPTANCE_APP_ID}/rollback/${options.rollbackToDeploymentId ?? 'dpl_candidate_1'}`, json: {} }]
+      ? [{ id: 'vercel.rollback', method: 'POST', url: `https://vercel.sandbox.test/v1/projects/${ACCEPTANCE_PROJECT_ID}/rollback/${options.rollbackToDeploymentId ?? 'dpl_candidate_1'}`, json: {} }]
       : []),
     // Proxy compatibility probes (apply/proxy-compatibility): the origin probe
     // hits the candidate URL directly, the public probe hits the proxied
