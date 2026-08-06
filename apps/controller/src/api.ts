@@ -1939,6 +1939,18 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
         ? (executeStep.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED')
         : run.status;
     const execute = steps.find((step) => step.stepId === 'execute' && step.status === 'SUCCEEDED');
+    // Granular preview machines persist per-stage steps rather than a single
+    // execute step; project the deployment/health evidence from those stages.
+    const waited = steps.find((step) => step.stepId === 'wait-for-build' && step.status === 'SUCCEEDED');
+    const healthStep = steps.find((step) => step.stepId === 'health-check' && step.status === 'SUCCEEDED');
+    const waitedResult = waited !== undefined && waited.result !== null && typeof waited.result === 'object' ? waited.result as Record<string, unknown> : null;
+    const deployment = waitedResult !== null && typeof waitedResult.deployment === 'object' && waitedResult.deployment !== null ? waitedResult.deployment : null;
+    const health = healthStep?.result ?? null;
+    const result = execute !== undefined
+      ? projectSafeOperationResult(execute.result)
+      : deployment !== null || health !== null
+        ? projectSafeOperationResult({ deployment, health })
+        : null;
     return context.json({
       operationId,
       workflowId: typeof details.workflowId === 'string' ? details.workflowId : operationId,
@@ -1949,7 +1961,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       startedAt: run.startedAt,
       completedAt: run.completedAt,
       sourceCommit: typeof details.sourceCommit === 'string' ? details.sourceCommit : null,
-      result: execute ? projectSafeOperationResult(execute.result) : null,
+      result,
     });
   });
 
