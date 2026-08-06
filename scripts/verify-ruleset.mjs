@@ -102,8 +102,17 @@ try {
         if (Boolean(found.parameters?.strict_required_status_checks_policy) !== Boolean(rule.parameters?.strict_required_status_checks_policy)) {
           problems.push(`required_status_checks strict policy: live=${found.parameters?.strict_required_status_checks_policy}, spec=${rule.parameters?.strict_required_status_checks_policy}`);
         }
-      } else if (JSON.stringify(found.parameters ?? null) !== JSON.stringify(rule.parameters ?? null)) {
-        problems.push(`Rule '${rule.type}' parameters differ: spec ${JSON.stringify(rule.parameters ?? null)}, live ${JSON.stringify(found.parameters ?? null)}`);
+      } else {
+        // GitHub adds canonical response-only fields to pull_request rules
+        // (currently required_reviewers and do_not_enforce_on_create). Compare
+        // the reviewed desired fields while ignoring only those server fields.
+        const responseOnlyFields = new Set(['required_reviewers', 'do_not_enforce_on_create']);
+        const normalizeParameters = (parameters) => Object.fromEntries(Object.entries(parameters ?? {}).filter(([key]) => !responseOnlyFields.has(key)));
+        const expectedParameters = normalizeParameters(rule.parameters);
+        const liveParameters = normalizeParameters(found.parameters);
+        if (JSON.stringify(liveParameters) !== JSON.stringify(expectedParameters)) {
+          problems.push(`Rule '${rule.type}' parameters differ: spec ${JSON.stringify(expectedParameters)}, live ${JSON.stringify(liveParameters)}`);
+        }
       }
     }
 
