@@ -231,6 +231,25 @@ function dnsConfigAdapter(): VercelAdapter {
   return new VercelAdapter({ token: 'token', fetchImpl });
 }
 
+it('extracts the DNS target from every documented Vercel config shape', async () => {
+  const shapes: Array<{ name: string; body: Record<string, unknown> }> = [
+    { name: 'records-array', body: { records: [{ type: 'CNAME', name: '_vercel', value: 'cname.records-array.vercel-dns.com', ttl: 86400, state: 'created' }] } },
+    { name: 'recommended-string', body: { recommendedCNAME: [{ rank: 1, value: 'cname.recommended-string.vercel-dns.com' }] } },
+    { name: 'records-object', body: { records: { type: 'CNAME', value: 'cname.records-object.vercel-dns.com' } } },
+    { name: 'top-level-cname', body: { cname: 'cname.top-level-cname.vercel-dns.com' } },
+  ];
+  for (const shape of shapes) {
+    const adapter = new VercelAdapter({ token: 'token', fetchImpl: async (input) => (String(input).includes('/v6/domains/app.example.com/config') ? new Response(JSON.stringify(shape.body), { status: 200 }) : new Response('{}', { status: 404 })) });
+    const [record] = await adapter.requiredDnsRecords({ projectId: 'app', hostname: 'app.example.com', environment: 'production', mode: 'dns-only' }, ctx);
+    expect(record?.value, shape.name).toBe(`cname.${shape.name}.vercel-dns.com`);
+  }
+});
+
+it('fails closed with a typed diagnostic when no DNS target is returned', async () => {
+  const adapter = new VercelAdapter({ token: 'token', fetchImpl: async (input) => (String(input).includes('/v6/domains/app.example.com/config') ? new Response(JSON.stringify({ misconfigured: true, verified: false }), { status: 200 }) : new Response('{}', { status: 404 })) });
+  await expect(adapter.requiredDnsRecords({ projectId: 'app', hostname: 'app.example.com', environment: 'production', mode: 'dns-only' }, ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DNS-REQUIREMENT-MISSING', safeDetails: { recommendedCNAME: 'undefined', records: 'undefined', cname: 'undefined' } });
+});
+
 it('maps acknowledged proxied mode into proxied required DNS records with the acknowledgment', async () => {
   const records = await dnsConfigAdapter().requiredDnsRecords({ projectId: 'app', hostname: 'app.example.com', environment: 'production', mode: 'proxied', proxyAcknowledgment: true }, ctx);
   expect(records[0]).toMatchObject({ hostname: 'app.example.com', type: 'CNAME', value: 'cname.vercel-dns.com', ttl: 'auto', providerRecordId: 'rec_1', proxied: true, proxyAcknowledgment: true });
