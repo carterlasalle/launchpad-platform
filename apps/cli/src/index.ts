@@ -13,7 +13,7 @@ import type { ProviderCapabilities, ProviderContext } from '@launchpad/provider-
 
 export type CliCommand = 'validate' | 'preflight' | 'plan' | 'status' | 'graph' | 'health' | 'reconcile' | 'logs' | 'preview' | 'report-pr' | 'apply' | 'destroy' | 'app-preview' | 'controller-smoke';
 export interface CliArgs { command: CliCommand; flags: Record<string, string | boolean>; }
-const knownFlags = new Set(['catalog', 'format', 'output', 'app', 'application', 'sha', 'pr', 'controller', 'approval-token', 'environment', 'dry-run', 'artifacts', 'plans', 'url', 'preview-summary', 'timeout-minutes']);
+const knownFlags = new Set(['catalog', 'format', 'output', 'app', 'application', 'sha', 'pr', 'controller', 'approval-token', 'approval-id', 'domain', 'environment', 'dry-run', 'artifacts', 'plans', 'url', 'preview-summary', 'timeout-minutes']);
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   const command = argv[0] as CliCommand | undefined;
@@ -840,7 +840,21 @@ export async function runCli(argv: readonly string[], output: { write(value: str
   }
 
   if (args.command === 'destroy') {
-    const response = await controllerRequest(controller, '/v1/cli/destroy', token, { applicationId: application.metadata.id, approvalToken: args.flags['approval-token'] ?? null });
+    // The controller has no generic /v1/cli/:command enqueue anymore (it
+    // faked a durable enqueue while doing nothing). Destroy is the reviewed
+    // lifecycle endpoint /v1/applications/:id/delete (runbook
+    // docs/runbooks/deletion.md): it requires the single-use approvalId
+    // issued by the decommission approval step, the plaintext approval token,
+    // the approved merged deletion commit, and the production domain.
+    const approvalId = typeof args.flags['approval-id'] === 'string' && args.flags['approval-id'].length > 0 ? args.flags['approval-id'] : null;
+    if (!approvalId) throw new CliFailure('LP-DESTROY-APPROVAL-ID-REQUIRED', 'Destroy requires --approval-id from the decommission approval step (POST /v1/applications/<id>/decommission/approval).');
+    const approvalToken = typeof args.flags['approval-token'] === 'string' && args.flags['approval-token'].length > 0 ? args.flags['approval-token'] : null;
+    if (!approvalToken) throw new CliFailure('LP-DESTROY-TOKEN-REQUIRED', 'Destroy requires --approval-token (the single-use plaintext token from the decommission approval step).');
+    const domain = typeof args.flags.domain === 'string' && args.flags.domain.length > 0 ? args.flags.domain : null;
+    if (!domain) throw new CliFailure('LP-DESTROY-DOMAIN-REQUIRED', 'Destroy requires --domain of the approved production deployment.');
+    const sourceCommit = typeof args.flags.sha === 'string' && SHA_PATTERN.test(args.flags.sha) ? args.flags.sha : process.env.GITHUB_SHA ?? null;
+    if (!sourceCommit) throw new CliFailure('LP-COMMIT-UNBOUND', 'Destroy requires --sha (or GITHUB_SHA) bound to the merged final deletion commit.');
+    const response = await controllerRequest(controller, `/v1/applications/${encodeURIComponent(application.metadata.id)}/delete`, token, { approvalId, approvalToken, sourceCommit, domain });
     output.write(`${response.text}\n`);
     return response.ok ? 0 : 1;
   }

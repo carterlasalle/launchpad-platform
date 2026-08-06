@@ -5,9 +5,10 @@ import { stringify as yamlStringify } from 'yaml';
 import { InMemoryDatabase, LaunchpadRepositories, TERMINAL_WORKFLOW_STATUSES, type ApplicationRecord, type AuditAppend, type CredentialMetadataRecord, type DeploymentRow, type DriftEventRecord, type LaunchpadStore, type WorkflowRunRecord, type WorkflowStepRecord, type WorkflowStatus } from '@launchpad/database';
 import { loadCatalog, parseZoneRegistry, ZONE_REGISTRY_FILE } from '@launchpad/catalog';
 import { LaunchpadError, planReviewFingerprint, type HealthCheckRecord, type PlatformPlan } from '@launchpad/core';
-import { ALERT_TYPES, canonicalJson, metricWorkflowOf, sha256Hex, stableId, type AlertType as AlertIncidentType, type LaunchpadLogger, type MetricsRegistry } from '@launchpad/shared';
+import { ALERT_TYPES, canonicalJson, metricWorkflowOf, redactText, sha256Hex, stableId, type AlertType as AlertIncidentType, type LaunchpadLogger, type MetricsRegistry } from '@launchpad/shared';
 import { assertTombstoneReuseAllowed } from '@launchpad/workflows';
 import { assertOidcBinding, bindOidcBody, extractOidcToken, OidcBindingError, pullRequestNumberFromClaims, verifyGithubOidc, type GithubOidcClaims, type OidcBinding } from './auth/oidc.js';
+import { timingSafeEqual } from './auth/timing.js';
 import { verifyWebhookSignature } from './auth/webhooks.js';
 import { dashboardAssetBindingResponse, dashboardAssetResponse, type DashboardAsset } from './dashboard.js';
 import type { ControllerEnv, OidcConfig, WorkflowBinding } from './env.js';
@@ -38,7 +39,7 @@ export interface ControllerDependencies {
   observability?: ObservabilityDeps | undefined;
 }
 
-type AppEnv = ControllerEnv & { Variables: { oidcClaims: GithubOidcClaims } };
+type AppEnv = ControllerEnv & { Variables: { oidcClaims: GithubOidcClaims; operatorActor: string } };
 
 /** The Cloudflare Workflow binding used for each enqueue kind. */
 const WORKFLOW_BINDING_BY_KIND: Record<string, keyof ControllerEnv['Bindings']> = {
@@ -81,11 +82,62 @@ function repositoryIdentityField(body: Record<string, unknown>, key: 'repository
 }
 
 /**
+ * Parses the OPERATOR_TOKENS JSON object (actor name -> bearer token).
+ * Malformed configuration fails closed: a non-object, an empty actor name,
+ * or a non-string/empty token is a deployment error, not a silently ignored
+ * mapping. Returns an empty map when the variable is unset.
+ */
+export function parseOperatorTokens(raw: string | undefined): Record<string, string> {
+  if (raw === undefined || raw.trim() === '') return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error('LP-OPERATOR-TOKENS-INVALID');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('LP-OPERATOR-TOKENS-INVALID');
+  const map: Record<string, string> = {};
+  for (const [actor, token] of Object.entries(parsed as Record<string, unknown>)) {
+    if (actor.length === 0 || typeof token !== 'string' || token.length === 0) throw new Error('LP-OPERATOR-TOKENS-INVALID');
+    map[actor] = token;
+  }
+  return map;
+}
+
+/**
+ * Resolves the authenticated operator actor from the presented bearer token.
+ * The legacy single token (OPERATOR_TOKEN / SECRETS_OPERATOR_TOKEN) maps to
+ * the actor 'operator'; OPERATOR_TOKENS maps each actor to its own token.
+ * Returns null when the token matches nothing. Every comparison is
+ * timing-safe (see auth/timing.ts). Throws LP-OPERATOR-TOKENS-INVALID on a
+ * malformed OPERATOR_TOKENS value (fail closed on deployment misconfig).
+ */
+export function resolveOperatorActor(legacyToken: string, mappedRaw: string | undefined, presented: string | null): string | null {
+  if (!presented) return null;
+  const mapped = parseOperatorTokens(mappedRaw);
+  if (legacyToken.length > 0 && timingSafeEqual(legacyToken, presented)) return 'operator';
+  for (const [actor, token] of Object.entries(mapped)) {
+    if (timingSafeEqual(token, presented)) return actor;
+  }
+  return null;
+}
+
+/** The audit principal for the authenticated operator (never caller-declared). */
+function operatorPrincipal(context: Context<AppEnv>): string {
+  return `operator:${context.get('operatorActor')}`;
+}
+
+/**
  * Operator authorization for every dashboard read and mutation.
  *
- * The operator model is a single configured bearer token identity (no roles
- * today); authorization fails CLOSED to that identity — any other or absent
- * credential is rejected, and the token is never read from cookies.
+ * The operator model authenticates a bearer token to a resolved actor
+ * identity: the legacy single token maps to the actor 'operator', and the
+ * optional OPERATOR_TOKENS JSON map authenticates additional named actors.
+ * Authorization fails CLOSED — any other or absent credential is rejected,
+ * and the token is never read from cookies. The resolved actor is exposed on
+ * the request (context variable `operatorActor`) and is the ONLY identity
+ * audit events record for operator routes; caller-declared strings are never
+ * trusted as the principal.
  *
  * CSRF does not apply to these routes by design: the browser never receives
  * ambient credentials (no cookies, no Authorization auto-attach). The
@@ -100,7 +152,16 @@ function repositoryIdentityField(body: Record<string, unknown>, key: 'repository
  */
 function operatorMiddleware(dependencies: ControllerDependencies): MiddlewareHandler<AppEnv> {
   return async (context, next) => {
-    if (!dependencies.operatorToken || bearer(context.req.raw) !== dependencies.operatorToken) return errorResponse(context, 'LP-OPERATOR-AUTH-REQUIRED', 'Operator authentication is required.', 401, false);
+    const env = context.env as ControllerEnv['Bindings'] | undefined;
+    if (!dependencies.operatorToken && !env?.OPERATOR_TOKENS) return errorResponse(context, 'LP-OPERATOR-AUTH-REQUIRED', 'Operator authentication is required.', 401, false);
+    let actor: string | null;
+    try {
+      actor = resolveOperatorActor(dependencies.operatorToken, env?.OPERATOR_TOKENS, bearer(context.req.raw));
+    } catch {
+      return errorResponse(context, 'LP-OPERATOR-TOKENS-INVALID', 'The operator token configuration is invalid; refusing operator access.', 503, false);
+    }
+    if (actor === null) return errorResponse(context, 'LP-OPERATOR-AUTH-REQUIRED', 'Operator authentication is required.', 401, false);
+    context.set('operatorActor', actor);
     await next();
   };
 }
@@ -163,6 +224,16 @@ export function oidcMiddleware(dependencies: ControllerDependencies): Middleware
       claims = await verifyGithubOidc(token, dependencies.oidc);
     } catch {
       return errorResponse(context, 'LP-OIDC-VERIFICATION-FAILED', 'OIDC token verification failed.', 401, false);
+    }
+    // Control-repository gate: every control-plane OIDC ingress (plan
+    // attestation, preview/apply enqueue, operation polling) must be driven
+    // by a workflow running in the configured CONTROL_REPOSITORY. When the
+    // repository is configured, a token minted for any other repository is
+    // rejected outright. The cross-repo preview/status endpoint used by
+    // application repositories performs its own verification below and is
+    // deliberately NOT subject to this gate.
+    if (dependencies.controlRepository && claims.repository !== dependencies.controlRepository) {
+      return errorResponse(context, 'LP-OIDC-REPOSITORY-NOT-CONTROL', 'The OIDC token repository is not the configured control repository.', 401, false);
     }
     context.set('oidcClaims', claims);
     await next();
@@ -722,14 +793,14 @@ function applicationSummaryView(app: ApplicationRecord, knownGood: DeploymentRow
   };
 }
 
-/** Redacted step error projection: only bounded code/message strings ever leave the API. */
-function stepErrorView(error: unknown): { code: string | null; message: string | null } | null {
+/** Redacted step error projection: only bounded, structurally redacted code/message strings ever leave the API. */
+export function stepErrorView(error: unknown): { code: string | null; message: string | null } | null {
   if (error === null || error === undefined) return null;
-  if (typeof error === 'string') return { code: null, message: error.slice(0, 500) };
+  if (typeof error === 'string') return { code: null, message: redactText(error.slice(0, 500)) };
   if (typeof error === 'object' && !Array.isArray(error)) {
     const record = error as Record<string, unknown>;
-    const code = typeof record.code === 'string' ? record.code.slice(0, 100) : null;
-    const message = typeof record.message === 'string' ? record.message.slice(0, 500) : null;
+    const code = typeof record.code === 'string' ? redactText(record.code).slice(0, 100) : null;
+    const message = typeof record.message === 'string' ? redactText(record.message).slice(0, 500) : null;
     if (code === null && message === null) return null;
     return { code, message };
   }
@@ -818,7 +889,7 @@ async function runRetryAction(context: Context<AppEnv>, dependencies: Controller
   } catch {
     return errorResponse(context, 'LP-WORKFLOW-CREATE-FAILED', 'The retry workflow could not be started.', 503, true);
   }
-  await appendAuditOnce(store, { id: stableId('audit', applicationId, 'OPERATOR_RETRY', operationId), actor: 'operator:dashboard', action: 'OPERATOR_RETRY', applicationId, details: { operationId, retryOperationId: retryRun.id, kind, sourceCommit, workflowId: instance.id, idempotencyKey } });
+  await appendAuditOnce(store, { id: stableId('audit', applicationId, 'OPERATOR_RETRY', operationId), actor: operatorPrincipal(context), action: 'OPERATOR_RETRY', applicationId, details: { operationId, retryOperationId: retryRun.id, kind, sourceCommit, workflowId: instance.id, idempotencyKey } });
   return context.json({ workflowId, operationId: retryRun.id, status: retryRun.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'QUEUED', retriedOperationId: operationId }, 202);
 }
 
@@ -875,7 +946,7 @@ async function runRecheckAction(context: Context<AppEnv>, dependencies: Controll
     }
     dispatched = 'queue';
   }
-  await appendAuditOnce(store, { id: stableId('audit', applicationId, 'OPERATOR_RECHECK', idempotencyKey), actor: 'operator:dashboard', action: 'OPERATOR_RECHECK', applicationId, details: { operationId: run.id, sourceCommit, idempotencyKey, dispatched } });
+  await appendAuditOnce(store, { id: stableId('audit', applicationId, 'OPERATOR_RECHECK', idempotencyKey), actor: operatorPrincipal(context), action: 'OPERATOR_RECHECK', applicationId, details: { operationId: run.id, sourceCommit, idempotencyKey, dispatched } });
   const finalRun = await store.getWorkflowRun(run.id);
   return context.json({ workflowId: run.id, operationId: run.id, status: finalRun?.status ?? run.status, dispatched }, 202);
 }
@@ -928,7 +999,7 @@ async function runRollbackAction(context: Context<AppEnv>, dependencies: Control
     await persistInternalOutcome(dependencies, payload, 'FAILED', null, { code: redacted.code, message: redacted.message });
     return errorResponse(context, redacted.code, redacted.message, 500, redacted.retryable);
   }
-  await appendAuditOnce(store, { id: stableId('audit', applicationId, 'OPERATOR_ROLLBACK', idempotencyKey), actor: 'operator:dashboard', action: 'OPERATOR_ROLLBACK', applicationId, details: { operationId: run.id, failedDeploymentId, knownGoodDeploymentId: knownGood.id, sourceCommit: failed.commitSha, idempotencyKey } });
+  await appendAuditOnce(store, { id: stableId('audit', applicationId, 'OPERATOR_ROLLBACK', idempotencyKey), actor: operatorPrincipal(context), action: 'OPERATOR_ROLLBACK', applicationId, details: { operationId: run.id, failedDeploymentId, knownGoodDeploymentId: knownGood.id, sourceCommit: failed.commitSha, idempotencyKey } });
   const finalRun = await store.getWorkflowRun(run.id);
   return context.json({ workflowId: run.id, operationId: run.id, status: finalRun?.status ?? run.status, failedDeploymentId, knownGoodDeploymentId: knownGood.id }, 200);
 }
@@ -970,7 +1041,7 @@ async function runCancelAction(context: Context<AppEnv>, dependencies: Controlle
   const statusConflict = cancelStatusConflict(context, run.status);
   if (statusConflict) return statusConflict;
   try {
-    await store.cancelWorkflowRun({ id: operationId, actor: 'operator:dashboard', idempotencyKey: declaredKey, auditId: stableId('audit', applicationId, 'OPERATOR_CANCEL', declaredKey), canceledAt: new Date().toISOString() });
+    await store.cancelWorkflowRun({ id: operationId, actor: operatorPrincipal(context), idempotencyKey: declaredKey, auditId: stableId('audit', applicationId, 'OPERATOR_CANCEL', declaredKey), canceledAt: new Date().toISOString() });
     await store.registerIdempotentRequest({ idempotencyKey: declaredKey, operationId, payloadHash: run.payloadHash });
   } catch (error) {
     if (error instanceof LaunchpadError && error.platform.code === 'LP-DB-CANCEL-NOT-QUEUED') {
@@ -1396,7 +1467,7 @@ async function applyConfigChange(context: Context<AppEnv>, dependencies: Control
     return errorResponse(context, code, message, 503, typeof error === 'object' && error !== null && 'retryable' in error && error.retryable === true);
   }
   try {
-    await appendAuditOnce(store, { id: auditId, actor: 'operator:dashboard', action: `CONFIG_CHANGE_${change.toUpperCase()}`, applicationId, details: { change, requestFingerprint, branch, pullRequestNumber: pullRequest.number, pullRequestUrl: pullRequest.url, params } });
+    await appendAuditOnce(store, { id: auditId, actor: operatorPrincipal(context), action: `CONFIG_CHANGE_${change.toUpperCase()}`, applicationId, details: { change, requestFingerprint, branch, pullRequestNumber: pullRequest.number, pullRequestUrl: pullRequest.url, params } });
   } catch {
     return errorResponse(context, 'LP-CHANGE-RECORD-FAILED', 'The pull request was created but the change could not be durably recorded.', 500, true);
   }
@@ -1460,6 +1531,35 @@ export function sanitizeVercelWebhookEvent(payload: Record<string, unknown>, eve
   }
   return event;
 }
+
+/**
+ * Parses the WEBHOOK_MAX_AGE_SECONDS freshness window (default 300 seconds).
+ * An invalid configured value fails closed (throws) so a deployment mistake
+ * cannot silently widen the window.
+ */
+export function parseWebhookMaxAgeSeconds(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return 300;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) throw new Error('LP-WEBHOOK-MAX-AGE-INVALID');
+  return parsed;
+}
+
+/**
+ * The Vercel webhook event timestamp, in seconds. The raw (HMAC-covered)
+ * payload carries a top-level `createdAt` epoch-milliseconds field, which is
+ * the only usable creation timestamp the route receives (the sanitized
+ * projection intentionally drops it). Returns null when the field is absent
+ * or not a positive finite number; the caller fails closed on null because
+ * the freshness gate cannot be enforced without a timestamp.
+ */
+export function webhookEventTimestampSeconds(payload: Record<string, unknown>): number | null {
+  const createdAt = payload.createdAt;
+  if (typeof createdAt !== 'number' || !Number.isFinite(createdAt) || createdAt <= 0) return null;
+  return createdAt / 1000;
+}
+
+/** Clock-skew allowance for webhook timestamps: events "from the future" beyond this are rejected. */
+const WEBHOOK_FUTURE_SKEW_SECONDS = 60;
 
 /**
  * Enqueues one sanitized provider-event envelope to PROVIDER_EVENTS and marks
@@ -1609,7 +1709,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
   app.post('/v1/applications/:id/changes/propose', operatorMiddleware(dependencies), async (context) => {
     const body = await readJsonObject(context);
     const operation = repositories.startOperation({ applicationId: context.req.param('id'), workflowId: crypto.randomUUID(), action: 'PROPOSE_CHANGE', idempotencyKey: context.req.header('idempotency-key') ?? crypto.randomUUID(), payloadHash: typeof body?.payloadHash === 'string' ? body.payloadHash : 'propose-change' });
-    repositories.appendAudit({ actor: 'operator:dashboard', action: 'PROPOSE_CHANGE', applicationId: context.req.param('id'), details: { operationId: operation.id } });
+    repositories.appendAudit({ actor: operatorPrincipal(context), action: 'PROPOSE_CHANGE', applicationId: context.req.param('id'), details: { operationId: operation.id } });
     return context.json({ workflowId: operation.id, status: operation.status }, 202);
   });
   app.post('/v1/applications/:id/actions/retry', operatorMiddleware(dependencies), async (context) => {
@@ -1666,7 +1766,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       const instance = await dispatcher.dispatch(envelope);
       instanceIds.push(instance.instanceId);
     }
-    await dependencies.store?.appendAudit({ actor: automatic ? 'automation:github-actions' : 'operator:dashboard', action: 'RECONCILE_REQUESTED', applicationId: 'platform', details: { applicationIds, sourceCommit: sourceCommit ?? null, instanceIds, automatic } });
+    await dependencies.store?.appendAudit({ actor: automatic ? 'automation:github-actions' : operatorPrincipal(context), action: 'RECONCILE_REQUESTED', applicationId: 'platform', details: { applicationIds, sourceCommit: sourceCommit ?? null, instanceIds, automatic } });
     return context.json({ status: 'QUEUED', instanceIds, applicationIds }, 202);
   });
 
@@ -1749,7 +1849,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     const auditId = stableId('audit', applicationId, 'DELETE_REQUESTED', run.id);
     if (!(await store.listAudit(applicationId)).some((event) => event.id === auditId)) {
       try {
-        await store.appendAudit({ id: auditId, actor: `operator:${actor}`, action: 'DELETE_REQUESTED', applicationId, details: { operationId: run.id, workflowId: instance.id, approvalId, sourceCommit, domain, actor } });
+        await store.appendAudit({ id: auditId, actor: operatorPrincipal(context), action: 'DELETE_REQUESTED', applicationId, details: { operationId: run.id, workflowId: instance.id, approvalId, sourceCommit, domain } });
       } catch {
         // Idempotent retry; the token is never written to audit details.
       }
@@ -1780,16 +1880,31 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     const verdict = await assertTombstoneReuseAllowed({ store, applicationId, domain, now: new Date().toISOString(), override });
     if (!verdict.allowed) return context.json({ applicationId, domain, allowed: false, code: verdict.code, message: verdict.message, retainUntil: verdict.retainUntil }, 409);
     try {
-      await store.appendAudit({ actor: 'operator:dashboard', action: 'TOMBSTONE_RELEASED', applicationId, details: { domain, ...(override ?? {}) } });
+      await store.appendAudit({ actor: operatorPrincipal(context), action: 'TOMBSTONE_RELEASED', applicationId, details: { domain, ...(override ?? {}) } });
     } catch {
       // Idempotent retry-safe; the release itself already succeeded.
     }
     return context.json({ applicationId, domain, allowed: true, released: verdict.released, retainUntil: verdict.retainUntil });
   });
 
+  // Operator CLI command dispatch (gzg.9). Only commands with a dedicated
+  // safe implementation are whitelisted; every other command fails closed
+  // with a typed error instead of faking a durable enqueue (the previous
+  // generic stub answered 202 for ANY command while doing nothing durable —
+  // e.g. the CLI `destroy` command silently reported success without ever
+  // running the reviewed destroy lifecycle). `/v1/cli/reconcile` is a real
+  // route registered above, so it never reaches this fallback. Commands are
+  // deliberately added one at a time together with their operator-identity
+  // audit and durable operation recording; destructive commands must use the
+  // reviewed lifecycle routes (/v1/applications/:id/delete, runbook
+  // docs/runbooks/deletion.md).
+  const CLI_COMMAND_WHITELIST: ReadonlySet<string> = new Set([]);
   app.post('/v1/cli/:command', operatorMiddleware(dependencies), async (context) => {
-    const operation = repositories.startOperation({ applicationId: 'platform', workflowId: crypto.randomUUID(), action: context.req.param('command').toUpperCase(), idempotencyKey: context.req.header('idempotency-key') ?? crypto.randomUUID(), payloadHash: 'cli' });
-    return context.json({ workflowId: operation.id, status: operation.status }, 202);
+    const command = context.req.param('command');
+    if (!CLI_COMMAND_WHITELIST.has(command)) {
+      return errorResponse(context, 'LP-CLI-COMMAND-UNSUPPORTED', `The CLI command '${command}' has no dedicated controller implementation. Use the documented dashboard or lifecycle routes.`, 404, false);
+    }
+    return errorResponse(context, 'LP-CLI-COMMAND-UNSUPPORTED', `The CLI command '${command}' is not implemented.`, 404, false);
   });
 
   // Failure observability surfaces (operator-authenticated): incidents and
@@ -1816,7 +1931,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     if (!store) return errorResponse(context, 'LP-PERSISTENCE-CONFIG-MISSING', 'Durable persistence is not configured.', 503, false);
     try {
       const incident = await store.resolveIncident(context.req.param('id'));
-      await store.appendAudit({ actor: 'operator:dashboard', action: 'INCIDENT_RESOLVED', applicationId: incident.applicationId, details: { incidentId: incident.id, type: incident.type, fingerprint: incident.fingerprint } });
+      await store.appendAudit({ actor: operatorPrincipal(context), action: 'INCIDENT_RESOLVED', applicationId: incident.applicationId, details: { incidentId: incident.id, type: incident.type, fingerprint: incident.fingerprint } });
       return context.json({ incident });
     } catch {
       return errorResponse(context, 'LP-INCIDENT-NOT-FOUND', 'The incident was not found.', 404, false);
@@ -1966,9 +2081,13 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
   });
 
   // Internal workflow phase dispatch (CONTROLLER_INTERNAL_TOKEN only).
+  // The presented header is compared in constant time (auth/timing.ts).
   const internalMiddleware = (): MiddlewareHandler<AppEnv> => async (context, next) => {
     const expected = dependencies.internalWorkflowToken;
-    if (!expected || context.req.header('x-launchpad-workflow-token') !== expected) return errorResponse(context, 'LP-WORKFLOW-AUTH-REQUIRED', 'Workflow authentication is required.', 401, false);
+    const presented = context.req.header('x-launchpad-workflow-token');
+    const unauthorized = () => errorResponse(context, 'LP-WORKFLOW-AUTH-REQUIRED', 'Workflow authentication is required.', 401, false);
+    if (typeof expected !== 'string' || typeof presented !== 'string') return unauthorized();
+    if (!timingSafeEqual(expected, presented)) return unauthorized();
     await next();
   };
   app.post('/internal/workflows/:kind', internalMiddleware(), (context) => dispatchInternal(context, dependencies, null));
@@ -1980,14 +2099,39 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       dependencies.logger?.warn('webhook signature invalid', { provider: 'vercel', step: 'webhook/vercel', errorCode: 'LP-WEBHOOK-SIGNATURE-INVALID' });
       return errorResponse(context, 'LP-WEBHOOK-SIGNATURE-INVALID', 'Invalid webhook signature.', 401, false);
     }
-    const store = dependencies.store;
-    if (!store) return errorResponse(context, 'LP-PERSISTENCE-CONFIG-MISSING', 'Durable persistence is not configured; refusing to accept webhooks.', 503, false);
     let payload: Record<string, unknown>;
     try {
       payload = JSON.parse(body) as Record<string, unknown>;
     } catch {
       return errorResponse(context, 'LP-WEBHOOK-PAYLOAD-INVALID', 'The webhook payload must be JSON.', 400, false);
     }
+    // Bounded freshness window (gzg.5): the HMAC-covered payload carries the
+    // event creation time as top-level `createdAt` (epoch milliseconds).
+    // Replays of ancient deliveries, and payloads with impossible future
+    // timestamps, are rejected before any receipt/envelope/audit state is
+    // written. A missing/unusable timestamp fails closed because the gate
+    // cannot be enforced. `sanitizeVercelWebhookEvent` intentionally does not
+    // carry `createdAt` forward, so this check is the only place the raw
+    // timestamp is consumed.
+    let maxAgeSeconds: number;
+    try {
+      maxAgeSeconds = parseWebhookMaxAgeSeconds((context.env as ControllerEnv['Bindings'] | undefined)?.WEBHOOK_MAX_AGE_SECONDS);
+    } catch {
+      return errorResponse(context, 'LP-WEBHOOK-MAX-AGE-INVALID', 'WEBHOOK_MAX_AGE_SECONDS must be a non-negative integer of seconds.', 503, false);
+    }
+    const eventTimestampSeconds = webhookEventTimestampSeconds(payload);
+    if (eventTimestampSeconds === null) return errorResponse(context, 'LP-WEBHOOK-TIMESTAMP-MISSING', 'The webhook payload must declare a numeric createdAt timestamp.', 400, false);
+    const nowSeconds = Date.now() / 1000;
+    if (eventTimestampSeconds > nowSeconds + WEBHOOK_FUTURE_SKEW_SECONDS) {
+      dependencies.logger?.warn('webhook timestamp in the future', { provider: 'vercel', step: 'webhook/vercel', errorCode: 'LP-WEBHOOK-TIMESTAMP-FUTURE' });
+      return errorResponse(context, 'LP-WEBHOOK-TIMESTAMP-FUTURE', 'The webhook event timestamp is impossibly far in the future.', 400, false);
+    }
+    if (nowSeconds - eventTimestampSeconds > maxAgeSeconds) {
+      dependencies.logger?.warn('webhook event outside the freshness window', { provider: 'vercel', step: 'webhook/vercel', errorCode: 'LP-WEBHOOK-EVENT-STALE', eventAgeSeconds: Math.floor(nowSeconds - eventTimestampSeconds), maxAgeSeconds });
+      return errorResponse(context, 'LP-WEBHOOK-EVENT-STALE', 'The webhook event is older than the configured freshness window.', 401, false);
+    }
+    const store = dependencies.store;
+    if (!store) return errorResponse(context, 'LP-PERSISTENCE-CONFIG-MISSING', 'Durable persistence is not configured; refusing to accept webhooks.', 503, false);
     const eventId = typeof payload.id === 'string' && payload.id.length > 0 ? payload.id : null;
     if (!eventId) return errorResponse(context, 'LP-WEBHOOK-EVENT-ID-MISSING', 'The webhook payload must declare an id.', 400, false);
     const eventType = typeof payload.type === 'string' && payload.type.length > 0 ? payload.type.slice(0, 64) : 'deployment';

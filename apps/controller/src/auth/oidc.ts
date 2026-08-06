@@ -177,7 +177,14 @@ export function assertOidcBinding(claims: GithubOidcClaims, binding: OidcBinding
   if (binding.ref !== undefined && binding.ref !== null && claims.ref !== binding.ref) {
     throw bindingMismatch('ref');
   }
-  if (binding.actor !== undefined && binding.actor !== null && claims.actor !== binding.actor) {
+  // The actor claim is binding on every control-plane OIDC ingress: the
+  // signed claims always carry `actor`, so the request must declare it and
+  // match exactly. A request that omits the declaration fails closed instead
+  // of being accepted with an unbound identity.
+  if (binding.actor === undefined || binding.actor === null) {
+    throw bindingMissing('actor');
+  }
+  if (claims.actor !== binding.actor) {
     throw bindingMismatch('actor');
   }
   if (binding.sourceCommit !== undefined && binding.sourceCommit !== null) {

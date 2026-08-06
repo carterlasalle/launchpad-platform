@@ -124,3 +124,37 @@ jobs:
         if: needs.changes.outputs.code == 'true'
       - run: yarn build
         if: needs.changes.outputs.code == 'true'
+
+  acceptance:
+    name: acceptance / offline
+    needs: [changes, toolchain, quality]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Fail when a quality prerequisite failed
+        if: needs.changes.result != 'success' || needs.toolchain.result != 'success' || needs.quality.result != 'success'
+        run: |
+          echo "::error::A required acceptance prerequisite did not complete successfully."
+          exit 1
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+        if: needs.changes.outputs.code == 'true'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        if: needs.changes.outputs.code == 'true'
+        with:
+          node-version-file: .node-version
+      - uses: ./.github/actions/setup-launchpad
+        if: needs.changes.outputs.code == 'true'
+      - name: Run offline acceptance gate
+        if: needs.changes.outputs.code == 'true'
+        run: yarn acceptance:offline
+      - name: Upload acceptance evidence
+        if: needs.changes.outputs.code == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: acceptance-report
+          path: artifacts/acceptance-report.json
+          if-no-files-found: error

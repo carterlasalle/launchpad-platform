@@ -8,11 +8,41 @@ interface ShimListener {
   (event: { type: string; target: FakeElement }): void;
 }
 
+interface ShimWindowListener {
+  (event: unknown): void;
+}
+
 const elementRegistry = new Map<string, FakeElement>();
 const createdElements: FakeElement[] = [];
 
 /** Every innerHTML assignment that happened during the test, for XSS audits. */
 export const innerHTMLWrites: Array<{ tag: string; value: string }> = [];
+
+const windowListeners = new Map<string, Set<ShimWindowListener>>();
+
+/**
+ * Minimal window for router/app tests: a mutable hash location plus listener
+ * registration. Everything else the dashboard touches goes through the fake
+ * `document` installed alongside it.
+ */
+export const windowShim = {
+  location: { hash: '' },
+  addEventListener(type: string, listener: ShimWindowListener): void {
+    let set = windowListeners.get(type);
+    if (!set) {
+      set = new Set();
+      windowListeners.set(type, set);
+    }
+    set.add(listener);
+  },
+};
+
+/** Fires a window event (e.g. 'hashchange') at the registered listeners. */
+export function fireWindowEvent(type: string, event: unknown = { type }): void {
+  const set = windowListeners.get(type);
+  if (!set) return;
+  for (const listener of [...set]) listener(event);
+}
 
 export class FakeText {
   readonly nodeType = 3;
@@ -230,6 +260,8 @@ export function findTags(root: FakeElement, tag: string): FakeElement[] {
 
 export function installDomShim(): void {
   innerHTMLWrites.length = 0;
+  windowListeners.clear();
+  windowShim.location.hash = '';
   if ((globalThis as Record<string, unknown>).document !== undefined) return;
   const document = {
     title: '',
@@ -249,4 +281,5 @@ export function installDomShim(): void {
     },
   };
   (globalThis as Record<string, unknown>).document = document;
+  (globalThis as Record<string, unknown>).window = windowShim;
 }

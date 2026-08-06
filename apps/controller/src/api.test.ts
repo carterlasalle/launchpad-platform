@@ -162,6 +162,7 @@ function createHarness(overrides: Partial<Parameters<typeof createControllerApp>
       apply: async () => { handlersCalled.push('apply'); return { ok: true }; },
       preview: async () => { handlersCalled.push('preview'); return { ok: true }; },
       'app-preview': async (payload) => { handlersCalled.push('app-preview'); return { applicationId: payload.applicationId, deployment: payload.deployment, health: payload.health }; },
+      'app-preview-status': async (payload) => { handlersCalled.push('app-preview-status'); return { applicationId: payload.applicationId, status: 'SUCCEEDED' }; },
       'apply/validate-request': async () => { handlersCalled.push('apply/validate-request'); return { phase: 'validated' }; },
       failing: async () => { throw new Error('provider body leaked: super-secret-token-value'); },
       'coded-failure': async () => { throw new Error('LP-CONTROL-APPLICATION-NOT_FOUND: missing'); },
@@ -1145,7 +1146,7 @@ describe('operator cancel action', () => {
     expect(run?.completedAt).not.toBeNull();
     const audit = await harness.store.listAudit('app-demo');
     expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({ actor: 'operator:dashboard', action: 'OPERATOR_CANCEL', applicationId: 'app-demo' });
+    expect(audit[0]).toMatchObject({ actor: 'operator:operator', action: 'OPERATOR_CANCEL', applicationId: 'app-demo' });
     expect(audit[0]?.details).toEqual({ operationId, idempotencyKey: 'cancel-key-1', status: 'CANCELED' });
   });
 
@@ -1523,7 +1524,9 @@ describe('preserved routes', () => {
     let body: string;
 
     beforeEach(async () => {
-      body = JSON.stringify({ id: 'evt-webhook-1', type: 'deployment.ready', payload: { deploymentId: 'dpl_webhook', projectId: 'prj_webhook', url: 'https://deploy.example/private', token: CANARY }, deployment: { id: 'dpl_webhook', url: 'https://deploy.example/private' }, project: { id: 'prj_webhook', name: 'private-project' } });
+      // The HMAC-covered payload carries the event creation time (epoch ms);
+      // a fresh timestamp keeps the event inside the default freshness window.
+      body = JSON.stringify({ id: 'evt-webhook-1', type: 'deployment.ready', createdAt: Date.now(), payload: { deploymentId: 'dpl_webhook', projectId: 'prj_webhook', url: 'https://deploy.example/private', token: CANARY }, deployment: { id: 'dpl_webhook', url: 'https://deploy.example/private' }, project: { id: 'prj_webhook', name: 'private-project' } });
       signature = await sign(body);
     });
 
@@ -1677,5 +1680,407 @@ describe('lifecycle and deletion operator routes', () => {
       const response = await request(harness, path, { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
       expect(response.status, path).toBe(401);
     }
+  });
+});
+
+
+describe('control-repository OIDC gate (gzg.3)', () => {
+  it('rejects control-plane ingress from a non-control repository when CONTROL_REPOSITORY is configured', async () => {
+    const harness = createHarness({ controlRepository: REPOSITORY });
+    const token = await signToken(baseClaims({ repository: 'acme/other', sub: 'repo:111:acme/other:ref:refs/heads/main' }));
+    const response = await request(harness, '/v1/plans/verify', { method: 'POST', body: JSON.stringify(baseBody({ repository: 'acme/other' })), headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OIDC-REPOSITORY-NOT-CONTROL', retryable: false } });
+    expect(harness.workflowCalls).toHaveLength(0);
+    expect(await harness.store.listPlanReviewAttestations('app-demo')).toHaveLength(0);
+  });
+
+  it('accepts control-plane ingress minted by the configured control repository', async () => {
+    const harness = createHarness({ controlRepository: REPOSITORY });
+    const token = await signToken(baseClaims());
+    const response = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(202);
+  });
+
+  it('leaves control-plane ingress open to any repository when CONTROL_REPOSITORY is not configured', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims({ repository: 'acme/other', sub: 'repo:111:acme/other:ref:refs/heads/main' }));
+    const response = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody({ repository: 'acme/other' })), headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(202);
+  });
+
+  it('keeps the cross-repo preview/status endpoint outside the control-repository gate', async () => {
+    const harness = createHarness({ controlRepository: REPOSITORY });
+    const token = await signToken(baseClaims({ repository: 'acme/other', repository_id: '111', sub: 'repo:111:acme/other:ref:refs/heads/main' }));
+    const statusBody = { version: 1, applicationId: 'app-demo', sourceCommit: PUSH_SHA, repository: 'acme/other', repositoryId: 111, repositoryOwnerId: Number(OWNER_ID), event: 'push', result: 'SUCCEEDED', url: 'https://preview.example' };
+    const response = await request(harness, '/v1/applications/app-demo/preview/status', { method: 'POST', body: JSON.stringify(statusBody), headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(200);
+    expect(harness.handlersCalled).toContain('app-preview-status');
+  });
+});
+
+describe('operator token resolution (gzg.4)', () => {
+  it('authenticates the legacy single operator token as actor operator', async () => {
+    const harness = createHarness();
+    const response = await request(harness, '/v1/incidents', { headers: bearer('operator-token') });
+    expect(response.status).toBe(200);
+  });
+
+  it('authenticates mapped actors from OPERATOR_TOKENS', async () => {
+    const harness = createHarness({}, { OPERATOR_TOKENS: JSON.stringify({ ci: 'ci-token', auditor: 'auditor-token' }) });
+    const response = await request(harness, '/v1/incidents', { headers: bearer('ci-token') });
+    expect(response.status).toBe(200);
+    const auditor = await request(harness, '/v1/incidents', { headers: bearer('auditor-token') });
+    expect(auditor.status).toBe(200);
+  });
+
+  it('rejects tokens that match neither the legacy token nor any mapped actor', async () => {
+    const harness = createHarness({}, { OPERATOR_TOKENS: JSON.stringify({ ci: 'ci-token' }) });
+    const response = await request(harness, '/v1/incidents', { headers: bearer('ci-token-wrong') });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OPERATOR-AUTH-REQUIRED', retryable: false } });
+  });
+
+  it('rejects operator access when nothing is configured', async () => {
+    const harness = createHarness({ operatorToken: '' });
+    const response = await request(harness, '/v1/incidents', { headers: bearer('anything') });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OPERATOR-AUTH-REQUIRED' } });
+  });
+
+  it('fails closed with a typed 503 when OPERATOR_TOKENS is malformed, even for a valid legacy token', async () => {
+    const harness = createHarness({}, { OPERATOR_TOKENS: '{not-json' });
+    const response = await request(harness, '/v1/incidents', { headers: bearer('operator-token') });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OPERATOR-TOKENS-INVALID', retryable: false } });
+  });
+
+  it('records the resolved mapped actor as the audit principal, never a caller-declared string', async () => {
+    const harness = createHarness({}, { OPERATOR_TOKENS: JSON.stringify({ ci: 'ci-token' }) });
+    const response = await request(harness, '/v1/cli/reconcile', { method: 'POST', body: JSON.stringify({ applicationIds: ['app-demo'], automatic: false }), headers: { 'content-type': 'application/json', authorization: 'Bearer ci-token' } });
+    expect(response.status).toBe(202);
+    const audit = await harness.store.listAuditAll();
+    expect(audit.filter((event) => event.action === 'RECONCILE_REQUESTED')).toHaveLength(1);
+    expect(audit.find((event) => event.action === 'RECONCILE_REQUESTED')).toMatchObject({ actor: 'operator:ci', applicationId: 'platform', details: { applicationIds: ['app-demo'], automatic: false } });
+  });
+
+  it('records the legacy token as the operator audit principal', async () => {
+    const harness = createHarness();
+    const response = await request(harness, '/v1/cli/reconcile', { method: 'POST', body: JSON.stringify({ applicationIds: ['app-demo'], automatic: false }), headers: { 'content-type': 'application/json', authorization: 'Bearer operator-token' } });
+    expect(response.status).toBe(202);
+    const audit = await harness.store.listAuditAll();
+    expect(audit.find((event) => event.action === 'RECONCILE_REQUESTED')).toMatchObject({ actor: 'operator:operator' });
+  });
+});
+
+describe('webhook freshness window (gzg.5)', () => {
+  async function sign(payload: string): Promise<string> {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('webhook-secret'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const digest = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
+    return `sha256=${[...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  async function deliver(harness: TestHarness, payload: Record<string, unknown>): Promise<Response> {
+    const body = JSON.stringify(payload);
+    return request(harness, '/webhooks/vercel', { method: 'POST', body, headers: { 'content-type': 'application/json', 'x-vercel-signature': await sign(body) } });
+  }
+
+  it('accepts a fresh event', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' });
+    const response = await deliver(harness, { id: 'evt-fresh', type: 'deployment', createdAt: Date.now(), deployment: { id: 'dep-fresh' } });
+    expect(response.status).toBe(202);
+  });
+
+  it('rejects an event older than the default 300-second window', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' });
+    const response = await deliver(harness, { id: 'evt-stale', type: 'deployment', createdAt: Date.now() - 301_000, deployment: { id: 'dep-stale' } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-EVENT-STALE', retryable: false } });
+    expect(await harness.store.getWebhookReceipt('vercel', 'evt-stale')).toBeNull();
+  });
+
+  it('rejects an event with an impossible future timestamp', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' });
+    const response = await deliver(harness, { id: 'evt-future', type: 'deployment', createdAt: Date.now() + 3_600_000, deployment: { id: 'dep-future' } });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-TIMESTAMP-FUTURE', retryable: false } });
+  });
+
+  it('rejects an event without a numeric createdAt timestamp', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' });
+    const response = await deliver(harness, { id: 'evt-nots', type: 'deployment', deployment: { id: 'dep-nots' } });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-TIMESTAMP-MISSING', retryable: false } });
+  });
+
+  it('honors a configured WEBHOOK_MAX_AGE_SECONDS window', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' }, { WEBHOOK_MAX_AGE_SECONDS: '5' });
+    const fresh = await deliver(harness, { id: 'evt-tight-fresh', type: 'deployment', createdAt: Date.now() - 4_000, deployment: { id: 'dep-tight' } });
+    expect(fresh.status).toBe(202);
+    const stale = await deliver(harness, { id: 'evt-tight-stale', type: 'deployment', createdAt: Date.now() - 6_000, deployment: { id: 'dep-tight2' } });
+    expect(stale.status).toBe(401);
+    await expect(stale.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-EVENT-STALE' } });
+  });
+
+  it('fails closed on an invalid WEBHOOK_MAX_AGE_SECONDS configuration', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' }, { WEBHOOK_MAX_AGE_SECONDS: 'soon' });
+    const response = await deliver(harness, { id: 'evt-cfg', type: 'deployment', createdAt: Date.now(), deployment: { id: 'dep-cfg' } });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-MAX-AGE-INVALID', retryable: false } });
+  });
+});
+
+describe('mandatory OIDC actor binding on ingress (gzg.7)', () => {
+  it('rejects enqueue requests that omit the actor binding', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims());
+    const response = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody({ actor: undefined })), headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OIDC-CLAIM-MISSING-ACTOR', retryable: false } });
+    expect(harness.workflowCalls).toHaveLength(0);
+  });
+
+  it('rejects plan reviews that omit the actor binding', async () => {
+    const harness = createHarness();
+    const token = await signToken(prClaims());
+    const response = await request(harness, '/v1/plans/verify', { method: 'POST', body: JSON.stringify(reviewBody({ actor: undefined })), headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OIDC-CLAIM-MISSING-ACTOR' } });
+    expect(await harness.store.listPlanReviewAttestations('app-demo')).toHaveLength(0);
+  });
+});
+
+describe('CLI command dispatch (gzg.9)', () => {
+  it('fails closed with a typed 404 for unsupported CLI commands instead of faking an enqueue', async () => {
+    const harness = createHarness();
+    const response = await request(harness, '/v1/cli/destroy', { method: 'POST', body: JSON.stringify({ applicationId: 'app-demo' }), headers: { 'content-type': 'application/json', authorization: 'Bearer operator-token' } });
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-CLI-COMMAND-UNSUPPORTED', retryable: false } });
+    expect(harness.workflowCalls).toHaveLength(0);
+    expect(await harness.store.listWorkflowRuns('app-demo')).toHaveLength(0);
+  });
+
+  it('still requires operator authentication before the command check', async () => {
+    const harness = createHarness();
+    const response = await request(harness, '/v1/cli/destroy', { method: 'POST', body: JSON.stringify({ applicationId: 'app-demo' }), headers: { 'content-type': 'application/json' } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OPERATOR-AUTH-REQUIRED' } });
+  });
+});
+
+describe('control repository gate (gzg.3)', () => {
+  const CONTROL_REPOSITORY = 'acme/control';
+  const CONTROL_WORKFLOW_REF = `${CONTROL_REPOSITORY}/.github/workflows/preview.yml@refs/heads/main`;
+
+  function controlClaims(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return prClaims({
+      repository: CONTROL_REPOSITORY,
+      sub: `repo:${OWNER_ID}:${CONTROL_REPOSITORY}:ref:refs/heads/main`,
+      workflow_ref: CONTROL_WORKFLOW_REF,
+      ...overrides,
+    });
+  }
+
+  function controlReviewBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return reviewBody({ repository: CONTROL_REPOSITORY, workflowRef: CONTROL_WORKFLOW_REF, ...overrides });
+  }
+
+  it('accepts plan attestation from a token minted in the configured control repository', async () => {
+    const harness = createHarness({ controlRepository: CONTROL_REPOSITORY });
+    const token = await signToken(controlClaims());
+    fetchHandler = () => new Response(JSON.stringify({ number: 42, head: { sha: HEAD_SHA } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const response = await request(harness, '/v1/plans/verify', { method: 'POST', body: JSON.stringify(controlReviewBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(response.status).toBe(200);
+    expect(await harness.store.listPlanReviewAttestations('app-demo')).toHaveLength(1);
+  });
+
+  it('rejects a non-control repository token on every OIDC gate route before any state is written', async () => {
+    const harness = createHarness({ controlRepository: CONTROL_REPOSITORY });
+    const token = await signToken(prClaims());
+    const cases: Array<[string, string, RequestInit]> = [
+      ['POST /v1/plans/verify', '/v1/plans/verify', { method: 'POST', body: JSON.stringify(reviewBody()), headers: { 'content-type': 'application/json' } }],
+      ['POST /v1/applications/app-demo/preview/verify', '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json' } }],
+      ['POST /v1/applications/app-demo/apply', '/v1/applications/app-demo/apply', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json' } }],
+      ['POST /v1/applications/app-demo/health/run', '/v1/applications/app-demo/health/run', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json' } }],
+      ['GET /v1/operations/op-1', '/v1/operations/op-1', {}],
+    ];
+    for (const [label, path, init] of cases) {
+      const response = await request(harness, path, { ...init, headers: { ...init.headers, ...bearer(token) } });
+      expect(response.status, label).toBe(401);
+      await expect(response.json(), label).resolves.toMatchObject({ error: { code: 'LP-OIDC-REPOSITORY-NOT-CONTROL', retryable: false } });
+    }
+    expect(harness.workflowCalls).toHaveLength(0);
+    expect(await harness.store.listWorkflowRuns('app-demo')).toHaveLength(0);
+    expect(await harness.store.listPlanReviewAttestations('app-demo')).toHaveLength(0);
+  });
+
+  it('still accepts cross-repo app-preview status reporting from a non-control repository', async () => {
+    const harness = createHarness({ controlRepository: CONTROL_REPOSITORY });
+    const handlerCalls: Array<Record<string, unknown>> = [];
+    harness.app = createControllerApp({
+      operatorToken: 'operator-token',
+      oidc: OIDC,
+      internalWorkflowToken: 'internal-token',
+      githubToken: 'ghp_controller',
+      controlRepository: CONTROL_REPOSITORY,
+      store: harness.store,
+      repositories: new LaunchpadRepositories(new InMemoryDatabase()),
+      workflowHandlers: {
+        'app-preview-status': async (payload) => { handlerCalls.push(payload); return { ok: true }; },
+      },
+    });
+    const token = await signToken(baseClaims());
+    const body = { version: 1, applicationId: 'app-demo', sourceCommit: PUSH_SHA, repository: REPOSITORY, repositoryId: REPOSITORY_ID, repositoryOwnerId: OWNER_ID, event: 'push', ref: 'refs/heads/main' };
+    const response = await request(harness, '/v1/applications/app-demo/preview/status', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(response.status).toBe(200);
+    expect(handlerCalls).toHaveLength(1);
+    expect(handlerCalls[0]).toMatchObject({ applicationId: 'app-demo', repository: REPOSITORY, sourceCommit: PUSH_SHA });
+  });
+});
+
+describe('mapped operator tokens (gzg.4)', () => {
+  it('authenticates an OPERATOR_TOKENS bearer as the mapped actor and audits that principal', async () => {
+    const harness = createHarness({}, { OPERATOR_TOKENS: JSON.stringify({ ci: 'tok-abc' }) });
+    const response = await request(harness, '/v1/cli/reconcile', { method: 'POST', body: JSON.stringify({ applicationIds: ['app-demo'], automatic: false }), headers: { 'content-type': 'application/json', ...bearer('tok-abc') } });
+    expect(response.status).toBe(202);
+    const audit = await harness.store.listAudit('platform');
+    expect(audit.some((event) => event.action === 'RECONCILE_REQUESTED' && event.actor === 'operator:ci')).toBe(true);
+  });
+
+  it('rejects a wrong token and a token for an unknown actor with the closed 401', async () => {
+    const harness = createHarness({}, { OPERATOR_TOKENS: JSON.stringify({ ci: 'tok-abc', dev: 'tok-dev' }) });
+    for (const token of ['tok-unknown', 'wrong-token']) {
+      const response = await request(harness, '/v1/applications', { headers: bearer(token) });
+      expect(response.status, token).toBe(401);
+      await expect(response.json(), token).resolves.toMatchObject({ error: { code: 'LP-OPERATOR-AUTH-REQUIRED', retryable: false } });
+    }
+  });
+
+  it('fails closed with 503 when OPERATOR_TOKENS is malformed, even for the legacy token', async () => {
+    for (const malformed of ['{not-json', '[1,2]', '{"ci": 5}', '{"ci":""}']) {
+      const harness = createHarness({}, { OPERATOR_TOKENS: malformed });
+      for (const token of ['tok-abc', 'operator-token']) {
+        const response = await request(harness, '/v1/applications', { headers: bearer(token) });
+        expect(response.status, `${malformed} / ${token}`).toBe(503);
+        await expect(response.json(), `${malformed} / ${token}`).resolves.toMatchObject({ error: { code: 'LP-OPERATOR-TOKENS-INVALID', retryable: false } });
+      }
+    }
+  });
+
+  it('keeps the legacy operator token working alongside mapped tokens, audited as operator:operator', async () => {
+    const harness = createHarness({}, { OPERATOR_TOKENS: JSON.stringify({ ci: 'tok-abc' }) });
+    const response = await request(harness, '/v1/cli/reconcile', { method: 'POST', body: JSON.stringify({ applicationIds: ['app-demo'], automatic: false }), headers: { 'content-type': 'application/json', ...bearer('operator-token') } });
+    expect(response.status).toBe(202);
+    const audit = await harness.store.listAudit('platform');
+    expect(audit.some((event) => event.action === 'RECONCILE_REQUESTED' && event.actor === 'operator:operator')).toBe(true);
+  });
+
+  it('rejects operator requests when neither legacy nor mapped tokens are configured', async () => {
+    const harness = createHarness({ operatorToken: '' });
+    const response = await request(harness, '/v1/applications', { headers: bearer('anything') });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OPERATOR-AUTH-REQUIRED', retryable: false } });
+  });
+});
+
+describe('webhook event freshness (gzg.5)', () => {
+  async function sign(body: string): Promise<string> {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('webhook-secret'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const digest = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)));
+    return `sha256=${[...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  function eventBody(createdAt?: number): string {
+    return JSON.stringify({ id: 'evt-freshness', type: 'deployment.ready', ...(createdAt === undefined ? {} : { createdAt }), payload: { deploymentId: 'dpl_fresh', projectId: 'prj_fresh', url: 'https://deploy.example' }, deployment: { id: 'dpl_fresh', url: 'https://deploy.example' }, project: { id: 'prj_fresh', name: 'fresh-project' } });
+  }
+
+  async function deliver(harness: TestHarness, body: string): Promise<Response> {
+    return request(harness, '/webhooks/vercel', { method: 'POST', body, headers: { 'content-type': 'application/json', 'x-vercel-signature': await sign(body) } });
+  }
+
+  it('rejects an event older than the default 300-second window as stale, before any state is written', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' });
+    const response = await deliver(harness, eventBody(Date.now() - 301_000));
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-EVENT-STALE', retryable: false } });
+    expect(await harness.store.getWebhookReceipt('vercel', 'evt-freshness')).toBeNull();
+  });
+
+  it('rejects an event stamped impossibly far in the future', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' });
+    const response = await deliver(harness, eventBody(Date.now() + 120_000));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-TIMESTAMP-FUTURE', retryable: false } });
+    expect(await harness.store.getWebhookReceipt('vercel', 'evt-freshness')).toBeNull();
+  });
+
+  it('rejects an event without a usable createdAt timestamp', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' });
+    const response = await deliver(harness, eventBody());
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-TIMESTAMP-MISSING', retryable: false } });
+    expect(await harness.store.getWebhookReceipt('vercel', 'evt-freshness')).toBeNull();
+  });
+
+  it('honors a configured WEBHOOK_MAX_AGE_SECONDS window (30s bound)', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' }, { WEBHOOK_MAX_AGE_SECONDS: '30' });
+    const stale = await deliver(harness, eventBody(Date.now() - 31_000));
+    expect(stale.status).toBe(401);
+    await expect(stale.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-EVENT-STALE' } });
+    const fresh = await deliver(harness, eventBody(Date.now() - 10_000));
+    expect(fresh.status).toBe(202);
+    await expect(fresh.json()).resolves.toMatchObject({ accepted: true });
+  });
+
+  it('fails closed with 503 when WEBHOOK_MAX_AGE_SECONDS is not a non-negative integer', async () => {
+    const harness = createHarness({ webhookSecret: 'webhook-secret' }, { WEBHOOK_MAX_AGE_SECONDS: 'abc' });
+    const response = await deliver(harness, eventBody(Date.now() - 10_000));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-WEBHOOK-MAX-AGE-INVALID', retryable: false } });
+  });
+});
+
+describe('actor claim binding (gzg.11)', () => {
+  it('rejects an operation request that omits the actor declaration with LP-OIDC-CLAIM-MISSING-ACTOR', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims());
+    const body = baseBody();
+    delete (body as Record<string, unknown>).actor;
+    const response = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OIDC-CLAIM-MISSING-ACTOR', retryable: false } });
+    expect(harness.workflowCalls).toHaveLength(0);
+    expect(await harness.store.listWorkflowRuns('app-demo')).toHaveLength(0);
+  });
+
+  it('also fails closed when the signed token itself carries no actor claim', async () => {
+    const harness = createHarness();
+    const claims = baseClaims();
+    delete (claims as Record<string, unknown>).actor;
+    const token = await signToken(claims);
+    const body = baseBody();
+    delete (body as Record<string, unknown>).actor;
+    const response = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-OIDC-CLAIM-MISSING-ACTOR' } });
+    expect(harness.workflowCalls).toHaveLength(0);
+  });
+});
+
+describe('CLI command stub removal (gzg.9)', () => {
+  it('returns 404 LP-CLI-COMMAND-UNSUPPORTED for the removed /v1/cli/destroy stub the CLI used to call', async () => {
+    const harness = createHarness();
+    const response = await request(harness, '/v1/cli/destroy', { method: 'POST', body: JSON.stringify({ applicationId: 'app-demo', approvalToken: 'approval-1' }), headers: { 'content-type': 'application/json', ...bearer('operator-token') } });
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-CLI-COMMAND-UNSUPPORTED', retryable: false } });
+    expect(harness.workflowCalls).toHaveLength(0);
+  });
+
+  it('keeps the reviewed destroy lifecycle available through /v1/applications/:id/delete for the updated CLI', async () => {
+    const harness = createHarness();
+    const response = await request(harness, '/v1/applications/app-demo/delete', { method: 'POST', body: JSON.stringify({ applicationId: 'app-demo', approvalId: 'ap-1', approvalToken: 'f'.repeat(64), sourceCommit: 'a'.repeat(40), domain: 'demo.example.com' }), headers: { 'content-type': 'application/json', ...bearer('operator-token') } });
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({ status: 'QUEUED' });
+    expect(harness.workflowCalls.some((call) => (call.params as Record<string, unknown>).approvalToken === 'f'.repeat(64))).toBe(true);
   });
 });

@@ -471,7 +471,14 @@ export function createWorkflowHandlers(env: ControllerEnv['Bindings'], repositor
       if (catalog.issues.length > 0) throw new HandlerFailure('LP-CONTROL-MANIFEST-INVALID', `The control manifest for ${applicationId} failed validation (${catalog.issues[0]?.code ?? 'unknown'}).`);
       const desired = catalog.applications.find((candidate) => candidate.metadata.id === applicationId);
       if (!desired) throw new HandlerFailure('LP-CONTROL-APPLICATION-NOT_FOUND', `No catalog application '${applicationId}' exists.`);
-      if (desired.repository.name !== repository) throw new HandlerFailure('LP-SCOPE-REPOSITORY-MISMATCH', `OIDC token repository ${repository} is not the configured repository for ${applicationId}.`);
+      // The evidence machine is driven either by the application repository
+      // itself (preview/status reporting) or by the trusted control
+      // repository (control-orchestrated health runs behind the gzg.3
+      // middleware gate, whose claims are already pinned to CONTROL_REPOSITORY).
+      // Any other repository is rejected.
+      if (desired.repository.name !== repository && repository !== env.CONTROL_REPOSITORY) {
+        throw new HandlerFailure('LP-SCOPE-REPOSITORY-MISMATCH', `OIDC token repository ${repository} is not the configured repository for ${applicationId}.`);
+      }
       // The preview-status workflow persists through the D1 store
       // (startWorkflowRun requires an application row); register a minimal
       // record like the OIDC enqueue path does.

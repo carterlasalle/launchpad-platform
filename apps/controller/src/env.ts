@@ -17,12 +17,15 @@ export interface ControllerEnv {
     PROVIDER_EVENTS?: Queue<QueueEnvelope>;
     HEALTH_CHECKS?: Queue<QueueEnvelope>;
     SECRETS_OPERATOR_TOKEN?: SecretsStoreSecret;
+    SECRETS_OPERATOR_TOKENS?: SecretsStoreSecret;
     SECRETS_CONTROLLER_INTERNAL_TOKEN?: SecretsStoreSecret;
     SECRETS_VERCEL_TOKEN?: SecretsStoreSecret;
     SECRETS_CLOUDFLARE_TOKEN?: SecretsStoreSecret;
     SECRETS_GITHUB_TOKEN?: SecretsStoreSecret;
     SECRETS_VERCEL_WEBHOOK_SECRET?: SecretsStoreSecret;
     OPERATOR_TOKEN?: string;
+    /** Optional JSON object mapping operator actor name -> bearer token (see SECRETS_OPERATOR_TOKENS for the secret-store fallback). */
+    OPERATOR_TOKENS?: string;
     OIDC_ISSUER?: string;
     OIDC_AUDIENCE?: string;
     OIDC_JWKS?: string;
@@ -40,6 +43,8 @@ export interface ControllerEnv {
     LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL?: string;
     GITHUB_TOKEN?: string;
     VERCEL_WEBHOOK_SECRET?: string;
+    /** Maximum accepted age in seconds for Vercel webhook events (default 300); older events are rejected. */
+    WEBHOOK_MAX_AGE_SECONDS?: string;
     RECONCILIATION_SHARD_COUNT?: string;
     /** Bounded provider-event fan-out: max reconciliation instances per webhook event. */
     PROVIDER_EVENT_FANOUT_LIMIT?: string;
@@ -68,7 +73,8 @@ export interface OidcConfig {
   clockToleranceSeconds?: number;
 }
 
-function parseAllowlist(value: string | undefined): string[] | undefined {
+/** Parses a comma-separated allowlist env var; unset/blank yields undefined, empty entries are dropped. */
+export function parseAllowlist(value: string | undefined): string[] | undefined {
   if (value === undefined || value.trim() === '') return undefined;
   return value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 }

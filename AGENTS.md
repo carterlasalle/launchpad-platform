@@ -146,7 +146,7 @@ Tests must defend behavior, boundaries, state transitions, precedence, or real f
 ## GitHub and release rules
 
 - `main` is protected by the desired ruleset in `.github/rulesets/main.json`.
-- Normal changes use pull requests, CODEOWNER approval, current required checks, and squash merge.
+- Normal changes use pull requests, current required checks, and squash merge. The control repository operates in **solo-owner mode**: the reviewed ruleset deliberately sets `required_approving_review_count=0`, `require_code_owner_review=false`, and `require_last_push_approval=false` (documented by a `$comment` in main.json) with compensating controls — no bypass actors, direct-push bans, stale-review dismissal, thread resolution, strict required checks. A second maintainer or automatic production operations must first flip those parameters in a reviewed change.
 - `LAUNCHPAD_CONTROL_PLANE_ENABLED` must remain absent or false until the complete deployment guide and live release gates pass.
 - Production workflow changes must preserve the ruleset gate, protected-commit provenance, immutable install, binding assertions, D1 migrations, SBOM/provenance, deploy, and smoke check sequence.
 - Live tests must use dedicated sandbox resources matching `LP_LIVE_SANDBOX_PREFIX`; never point them at production resources.
@@ -179,7 +179,7 @@ When uncertain, prefer the fail-closed behavior already established by the maste
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **launchpad-platform** (4907 symbols, 13679 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **launchpad-platform** (5047 symbols, 13969 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

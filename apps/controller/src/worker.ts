@@ -9,7 +9,7 @@ export { ApplyApplicationWorkflow, AppPreviewStatusWorkflow, DecommissionApplica
 
 const repositories = new LaunchpadRepositories(new InMemoryDatabase());
 
-type SecretName = 'OPERATOR_TOKEN' | 'CONTROLLER_INTERNAL_TOKEN' | 'VERCEL_TOKEN' | 'CLOUDFLARE_TOKEN' | 'GITHUB_TOKEN' | 'VERCEL_WEBHOOK_SECRET';
+type SecretName = 'OPERATOR_TOKEN' | 'OPERATOR_TOKENS' | 'CONTROLLER_INTERNAL_TOKEN' | 'VERCEL_TOKEN' | 'CLOUDFLARE_TOKEN' | 'GITHUB_TOKEN' | 'VERCEL_WEBHOOK_SECRET';
 
 async function resolveSecret(binding: { get(): Promise<string> } | undefined): Promise<string | undefined> {
   if (!binding) return undefined;
@@ -32,8 +32,9 @@ function automaticReconciliationEnabled(env: ControllerEnv['Bindings']): boolean
  * and fails closed if any configured binding cannot be read.
  */
 async function withSecrets(env: ControllerEnv['Bindings']): Promise<ControllerEnv['Bindings']> {
-  const [operatorToken, internalToken, vercelToken, cloudflareToken, githubToken, webhookSecret] = await Promise.all([
+  const [operatorToken, operatorTokens, internalToken, vercelToken, cloudflareToken, githubToken, webhookSecret] = await Promise.all([
     resolveSecret(env.SECRETS_OPERATOR_TOKEN).then((value) => value ?? env.OPERATOR_TOKEN),
+    resolveSecret(env.SECRETS_OPERATOR_TOKENS).then((value) => value ?? env.OPERATOR_TOKENS),
     resolveSecret(env.SECRETS_CONTROLLER_INTERNAL_TOKEN).then((value) => value ?? env.CONTROLLER_INTERNAL_TOKEN),
     resolveSecret(env.SECRETS_VERCEL_TOKEN).then((value) => value ?? env.VERCEL_TOKEN),
     resolveSecret(env.SECRETS_CLOUDFLARE_TOKEN).then((value) => value ?? env.CLOUDFLARE_TOKEN),
@@ -42,6 +43,7 @@ async function withSecrets(env: ControllerEnv['Bindings']): Promise<ControllerEn
   ]);
   const secrets: Partial<Record<SecretName, string>> = {};
   if (operatorToken !== undefined) secrets.OPERATOR_TOKEN = operatorToken;
+  if (operatorTokens !== undefined) secrets.OPERATOR_TOKENS = operatorTokens;
   if (internalToken !== undefined) secrets.CONTROLLER_INTERNAL_TOKEN = internalToken;
   if (vercelToken !== undefined) secrets.VERCEL_TOKEN = vercelToken;
   if (cloudflareToken !== undefined) secrets.CLOUDFLARE_TOKEN = cloudflareToken;

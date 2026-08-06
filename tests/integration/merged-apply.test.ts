@@ -5,7 +5,7 @@ import { applyLoadDesired, applyObserveLiveState, makeApplyBase } from '@launchp
 import { CompositeProvider } from '../../apps/controller/src/handlers.js';
 import { ApplyApplicationWorkflow } from '../../apps/controller/src/workflows.js';
 import { EnvironmentSecretProvider } from '@launchpad/provider-secrets';
-import { pushClaims, signGithubToken } from '../fixtures/oidc.js';
+import { controlPushClaims, signGithubToken } from '../fixtures/oidc.js';
 import { cfRecord, expectedDnsOwnership, manifestYamlFrom, vercelProject } from '../fixtures/providers.js';
 import { CONTROL_REPOSITORY, HEAD_SHA, MAIN_SHA, MANIFEST_PATH, SOURCE_COMMIT, createHarness, type ControllerHarness } from './harness.js';
 
@@ -16,7 +16,7 @@ vi.mock('cloudflare:workers', () => ({
   },
 }));
 
-const WORKFLOW_REF = 'example/fixture/.github/workflows/preview.yml@refs/heads/main';
+const WORKFLOW_REF = 'example/control/.github/workflows/apply.yml@refs/heads/main';
 const PREV_SHA = 'e'.repeat(40);
 
 /**
@@ -84,7 +84,7 @@ async function seedApplyHarness(options: { seedKnownGood?: boolean } = {}): Prom
 }
 
 async function enqueueApply(harness: ControllerHarness, planFingerprint: string, overrides: Record<string, unknown> = {}): Promise<{ operationId: string; workflowId: string }> {
-  const token = await signGithubToken(harness.oidc, pushClaims(SOURCE_COMMIT));
+  const token = await signGithubToken(harness.oidc, controlPushClaims(SOURCE_COMMIT));
   const body = {
     version: 1,
     applicationId: 'fixture-app',
@@ -94,7 +94,7 @@ async function enqueueApply(harness: ControllerHarness, planFingerprint: string,
     idempotencyKey: 'apply-key-1',
     repositoryId: '123456789',
     ownerId: '987654321',
-    repository: 'example/fixture',
+    repository: 'example/control',
     workflowRef: WORKFLOW_REF,
     event: 'push',
     ref: 'refs/heads/main',
@@ -190,7 +190,7 @@ describe('merged apply flow (integration)', () => {
     expect(await harness.store.getLock('domain:fixture.example.com')).toBeNull();
 
     // Claim-scoped poll reports the terminal success.
-    const token = await signGithubToken(harness.oidc, pushClaims(SOURCE_COMMIT));
+    const token = await signGithubToken(harness.oidc, controlPushClaims(SOURCE_COMMIT));
     const poll = await harness.request(`/v1/operations/${operationId}`, { headers: { authorization: `Bearer ${token}` } });
     expect(poll.status).toBe(200);
     await expect(poll.json()).resolves.toMatchObject({ status: 'SUCCEEDED', kind: 'apply', applicationId: 'fixture-app', sourceCommit: SOURCE_COMMIT, errorCode: null });

@@ -2197,7 +2197,7 @@ it('SEC-RULESET-CONFIG: the main ruleset config protects main and is wired as a 
     expect(types).toContain('deletion'); // direct pushes can never delete main
     expect(types).toContain('non_fast_forward'); // direct pushes are rejected (no force push / fast-forward)
     const review = ruleset.rules.find((rule) => rule.type === 'pull_request')?.parameters as Record<string, unknown> | undefined;
-    expect(review?.required_approving_review_count).toBe(0); // solo-owner policy; pull requests and required checks still gate main
+    expect(review?.required_approving_review_count).toBe(0); // solo-owner policy (documented in main.json $comment); required checks and no-bypass rules still gate main
     expect(review?.require_code_owner_review).toBe(false);
     expect(review?.require_last_push_approval).toBe(false);
     expect(review?.required_review_thread_resolution).toBe(true);
@@ -2206,7 +2206,7 @@ it('SEC-RULESET-CONFIG: the main ruleset config protects main and is wired as a 
     const checks = ruleset.rules.find((rule) => rule.type === 'required_status_checks')?.parameters as Record<string, unknown> | undefined;
     const contexts = ((checks?.required_status_checks as Array<{ context: string }> | undefined) ?? []).map((check) => check.context);
     expect(checks?.strict_required_status_checks_policy).toBe(true);
-    expect(contexts).toEqual(['static / toolchain', 'static / quality', 'platform / summary', 'dependency / review']);
+    expect(contexts).toEqual(['static / toolchain', 'static / quality', 'acceptance / offline', 'platform / summary', 'dependency / review']);
     expect(ruleset.repository.squash_merge_only).toBe(true);
     expect(ruleset.repository.default_branch).toBe('main');
 

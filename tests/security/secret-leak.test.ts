@@ -52,3 +52,57 @@ it('health records never carry secret-backed header values', async () => {
   expect(scan.leaked).toBe(false);
   expect(JSON.stringify(result)).not.toContain(secret);
 });
+
+
+it('stepErrorView redacts provider error strings before they reach served views (gzg.6)', async () => {
+  const { stepErrorView } = await import('../../apps/controller/src/api.js');
+  const canary = `token=${secret}`;
+  const canaryMessage = `Vercel deploy rejected: ${canary}`;
+
+  // The projection function itself must never emit the canary: code and
+  // message pass through redactText before the bounded slice is returned.
+  const projected = stepErrorView(new Error(canaryMessage));
+  expect(projected).not.toBeNull();
+  expect(projected?.message).not.toContain(secret);
+  expect(projected?.message).toContain('token=[REDACTED]');
+
+  const objectError = stepErrorView({ code: 'LP-VERCEL-DEPLOY-REJECTED', message: canaryMessage });
+  expect(objectError?.message).not.toContain(secret);
+  expect(objectError?.code).not.toContain(secret);
+  expect(objectError?.message).toContain('[REDACTED]');
+
+  // End-to-end: a typed provider failure whose message carries a `token=`
+  // canary is persisted raw by the internal dispatch, but the operator
+  // dashboard operation view (which serves persisted step errors through
+  // stepErrorView) must never emit the canary.
+  const { InMemoryLaunchpadStore } = await import('@launchpad/database');
+  const { createControllerApp } = await import('../../apps/controller/src/api.js');
+  const store = new InMemoryLaunchpadStore();
+  await store.upsertApplication({ id: 'app-canary', displayName: 'app-canary', sourcePath: 'catalog/apps/canary.yaml', desiredGeneration: 1, desiredHash: 'h', syncStatus: 'UNKNOWN', healthStatus: 'UNKNOWN', lifecycleState: 'active' });
+  const run = await store.startWorkflowRun({ id: 'run-1', applicationId: 'app-canary', workflowType: 'apply', idempotencyKey: 'k-1', payloadHash: 'p-1' });
+  const typedProviderError = new Error(canaryMessage);
+  typedProviderError.name = 'LP-VERCEL-DEPLOY-REJECTED';
+  const app = createControllerApp({
+    operatorToken: 'op-token',
+    internalWorkflowToken: 'internal-token',
+    store,
+    workflowHandlers: { apply: async () => { throw typedProviderError; } },
+  });
+  const dispatch = await app.request('/internal/workflows/apply', {
+    method: 'POST',
+    body: JSON.stringify({ version: 1, applicationId: 'app-canary', operationId: run.id, workflowId: run.id, sourceCommit: 'a'.repeat(40), idempotencyKey: 'k-1' }),
+    headers: { 'content-type': 'application/json', 'x-launchpad-workflow-token': 'internal-token' },
+  });
+  expect(dispatch.status).toBe(500);
+  const persisted = await store.listWorkflowSteps('run-1');
+  expect(persisted[0]?.error?.message).toContain(secret); // raw persistence is unchanged
+
+  const served = await app.request('/v1/applications/app-canary/operations/run-1', { headers: { authorization: 'Bearer op-token' } });
+  expect(served.status).toBe(200);
+  const servedBody = JSON.stringify(await served.json());
+  expect(servedBody).not.toContain(secret);
+  expect(servedBody).toContain('token=[REDACTED]');
+
+  const scan = await scanCanary({ served: servedBody }, [secret]);
+  expect(scan.leaked).toBe(false);
+});

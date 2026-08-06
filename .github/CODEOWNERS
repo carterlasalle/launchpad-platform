@@ -1,6 +1,8 @@
 # Launchpad control repository ownership
-# Changes to the paths below require review by the owning team before merge
-# (main ruleset: require review from CODEOWNERS).
+# Changes to the paths below are owned by the listed team; CODEOWNERS is
+# always kept accurate so that a future flip of the main ruleset to
+# CODEOWNER-required review takes effect immediately. The main ruleset
+# currently runs in solo-owner mode (see $comment in .github/rulesets/main.json).
 
 # All platform code
 * @CarterLaSalle
