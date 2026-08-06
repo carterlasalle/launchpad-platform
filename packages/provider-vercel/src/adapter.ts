@@ -491,14 +491,26 @@ export class VercelAdapter implements ProjectProvider {
     const response = await this.client.request<unknown>(`/v6/domains/${encodeURIComponent(domain.hostname)}/config`, { correlationId: ctx.correlationId });
     const data = record(response);
     // Current official shape: recommendedCNAME is an array of { rank, value: string[] }.
-    // Legacy shapes: top-level `cname` string or `records.value` string.
+    // Legacy shapes: top-level `cname` string, `records.value` string, or
+    // `records` as an array of { type, value } entries. Accept string or
+    // string-array values everywhere so the live API shape cannot fail the
+    // DNS requirement silently.
     const recommended = Array.isArray(data.recommendedCNAME) ? (data.recommendedCNAME as unknown[]).map(record) : [];
-    const entry = recommended.find((candidate) => candidate.rank === 1) ?? recommended[0];
-    const values = record(entry).value;
-    const target = (Array.isArray(values) ? values.find((candidate): candidate is string => typeof candidate === 'string') : null)
-      ?? text(data.cname)
-      ?? text(record(data.records).value);
-    if (!target) throw new ProviderRequestError({ code: 'LP-VERCEL-DNS-REQUIREMENT-MISSING', class: 'MALFORMED_PROVIDER_RESPONSE', provider: 'vercel', message: 'Vercel did not return a required DNS target.', retryable: false });
+    const entry = recommended.find((candidate) => candidate.rank === 1) ?? recommended[0] ?? {};
+    const entryValues = entry.value;
+    const entryTarget = Array.isArray(entryValues) ? entryValues.find((candidate): candidate is string => typeof candidate === 'string') : typeof entryValues === 'string' ? entryValues : null;
+    const recordsList = Array.isArray(data.records) ? (data.records as unknown[]).map(record) : [];
+    const preferredRecord = recordsList.find((candidate) => candidate.type === 'CNAME' || candidate.type === 'A') ?? recordsList[0];
+    const recordsTarget = (() => {
+      const value = preferredRecord?.value;
+      if (typeof value === 'string') return value;
+      if (Array.isArray(value)) return value.find((candidate): candidate is string => typeof candidate === 'string') ?? null;
+      return null;
+    })();
+    const recordsObjectValue = (!Array.isArray(data.records) && data.records !== null && typeof data.records === 'object') ? (data.records as Record<string, unknown>).value : null;
+    const recordsObjectTarget = typeof recordsObjectValue === 'string' ? recordsObjectValue : null;
+    const target = entryTarget ?? text(data.cname) ?? recordsTarget ?? recordsObjectTarget;
+    if (!target) throw new ProviderRequestError({ code: 'LP-VERCEL-DNS-REQUIREMENT-MISSING', class: 'MALFORMED_PROVIDER_RESPONSE', provider: 'vercel', message: 'Vercel did not return a required DNS target.', retryable: false, safeDetails: { recommendedCNAME: typeof data.recommendedCNAME, records: Array.isArray(data.records) ? `array[${data.records.length}]` : typeof data.records, cname: typeof data.cname } });
     // Cloudflare proxying intent is propagated from the domain spec:
     // proxied:true is only requested for acknowledged proxied mode (PRD-DNS-005);
     // anything else maps to an explicit DNS-only record. The apply pipeline
