@@ -448,7 +448,7 @@ async function buildPlans(applications: readonly DesiredApplication[], sha: stri
     if (root === 'missing') throw new CliFailure('LP-GITHUB-ROOT-MISSING', `Root directory '${application.vercel.project.rootDirectory}' does not exist in ${application.repository.name}@${application.repository.deploymentRef}.`);
     const capabilities = await adapters.vercel.capabilities();
     const project = await adapters.vercel.observeProject({ projectId: application.metadata.id }, context);
-    const deployment = await adapters.vercel.findDeploymentByCommit(application.metadata.id, sha, context);
+    const deployment = project === null ? null : await adapters.vercel.findDeploymentByCommit(application.metadata.id, sha, context);
     const observed = observedFrom(application, project, deployment);
     plans.push(await buildPlan({ desired: application, observed, capabilities, sourceCommit: sha, desiredGeneration: 1 }));
     graphs.push(buildResourceGraph(application, observed));
