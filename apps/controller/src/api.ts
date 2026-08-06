@@ -73,6 +73,13 @@ async function readJsonObject(context: Context<AppEnv>): Promise<Record<string, 
   }
 }
 
+function repositoryIdentityField(body: Record<string, unknown>, key: 'repositoryId' | 'ownerId'): string | undefined {
+  const value = body[key];
+  if (typeof value === 'string' && value.length > 0) return value;
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return String(value);
+  return undefined;
+}
+
 /**
  * Operator authorization for every dashboard read and mutation.
  *
@@ -349,9 +356,9 @@ async function enqueueOidcOperation(context: Context<AppEnv>, dependencies: Cont
   const binding: OidcBinding = { applicationId };
   const repository = stringField('repository');
   if (repository) binding.repository = repository;
-  const repositoryId = stringField('repositoryId');
+  const repositoryId = repositoryIdentityField(body, 'repositoryId');
   if (repositoryId) binding.repositoryId = repositoryId;
-  const ownerId = stringField('ownerId');
+  const ownerId = repositoryIdentityField(body, 'ownerId');
   if (ownerId) binding.ownerId = ownerId;
   const workflowRef = stringField('workflowRef');
   if (workflowRef) binding.workflowRef = workflowRef;
@@ -463,9 +470,9 @@ async function verifyReviewedPlan(context: Context<AppEnv>, dependencies: Contro
   const binding: OidcBinding = { applicationId };
   const repository = stringField('repository');
   if (repository) binding.repository = repository;
-  const repositoryId = stringField('repositoryId');
+  const repositoryId = repositoryIdentityField(body, 'repositoryId');
   if (repositoryId) binding.repositoryId = repositoryId;
-  const ownerId = stringField('ownerId');
+  const ownerId = repositoryIdentityField(body, 'ownerId');
   if (ownerId) binding.ownerId = ownerId;
   const workflowRef = stringField('workflowRef');
   if (workflowRef) binding.workflowRef = workflowRef;

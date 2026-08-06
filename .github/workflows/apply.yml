@@ -71,6 +71,8 @@ jobs:
           LAUNCHPAD_CLOUDFLARE_TOKEN: ${{ secrets.LAUNCHPAD_CLOUDFLARE_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          GITHUB_REPOSITORY_OWNER_ID: ${{ github.repository_owner_id }}
         run: |
           set -euo pipefail
           yarn platform validate --catalog catalog

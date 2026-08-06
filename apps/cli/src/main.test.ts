@@ -920,15 +920,18 @@ describe('controller token selection', () => {
     rmSync(plansDir, { recursive: true, force: true });
   });
 
-  it('apply authenticates with the workflow OIDC token, never the operator token', async () => {
+  it('apply authenticates with the workflow OIDC token and sends repository identity', async () => {
     const catalog = tempCatalog();
     const plansDir = tempDir('launchpad-cli-plans-');
     writeFileSync(join(plansDir, 'plans.json'), JSON.stringify([planFor()]));
     bothEnv();
+    vi.stubEnv('GITHUB_REPOSITORY_ID', '123');
+    vi.stubEnv('GITHUB_REPOSITORY_OWNER_ID', '456');
     stubFetch([
       oidcRoute(),
       { match: /\/v1\/applications\/invalid-root\/apply$/, response: (url, init) => {
         expect(bearerOf(init)).toBe(`Bearer ${oidcJwt}`);
+        expect(JSON.parse(String(init?.body))).toMatchObject({ repositoryId: 123, ownerId: 456 });
         return jsonResponse({ workflowId: 'wf-1', operationId: 'op-1', status: 'QUEUED' }, 202);
       } },
       { match: /\/v1\/operations\/op-1$/, response: () => jsonResponse({ operationId: 'op-1', workflowId: 'wf-1', applicationId: 'invalid-root', kind: 'apply', status: 'SUCCEEDED', errorCode: null, sourceCommit: sha, result: {} }) },
