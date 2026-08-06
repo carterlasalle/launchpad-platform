@@ -49,11 +49,17 @@ yarn build
 yarn acceptance:offline
 ```
 
-## 2. Replace the example catalog values
+## 2. Review the tokentest pilot catalog
 
-[`catalog/apps/fixture.yaml`](../../catalog/apps/fixture.yaml) and [`catalog/zones.yaml`](../../catalog/zones.yaml) contain example values. Before enabling any automatic workflow, change the fixture through a reviewed pull request so it references a dedicated, accessible repository, Vercel team/project namespace, Cloudflare zone, and non-production hostname.
+[`catalog/apps/fixture.yaml`](../../catalog/apps/fixture.yaml) is the first
+managed application declaration. It targets `carterlasalle/tokentest`, the
+Vercel project `tokentest`, the `tokentest.carterlasalle.com` hostname, and the
+`carterlasalle.com` Cloudflare zone. Review the repository, team, hostname, and
+DNS mode before any provider-backed operation.
 
-Do not enable the controller while `example/fixture`, `example.com`, or another placeholder target remains in desired state. Provider preflight is expected to fail closed against inaccessible examples.
+Do not enable the controller until the tokentest repository is accessible, the
+Vercel project can be created in the selected team, and the DNS hostname is
+available. Provider preflight must fail closed when any target is missing.
 
 Validate the resulting catalog:
 

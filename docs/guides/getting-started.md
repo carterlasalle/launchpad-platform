@@ -68,7 +68,7 @@ The offline matrix uses controlled adapters and fixtures. It verifies the full b
 
 ## 4. Inspect the catalog
 
-The repository includes one comprehensive fixture application at [`catalog/apps/fixture.yaml`](../../catalog/apps/fixture.yaml), shared defaults, environment strategies, and a zone registry.
+The repository includes the first managed `tokentest` application at [`catalog/apps/fixture.yaml`](../../catalog/apps/fixture.yaml), shared defaults, environment strategies, and the `carterlasalle.com` zone registry.
 
 Validate human-readable output:
 
@@ -85,12 +85,8 @@ yarn platform validate --catalog catalog --format json
 Render the provider-neutral resource graph without making provider calls:
 
 ```bash
-yarn platform graph --catalog catalog --app fixture-app --output artifacts/graph
+yarn platform graph --catalog catalog --app tokentest --output artifacts/graph
 ```
-
-This writes JSON and Graphviz DOT artifacts under the git-ignored `artifacts/` directory.
-
-The fixture deliberately uses example repository and domain values. Replace them with disposable resources before any credential-backed preflight or plan.
 
 ## 5. Initialize local D1
 

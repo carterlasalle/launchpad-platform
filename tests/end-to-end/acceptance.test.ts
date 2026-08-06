@@ -412,7 +412,7 @@ it('CAT-VALID: a valid manifest loads cleanly with a deterministic canonical doc
     const second = loadCatalog([{ path: 'catalog/apps/fixture.yaml', content }]);
     expect(first.issues).toEqual([]);
     expect(first.applications).toHaveLength(1);
-    expect(first.applications[0]?.metadata.id).toBe('fixture-app');
+    expect(first.applications[0]?.metadata.id).toBe('tokentest');
     expect(first.canonical).toBe(second.canonical);
     return { observed: `loaded ${first.applications.length} application(s), canonical deterministic`, evidence: { canonical: first.canonical.slice(0, 16) } };
   });
@@ -498,7 +498,7 @@ it('CAT-PLAINTEXT-SECRET: plaintext sensitive secret values are rejected', async
 it('CAT-LIFECYCLE-TRANSITION: invalid lifecycle transitions fail with manifest context', async () => {
   await scenario('CAT-LIFECYCLE-TRANSITION', async () => {
     const content = readFileSync('catalog/apps/fixture.yaml', 'utf8');
-    const result = loadCatalog([{ path: 'catalog/apps/fixture.yaml', content }], { previousLifecycle: { 'fixture-app': 'decommissioning' } });
+    const result = loadCatalog([{ path: 'catalog/apps/fixture.yaml', content }], { previousLifecycle: { tokentest: 'decommissioning' } });
     const issue = result.issues.find((candidate) => candidate.code === 'LP-LIFECYCLE-RECOVERY');
     expect(issue).toBeDefined();
     expect(issue?.path).toBe('lifecycle.state');

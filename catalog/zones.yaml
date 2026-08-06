@@ -3,4 +3,4 @@
 # manifest must reference a zone listed here.
 apiVersion: launchpad.dev/v1
 zones:
-  - example.com
+  - carterlasalle.com

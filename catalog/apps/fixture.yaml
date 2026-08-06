@@ -1,22 +1,22 @@
 apiVersion: launchpad.dev/v1
 kind: Application
 metadata:
-  id: fixture-app
-  displayName: Fixture App
-  description: Disposable local Launchpad fixture
+  id: tokentest
+  displayName: Token Test
+  description: Personal token calculator managed by Launchpad
   owners:
-    - "@platform"
+    - "@CarterLaSalle"
   labels:
     team: platform
     criticality: low
   annotations: {}
 repository:
   provider: github
-  name: example/fixture
+  name: carterlasalle/tokentest
   productionBranch: main
   deploymentRef: main
   access:
-    requirePrivateAccessVerification: true
+    requirePrivateAccessVerification: false
     requireVercelGitAccess: true
   onboarding:
     managedWorkflow: true
@@ -25,8 +25,8 @@ repository:
 vercel:
   scope: {}
   project:
-    name: fixture-app
-    framework: nextjs
+    name: tokentest
+    framework: null
     rootDirectory: .
     nodeVersion: "24.x"
     build:
@@ -61,7 +61,7 @@ environments:
       onPrClose: true
       retentionHours: 24
     health:
-      path: /api/health
+      path: /
       method: GET
       expectedStatus: [200]
       timeoutSeconds: 10
@@ -70,7 +70,7 @@ environments:
   production:
     enabled: true
     health:
-      path: /api/health
+      path: /
       method: GET
       expectedStatus: [200]
       timeoutSeconds: 10
@@ -85,11 +85,11 @@ environments:
       onFailedHealthCheck: true
       previousKnownGood: true
 domains:
-  - hostname: fixture.example.com
+  - hostname: tokentest.carterlasalle.com
     environment: production
     canonical: true
     cloudflare:
-      zoneRef: config://cloudflare/example.com
+      zoneRef: config://cloudflare/carterlasalle.com
       mode: dns-only
       ttl: auto
     redirects: []
