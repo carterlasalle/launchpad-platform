@@ -10,6 +10,7 @@ metadata:
 # Manifest source path is now controller-bound.
 # Final activation attempt uses normalized source paths.
 # Hash normalization is now deployed before this retry.
+# Provider fetch causes are now instrumented.
   owners:
     - "@CarterLaSalle"
   labels:
