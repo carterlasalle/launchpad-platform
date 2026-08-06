@@ -27,7 +27,7 @@ runs:
           echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
           exit 1
         fi
-        actual="$(gh api "repos/${{ inputs.repository }}/pulls/${{ inputs.pull_number }}" --jq -r '.head.sha' 2>/dev/null || true)"
+        actual="$(gh api "repos/${{ inputs.repository }}/pulls/${{ inputs.pull_number }}" --jq '.head.sha')"
         if [[ "${actual:-}" != "$expected" ]]; then
           echo "::error::Superseded run: the PR head is now '${actual:-unknown}' but this run is bound to '$expected'. A newer run validates the current head; this run must not report a result."
           exit 1

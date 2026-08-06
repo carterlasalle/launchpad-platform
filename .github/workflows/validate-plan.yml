@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     outputs:
       relevant: ${{ steps.scope.outputs.relevant }}
     steps:
@@ -32,6 +33,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           EXPECTED_SHA: ${{ env.HEAD_SHA }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
@@ -40,7 +42,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq '.head.sha')"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
@@ -74,6 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -84,6 +87,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           EXPECTED_SHA: ${{ env.HEAD_SHA }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
@@ -92,7 +96,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq '.head.sha')"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
@@ -111,6 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -121,6 +126,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           EXPECTED_SHA: ${{ env.HEAD_SHA }}
           PULL_REQUEST: ${{ github.event.pull_request.number }}
         run: |
@@ -129,7 +135,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha' 2>/dev/null || true)"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq '.head.sha')"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
@@ -147,6 +153,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout trusted platform implementation
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -193,6 +200,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout trusted platform implementation
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -246,6 +254,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
       id-token: write
     env:
       LAUNCHPAD_CONTROLLER_URL: ${{ vars.LAUNCHPAD_CONTROLLER_URL }}
@@ -303,6 +312,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout trusted platform implementation
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
