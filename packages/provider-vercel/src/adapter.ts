@@ -6,6 +6,17 @@ import { VercelClient } from './client.js';
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+function canonicalProjectConfiguration(value: unknown): Record<string, unknown> {
+  const project = { ...record(value) };
+  if (!('autoAssignProductionDomains' in project) && 'autoAssignCustomDomains' in project) project.autoAssignProductionDomains = project.autoAssignCustomDomains;
+  delete project.autoAssignCustomDomains;
+  return project;
+}
+
+function providerProjectSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(settings).map(([key, value]) => [key === 'autoAssignProductionDomains' ? 'autoAssignCustomDomains' : key, value]));
+}
+
 
 function text(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -248,7 +259,7 @@ export class VercelAdapter implements ProjectProvider {
   async observeProject(identity: ProjectIdentity, ctx: ProviderContext): Promise<ObservedResource | null> {
     try {
       const data = await this.client.request<unknown>(this.client.withTeam(`/v9/projects/${encodeURIComponent(identity.projectId)}`), { correlationId: ctx.correlationId });
-      const project = record(data);
+      const project = canonicalProjectConfiguration(data);
       return { provider: 'vercel', resourceType: 'vercel.project', resourceKey: identity.projectId, providerResourceId: text(project.id) ?? identity.projectId, configuration: project, ownershipFingerprint: text(project.id), observedAt: new Date().toISOString() };
     } catch (error) {
       if (error instanceof ProviderRequestError && error.class === 'NOT_FOUND') return null;
@@ -258,11 +269,20 @@ export class VercelAdapter implements ProjectProvider {
 
   async ensureProject(spec: ProjectSpec, ctx: ProviderContext): Promise<MutationResult<ObservedResource>> {
     const before = await this.observeProject({ projectId: spec.id, teamId: spec.teamId }, ctx);
-    const baseBody = { name: spec.name, framework: spec.framework, rootDirectory: spec.rootDirectory, installCommand: spec.build.installCommand, buildCommand: spec.build.buildCommand, outputDirectory: spec.build.outputDirectory, ...spec.settings };
+    const baseBody = {
+      ...(before ? {} : { name: spec.name }),
+      framework: spec.framework,
+      ...(spec.rootDirectory === '.' ? {} : { rootDirectory: spec.rootDirectory }),
+      installCommand: spec.build.installCommand,
+      buildCommand: spec.build.buildCommand,
+      outputDirectory: spec.build.outputDirectory,
+      ...providerProjectSettings(spec.settings),
+    };
     // Vercel's create contract does not accept nodeVersion; the PATCH path does.
     const body = before ? { ...baseBody, nodeVersion: spec.nodeVersion } : baseBody;
     const afterResponse = before ? await this.client.request<unknown>(this.client.withTeam(`/v9/projects/${encodeURIComponent(before.providerResourceId)}`), { method: 'PATCH', body: JSON.stringify(body), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-project', spec.id, canonicalJson(body)) }) : await this.client.request<unknown>(this.client.withTeam('/v10/projects'), { method: 'POST', body: JSON.stringify(body), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-project', spec.id, canonicalJson(body)) });
-    const observed = { provider: 'vercel' as const, resourceType: 'vercel.project', resourceKey: spec.id, providerResourceId: text(record(afterResponse).id) ?? before?.providerResourceId ?? spec.id, configuration: record(afterResponse), ownershipFingerprint: text(record(afterResponse).id) ?? spec.id, observedAt: new Date().toISOString() };
+    const configuration = canonicalProjectConfiguration(afterResponse);
+    const observed = { provider: 'vercel' as const, resourceType: 'vercel.project', resourceKey: spec.id, providerResourceId: text(configuration.id) ?? before?.providerResourceId ?? spec.id, configuration, ownershipFingerprint: text(configuration.id) ?? spec.id, observedAt: new Date().toISOString() };
     const changed = before === null || canonicalJson(before.configuration) !== canonicalJson(observed.configuration);
     return { resource: observed, changed, operationId: idempotencyKey('vercel-project-operation', spec.id, canonicalJson(body)) };
   }
