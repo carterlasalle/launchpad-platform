@@ -535,10 +535,14 @@ export class VercelAdapter implements ProjectProvider {
     while (Date.now() - started <= request.timeoutMs) {
       const response = await this.client.request<unknown>(this.client.withTeam(`/v13/deployments/${encodeURIComponent(request.deploymentId)}`), { correlationId: ctx.correlationId });
       const data = record(response);
+      const meta = record(data.meta);
       // A staged production candidate is created with target 'staging' (see
       // createDeployment) but remains a production-bound deployment: its
-      // Launchpad environment is 'production', never 'preview'.
-      last = mapDeployment(response, { projectId: text(data.projectId) ?? '', environment: data.target === 'production' || data.target === 'staging' ? 'production' : 'preview', repository: text(record(data.meta).repo) ?? '', commitSha: text(data.meta && record(data.meta).gitCommitSha) ?? '', desiredGeneration: Number(record(data.meta).desiredGeneration ?? 0) });
+      // Launchpad environment is 'production', never 'preview'. Vercel's
+      // deployment meta reports the git repository under either `gitRepo` or
+      // `repo` and the commit under `gitCommitSha`/`githubCommitSha`/`commitSha`;
+      // accept every shape so the promotion gates compare like-for-like.
+      last = mapDeployment(response, { projectId: text(data.projectId) ?? '', environment: data.target === 'production' || data.target === 'staging' ? 'production' : 'preview', repository: text(meta.gitRepo) ?? text(meta.repo) ?? '', commitSha: text(meta.gitCommitSha) ?? text(meta.githubCommitSha) ?? text(meta.commitSha) ?? '', desiredGeneration: Number(meta.desiredGeneration ?? 0) });
       if (['READY', 'ERROR', 'CANCELED', 'STAGED', 'CURRENT'].includes(last.state)) return last;
       await new Promise<void>((resolve) => setTimeout(resolve, request.pollMs));
     }
