@@ -7,7 +7,7 @@ import { loadCatalog, parseZoneRegistry, ZONE_REGISTRY_FILE } from '@launchpad/c
 import { LaunchpadError, planReviewFingerprint, type HealthCheckRecord, type PlatformPlan } from '@launchpad/core';
 import { ALERT_TYPES, canonicalJson, metricWorkflowOf, sha256Hex, stableId, type AlertType as AlertIncidentType, type LaunchpadLogger, type MetricsRegistry } from '@launchpad/shared';
 import { assertTombstoneReuseAllowed } from '@launchpad/workflows';
-import { assertOidcBinding, bindOidcBody, extractOidcToken, OidcBindingError, verifyGithubOidc, type GithubOidcClaims, type OidcBinding } from './auth/oidc.js';
+import { assertOidcBinding, bindOidcBody, extractOidcToken, OidcBindingError, pullRequestNumberFromClaims, verifyGithubOidc, type GithubOidcClaims, type OidcBinding } from './auth/oidc.js';
 import { verifyWebhookSignature } from './auth/webhooks.js';
 import { dashboardAssetBindingResponse, dashboardAssetResponse, type DashboardAsset } from './dashboard.js';
 import type { ControllerEnv, OidcConfig, WorkflowBinding } from './env.js';
@@ -1903,7 +1903,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     }
     if (actor !== undefined && claims.actor !== actor) return errorResponse(context, 'LP-OIDC-OPERATION-NOT-BOUND', 'The OIDC token is not bound to this operation.', 403, false);
     if (eventName === 'pull_request') {
-      if (claims.event_name !== 'pull_request' || prNumber === undefined || claims.pull_request_number !== String(prNumber)) return errorResponse(context, 'LP-OIDC-OPERATION-NOT-BOUND', 'The OIDC token is not bound to this operation.', 403, false);
+      if (claims.event_name !== 'pull_request' || prNumber === undefined || pullRequestNumberFromClaims(claims) !== String(prNumber)) return errorResponse(context, 'LP-OIDC-OPERATION-NOT-BOUND', 'The OIDC token is not bound to this operation.', 403, false);
     } else {
       const sourceCommit = details.sourceCommit;
       if (typeof sourceCommit !== 'string' || claims.sha !== sourceCommit) return errorResponse(context, 'LP-OIDC-OPERATION-NOT-BOUND', 'The OIDC token is not bound to this operation.', 403, false);
