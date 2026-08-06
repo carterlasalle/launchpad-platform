@@ -143,7 +143,7 @@ function createApplyPhaseHandlers(env: ControllerEnv['Bindings'], provider: Comp
         if (!env.CONTROL_REPOSITORY) throw new Error('LP-CONTROL-REPOSITORY-CONFIG-MISSING');
         ctx.source = github;
         ctx.controlRepository = env.CONTROL_REPOSITORY;
-        ctx.manifestPath = manifestPathFor(env, base.applicationId);
+        ctx.manifestPath = typeof payload.manifestPath === 'string' ? payload.manifestPath : (await store.getApplication(base.applicationId))?.sourcePath ?? manifestPathFor(env, base.applicationId);
         break;
       case 'observe-live-state':
         ctx.desired = requiredPayload<DesiredApplication>(payload, 'desired');
@@ -267,7 +267,7 @@ function createReconcilePhaseHandlers(env: ControllerEnv['Bindings'], provider: 
       runtime: { store, provider },
       source: github,
       controlRepository: env.CONTROL_REPOSITORY,
-      manifestPath: manifestPathFor(env, base.applicationId),
+      manifestPath: typeof payload.manifestPath === 'string' ? payload.manifestPath : (await store.getApplication(base.applicationId))?.sourcePath ?? manifestPathFor(env, base.applicationId),
       sourceCommit: base.sourceCommit,
     };
     switch (phase) {
@@ -504,7 +504,7 @@ export function createWorkflowHandlers(env: ControllerEnv['Bindings'], repositor
         idempotencyKey: requiredPayload<string>(payload, 'idempotencyKey'),
         workflowId: typeof payload.workflowId === 'string' && payload.workflowId.length > 0 ? payload.workflowId : crypto.randomUUID(),
         controlRepository: env.CONTROL_REPOSITORY,
-        manifestPath: manifestPathFor(env, applicationId),
+        manifestPath: (await store.getApplication(applicationId))?.sourcePath ?? manifestPathFor(env, applicationId),
         dependentCatalog: await loadRegisteredCatalog({ store, source: github, controlRepository: env.CONTROL_REPOSITORY, catalogRoot: env.CONTROL_CATALOG_ROOT ?? 'catalog/apps', context }),
         provider,
         source: github,
@@ -529,7 +529,7 @@ export function createWorkflowHandlers(env: ControllerEnv['Bindings'], repositor
         idempotencyKey: requiredPayload<string>(payload, 'idempotencyKey'),
         workflowId: requiredPayload<string>(payload, 'workflowId'),
         controlRepository: env.CONTROL_REPOSITORY,
-        manifestPath: manifestPathFor(env, applicationId),
+        manifestPath: (await store.getApplication(applicationId))?.sourcePath ?? manifestPathFor(env, applicationId),
         dependentCatalog: await loadRegisteredCatalog({ store, source: github, controlRepository: env.CONTROL_REPOSITORY, catalogRoot: env.CONTROL_CATALOG_ROOT ?? 'catalog/apps', context }),
         provider,
         source: github,
@@ -543,7 +543,7 @@ export function createWorkflowHandlers(env: ControllerEnv['Bindings'], repositor
       if (!env.CONTROL_REPOSITORY) throw new HandlerFailure('LP-CONTROL-REPOSITORY-CONFIG-MISSING', 'The control repository is not configured.');
       if (!store) throw new Error('LP-STORE-CONFIG-MISSING');
       const context = contextFor(payload, applicationId);
-      const manifestPath = manifestPathFor(env, applicationId);
+      const manifestPath = (await store.getApplication(applicationId))?.sourcePath ?? manifestPathFor(env, applicationId);
       const content = await github.readFile(env.CONTROL_REPOSITORY, 'main', manifestPath, context);
       const catalog = loadCatalog([{ path: manifestPath, content }], { zones: await readZoneRegistry(github, env, context) });
       if (catalog.issues.length > 0) throw new HandlerFailure('LP-CONTROL-MANIFEST-INVALID', `The control manifest for ${applicationId} failed validation (${catalog.issues[0]?.code ?? 'unknown'}).`);
@@ -568,8 +568,9 @@ export function createWorkflowHandlers(env: ControllerEnv['Bindings'], repositor
     'decommission/reactivate': async (payload) => {
       const applicationId = requiredPayload<string>(payload, 'applicationId');
       if (!env.CONTROL_REPOSITORY) throw new HandlerFailure('LP-CONTROL-REPOSITORY-CONFIG-MISSING', 'The control repository is not configured.');
+      if (!store) throw new Error('LP-STORE-CONFIG-MISSING');
       const context = contextFor(payload, applicationId);
-      const manifestPath = manifestPathFor(env, applicationId);
+      const manifestPath = (await store.getApplication(applicationId))?.sourcePath ?? manifestPathFor(env, applicationId);
       const content = await github.readFile(env.CONTROL_REPOSITORY, 'main', manifestPath, context);
       const catalog = loadCatalog([{ path: manifestPath, content }], { zones: await readZoneRegistry(github, env, context) });
       if (catalog.issues.length > 0) throw new HandlerFailure('LP-CONTROL-MANIFEST-INVALID', `The control manifest for ${applicationId} failed validation (${catalog.issues[0]?.code ?? 'unknown'}).`);

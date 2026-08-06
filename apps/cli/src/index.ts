@@ -676,6 +676,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
         desiredGeneration: plan.desiredGeneration,
         planFingerprint: plan.fingerprint,
         desiredHash: await desiredStateHash(previewApplication),
+        manifestPath: previewApplication.sourcePath ?? null,
         plan,
         repository: identity.repository,
         repositoryId: identity.repositoryId,
@@ -825,7 +826,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       if (applyPlan.result !== 'READY') throw new CliFailure('LP-PLAN-NOT-READY', `Plan for '${applyApplication.metadata.id}' is ${applyPlan.result}; apply requires a READY plan.`);
       if (applyPlan.sourceCommit !== sha) throw new CliFailure('LP-PLAN-COMMIT-MISMATCH', `Plan for '${applyApplication.metadata.id}' is bound to ${applyPlan.sourceCommit}; expected ${sha}.`);
       const idempotencyKey = `apply:${applyApplication.metadata.id}:${sha}:${applyPlan.desiredGeneration}`;
-      const body = { ...workflowPayload(args.flags, token, applyApplication.metadata.id, sha, applyPlan, idempotencyKey), plan: applyPlan, desired: applyApplication };
+      const body = { ...workflowPayload(args.flags, token, applyApplication.metadata.id, sha, applyPlan, idempotencyKey), manifestPath: applyApplication.sourcePath ?? null, plan: applyPlan, desired: applyApplication };
       const response = await controllerRequest(controller, `/v1/applications/${encodeURIComponent(applyApplication.metadata.id)}/apply`, token, body);
       if (response.status !== 202) throw new CliFailure('LP-APPLY-START-REJECTED', `Apply start for '${applyApplication.metadata.id}' was rejected with HTTP ${response.status}: ${redactText(response.text)}`);
       let accepted: { workflowId?: unknown; operationId?: unknown; status?: unknown };

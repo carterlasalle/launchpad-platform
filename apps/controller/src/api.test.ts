@@ -229,6 +229,15 @@ describe('OIDC authentication', () => {
     expect(response.status).toBe(200);
   });
 
+  it('records the declared catalog manifest path for later apply loads', async () => {
+    const harness = createHarness();
+    const token = await signToken(prClaims());
+    fetchHandler = () => new Response(JSON.stringify({ number: 42, head: { sha: HEAD_SHA } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const response = await request(harness, '/v1/plans/verify', { method: 'POST', body: JSON.stringify(reviewBody({ manifestPath: 'catalog/apps/fixture.yaml' })), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(response.status).toBe(200);
+    await expect(harness.store.getApplication('app-demo')).resolves.toMatchObject({ sourcePath: 'catalog/apps/fixture.yaml' });
+  });
+
   it('returns 503 when OIDC is not configured', async () => {
     const harness = createHarness({ oidc: undefined });
     const response = await request(harness, '/v1/plans/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json' } });
@@ -403,12 +412,12 @@ describe('durable enqueue contract', () => {
   it('dispatches catalog previews carrying a loaded desired application to the shadow preview machine', async () => {
     const harness = createHarness();
     const token = await signToken(baseClaims());
-    const desired = { metadata: { id: 'app-demo' }, vercel: { project: {} }, domains: [] };
+    const desired = { metadata: { id: 'app-demo' }, sourcePath: 'catalog/apps/fixture.yaml', vercel: { project: {} }, domains: [] };
     const response = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody({ desired })), headers: { 'content-type': 'application/json', ...bearer(token) } });
     expect(response.status).toBe(202);
     const body = await response.json() as { workflowId: string };
     expect(body.workflowId).toMatch(/^lp-preview-[0-9a-f]{16}$/);
-    expect(harness.workflowCalls[0]?.params).toMatchObject({ version: 1, kind: 'preview', applicationId: 'app-demo', sourceCommit: PUSH_SHA, desired });
+    expect(harness.workflowCalls[0]?.params).toMatchObject({ version: 1, kind: 'preview', applicationId: 'app-demo', sourceCommit: PUSH_SHA, manifestPath: 'catalog/apps/fixture.yaml', desired });
     const runs = await harness.store.listWorkflowRuns('app-demo');
     expect(runs[0]).toMatchObject({ workflowType: 'preview' });
   });

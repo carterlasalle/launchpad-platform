@@ -224,19 +224,37 @@ function mapEnqueueError(context: Context<AppEnv>, error: unknown): Response {
  * row is inert (UNKNOWN state, no provider access) and tombstoned/deleted
  * applications fail closed at the store level.
  */
-export async function ensureApplicationRegistered(store: LaunchpadStore, applicationId: string, catalogRoot: string | undefined): Promise<void> {
+export async function ensureApplicationRegistered(store: LaunchpadStore, applicationId: string, catalogRoot: string | undefined, sourcePath?: string): Promise<void> {
   const existing = await store.getApplication(applicationId);
-  if (existing) return;
+  if (existing) {
+    if (sourcePath && sourcePath !== existing.sourcePath) await store.upsertApplication({ ...existing, sourcePath });
+    return;
+  }
   await store.upsertApplication({
     id: applicationId,
     displayName: applicationId,
-    sourcePath: `${(catalogRoot ?? 'catalog/apps').replace(/\/$/, '')}/${applicationId}.yaml`,
+    sourcePath: sourcePath ?? `${(catalogRoot ?? 'catalog/apps').replace(/\/$/, '')}/${applicationId}.yaml`,
     desiredGeneration: 0,
     desiredHash: '',
     syncStatus: 'UNKNOWN',
     healthStatus: 'UNKNOWN',
     lifecycleState: 'active',
   });
+}
+
+function declaredManifestPath(body: Record<string, unknown>): string | null {
+  if (typeof body.manifestPath === 'string' && body.manifestPath.length > 0) return body.manifestPath;
+  const desired = body.desired;
+  if (desired !== null && typeof desired === 'object' && !Array.isArray(desired)) {
+    const sourcePath = (desired as Record<string, unknown>).sourcePath;
+    if (typeof sourcePath === 'string' && sourcePath.length > 0) return sourcePath;
+  }
+  return null;
+}
+
+function isCatalogManifestPath(path: string, catalogRoot: string | undefined): boolean {
+  const root = (catalogRoot ?? 'catalog/apps').replace(/\/$/, '');
+  return path.startsWith(`${root}/`) && !path.includes('..') && /\.ya?ml$/.test(path);
 }
 
 /** Server-side verification that the submitted sourceCommit is the PR head, using the controller's own GitHub credential. */
@@ -316,7 +334,7 @@ async function enqueueDurableOperation(context: Context<AppEnv>, dependencies: C
   const payloadHash = await workflowPayloadHash(hashInput);
   let run: WorkflowRunRecord;
   try {
-    await ensureApplicationRegistered(store, input.applicationId, dependencies.controlCatalogRoot);
+    await ensureApplicationRegistered(store, input.applicationId, dependencies.controlCatalogRoot, typeof input.params.manifestPath === 'string' ? input.params.manifestPath : undefined);
     run = await store.startWorkflowRun({ applicationId: input.applicationId, workflowType: input.kind, idempotencyKey: input.idempotencyKey, payloadHash });
     await store.registerIdempotentRequest({ idempotencyKey: input.idempotencyKey, operationId: run.id, payloadHash });
   } catch (error) {
@@ -353,6 +371,8 @@ async function enqueueOidcOperation(context: Context<AppEnv>, dependencies: Cont
     return errorResponse(context, 'LP-OIDC-CLAIM-MISMATCH-APPLICATIONID', 'The route application does not match the request body applicationId.', 401, false);
   }
   const stringField = (key: string): string | undefined => (typeof body[key] === 'string' && (body[key] as string).length > 0 ? (body[key] as string) : undefined);
+  const manifestPath = declaredManifestPath(body);
+  if (manifestPath !== null && !isCatalogManifestPath(manifestPath, dependencies.controlCatalogRoot)) return errorResponse(context, 'LP-MANIFEST-PATH-INVALID', 'The declared manifest path must remain inside the configured catalog root.', 400, false);
   const binding: OidcBinding = { applicationId };
   const repository = stringField('repository');
   if (repository) binding.repository = repository;
@@ -413,6 +433,7 @@ async function enqueueOidcOperation(context: Context<AppEnv>, dependencies: Cont
     ...(planFingerprint ? { planFingerprint } : {}),
     ...(typeof body.correlationId === 'string' ? { correlationId: body.correlationId } : {}),
     ...(options.kind === 'preview' && typeof body.desired === 'object' && body.desired !== null ? { desired: body.desired } : {}),
+    ...(manifestPath !== null ? { manifestPath } : {}),
     ...(typeof body.pullRequestNumber === 'number' ? { pullRequestNumber: body.pullRequestNumber } : {}),
     ...(typeof body.revision === 'number' ? { revision: body.revision } : {}),
   };
@@ -437,6 +458,8 @@ async function verifyReviewedPlan(context: Context<AppEnv>, dependencies: Contro
   const store = dependencies.store;
   if (!store) return errorResponse(context, 'LP-PERSISTENCE-CONFIG-MISSING', 'Durable persistence is not configured; refusing to record a plan review.', 503, false);
   const stringField = (key: string): string | undefined => (typeof body[key] === 'string' && (body[key] as string).length > 0 ? (body[key] as string) : undefined);
+  const manifestPath = declaredManifestPath(body);
+  if (manifestPath !== null && !isCatalogManifestPath(manifestPath, dependencies.controlCatalogRoot)) return errorResponse(context, 'LP-MANIFEST-PATH-INVALID', 'The declared manifest path must remain inside the configured catalog root.', 400, false);
   const applicationId = stringField('applicationId');
   if (!applicationId) return errorResponse(context, 'LP-OIDC-BINDING-MISSING-APPLICATIONID', 'The request body must declare a non-empty applicationId.', 400, false);
   const sourceCommit = stringField('sourceCommit');
@@ -503,7 +526,7 @@ async function verifyReviewedPlan(context: Context<AppEnv>, dependencies: Contro
   const reviewFingerprint = await planReviewFingerprint(plan as unknown as PlatformPlan);
   const actor = binding.actor ?? claims.actor ?? 'workflow';
   try {
-    await ensureApplicationRegistered(store, applicationId, dependencies.controlCatalogRoot);
+    await ensureApplicationRegistered(store, applicationId, dependencies.controlCatalogRoot, manifestPath ?? undefined);
     const { inserted, attestation } = await store.savePlanReviewAttestation({
       applicationId,
       prHeadSourceCommit: sourceCommit,
