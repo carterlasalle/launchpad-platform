@@ -134,7 +134,7 @@ if (!ENABLED) {
       id: projectId,
       name: projectId,
       teamId,
-      framework: 'nextjs',
+      framework: null,
       rootDirectory: '.',
       nodeVersion: '24.x',
       build: { installCommand: 'yarn install --immutable', buildCommand: 'yarn build', outputDirectory: null },
