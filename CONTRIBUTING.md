@@ -42,7 +42,7 @@ See the [getting-started guide](docs/guides/getting-started.md) for local D1 and
 4. Use an imperative subject with a conventional prefix used by this repository: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, or `refactor:`.
 5. Push the branch and open a pull request. Do not push directly to `main`.
 
-The repository is squash-merge-only. Pull requests require current status checks, resolved review threads, an approval of the latest reviewable push, and CODEOWNER review for protected paths.
+The repository is squash-merge-only. Pull requests require current status checks and resolved review threads. This repository uses solo-owner mode: direct pushes remain blocked, but GitHub does not require an independent approval that the sole maintainer cannot provide.
 
 Required contexts are published for every pull request so GitHub never leaves
 a path-filtered check pending. Their work is scoped: documentation-only

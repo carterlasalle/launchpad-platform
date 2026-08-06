@@ -23,8 +23,8 @@ flowchart LR
     B --> C[Schema and catalog validation]
     C --> D[Provider preflight and deterministic plan]
     D --> E[Isolated Vercel preview and health gate]
-    E --> F[CODEOWNER review]
-    F --> G[Merge to protected main]
+  E --> F[Pull request checks]
+  F --> G[Merge to protected main]
     G --> H[Durable Cloudflare Workflow]
     H --> I[Vercel project and deployment]
     H --> J[Cloudflare DNS]
@@ -91,7 +91,7 @@ For environment setup, provider preflight, and local command examples, follow th
 3. Validate locally with `yarn platform validate --catalog catalog`.
 4. Open a pull request.
 5. Review the exact plan, downstream effects, preview URL, build state, and health result.
-6. Obtain the required CODEOWNER approval and merge.
+6. Pass the required checks and merge the pull request.
 7. Launchpad revalidates the merged state, applies through the controller, stages a production candidate, verifies it, and promotes the exact deployment.
 
 Start with [`catalog/apps/fixture.yaml`](catalog/apps/fixture.yaml) and the [application management guide](docs/guides/managing-applications.md). The schema contract is [`schema/app.schema.json`](schema/app.schema.json).
@@ -165,4 +165,4 @@ The complete sequence is in [Deploying Launchpad](docs/guides/deployment.md).
 
 ## Contributing
 
-This repository uses protected, squash-only pull requests with CODEOWNER approval and required checks. Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Run `yarn docs:check` when editing documentation and `yarn acceptance:offline` before proposing a release.
+This repository uses protected, squash-only pull requests with required checks. Solo-owner mode keeps direct pushes blocked without requiring a second reviewer account. Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. Run `yarn docs:check` when editing documentation and `yarn acceptance:offline` before proposing a release.

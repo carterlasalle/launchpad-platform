@@ -258,13 +258,13 @@ Dry-run the reviewed GitHub API payload locally:
 node scripts/apply-ruleset.mjs --dry-run
 ```
 
-Strict CODEOWNER review needs at least two eligible identities: GitHub does
-not count the pull-request author's own approval. For a private repository
-with one maintainer, invite a second write-capable reviewer (or team) and make
-that identity eligible through `.github/CODEOWNERS` before applying this
-ruleset. Applying the checked-in policy to a truly single-user repository
-would intentionally make normal merges impossible. Do not solve that lockout
-by weakening the reviewed 1.0 policy or adding a permanent bypass actor.
+This repository is configured for solo-owner mode. The ruleset still requires
+pull requests, current required checks, resolved review threads, squash merges,
+and blocks direct, force, deletion, and creation changes to `main`. It does not
+require a second reviewer or CODEOWNER approval because GitHub would otherwise
+make the sole maintainer unable to merge. A future team can raise
+`required_approving_review_count` and enable CODEOWNER review in the reviewed
+ruleset before adding automatic production operations.
 
 The next command changes repository permissions and merge policy. Confirm the exact repository and token immediately before running it:
 
@@ -282,7 +282,7 @@ Verify the live result with a read token:
 node scripts/verify-ruleset.mjs
 ```
 
-The active ruleset must protect `refs/heads/main`, have no bypass actors, require pull requests/CODEOWNER/latest-push approval/resolved threads, prevent creation/deletion/force-push bypass, and require these checks on every pull request:
+The active ruleset must protect `refs/heads/main`, have no bypass actors, require pull requests/resolved threads, prevent creation/deletion/force-push bypass, and require these checks on every pull request:
 
 ```text
 static / toolchain

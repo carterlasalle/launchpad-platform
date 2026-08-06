@@ -64,23 +64,23 @@ that cannot run fails the release; nothing is claimed from memory.
 - `node scripts/verify-ruleset.mjs` passes against the live GitHub API
   (token: `LAUNCHPAD_RULESET_TOKEN`, fine-grained, Administration: read):
   - Ruleset `launchpad-main` is `active` and covers `refs/heads/main`.
-  - No bypass actors; pull-request, review, CODEOWNER, stale-dismissal,
-    latest-push-approval, conversation-resolution, status-check, strict
-    up-to-date, no-force-push, no-deletion, and no-creation rules match
-    `.github/rulesets/main.json`.
-  - Required checks `static / toolchain`, `static / quality`,
-    `platform / summary`, and `dependency / review` are all required.
-    `platform / summary` aggregates schema, catalog, provider preflight,
-    plan, preview, and health for relevant platform changes.
-  - Squash-merge-only repository settings and `main` default branch verified.
+- No bypass actors; pull-request, stale-dismissal, conversation-resolution,
+  status-check, strict up-to-date, no-force-push, no-deletion, and no-creation
+  rules match `.github/rulesets/main.json`. Solo-owner mode intentionally sets
+  approval and CODEOWNER review requirements to zero so the sole maintainer can
+  merge after the required checks pass.
+- Required checks `static / toolchain`, `static / quality`,
+  `platform / summary`, and `dependency / review` are all required.
+  `platform / summary` aggregates schema, catalog, provider preflight, plan,
+  preview, and health for relevant platform changes.
+- Squash-merge-only repository settings and `main` default branch verified.
 - Unavailability or mismatch fails the release (deploy gate in
   `.github/workflows/deploy-control-plane.yml`).
 - Direct pushes to `main` are rejected (attempted with a test push;
   offline config-contract: `SEC-RULESET-CONFIG`, live attempt:
   `LIVE-DIRECT-PUSH` via `yarn acceptance:live`).
-- CODEOWNER approval is required for catalog, schema, workflow, controller,
-  policy, toolchain, ruleset, and runbook paths (`.github/CODEOWNERS`;
-  offline acceptance: `SEC-RULESET-CONFIG`).
+- CODEOWNERS remains an ownership map for sensitive paths, but solo-owner mode
+  does not require a separate CODEOWNER approval identity.
 
 ## Controller release artifact integrity
 

@@ -2182,9 +2182,9 @@ it('SEC-RULESET-CONFIG: the main ruleset config protects main and is wired as a 
     expect(types).toContain('deletion'); // direct pushes can never delete main
     expect(types).toContain('non_fast_forward'); // direct pushes are rejected (no force push / fast-forward)
     const review = ruleset.rules.find((rule) => rule.type === 'pull_request')?.parameters as Record<string, unknown> | undefined;
-    expect(review?.required_approving_review_count).toBeGreaterThanOrEqual(1);
-    expect(review?.require_code_owner_review).toBe(true); // missing CODEOWNER approval blocks merge
-    expect(review?.require_last_push_approval).toBe(true);
+    expect(review?.required_approving_review_count).toBe(0); // solo-owner policy; pull requests and required checks still gate main
+    expect(review?.require_code_owner_review).toBe(false);
+    expect(review?.require_last_push_approval).toBe(false);
     expect(review?.required_review_thread_resolution).toBe(true);
     expect(review?.dismiss_stale_reviews_on_push).toBe(true);
     expect(review?.allowed_merge_methods).toEqual(['squash']);
