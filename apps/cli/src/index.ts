@@ -796,7 +796,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
   const controller = requireController(args.flags);
 
   if (args.command === 'controller-smoke') {
-    const response = await fetch(`${controller.replace(/\/$/, '')}/healthz`);
+    const response = await fetch(`${controller.replace(/\/$/, '')}/healthz`, { headers: { 'user-agent': 'launchpad-controller-smoke' } });
     output.write(`${await response.text()}\n`);
     return response.ok ? 0 : 1;
   }

@@ -73,6 +73,19 @@ describe('argument parsing', () => {
   });
 });
 
+describe('controller smoke', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('identifies the smoke probe to the controller edge', async () => {
+    let requestInit: RequestInit | undefined;
+    stubFetch([{ match: /launchpad\.test\/healthz$/, response: (_url, init) => { requestInit = init; return jsonResponse({ status: 'ok' }); } }]);
+    const out = writer();
+
+    expect(await runCli(['controller-smoke', '--controller', 'https://launchpad.test'], out)).toBe(0);
+    expect((requestInit?.headers as Record<string, string>)['user-agent']).toBe('launchpad-controller-smoke');
+  });
+});
+
 describe('validate', () => {
   it('emits machine-readable JSON and fails closed on schema issues', async () => {
     const catalog = tempCatalog([{ name: 'broken.yaml', content: 'kind: Application\nmetadata:\n  id: broken\n' }]);
