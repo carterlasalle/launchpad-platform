@@ -26,6 +26,7 @@
     },
     {
       "type": "pull_request",
+      "$comment": "SOLO-OWNER MODE (intentional; do not flip without a reviewed policy change): the control repository has a single maintainer, so GitHub CODEOWNER approval is deliberately NOT enforced (required_approving_review_count=0, require_code_owner_review=false, require_last_push_approval=false). Compensating controls: no bypass actors including administrators, direct pushes banned (creation/deletion/non_fast_forward rules), stale reviews dismissed on push, required review-thread resolution, strict required status checks, and squash-only merges. Docs that still claim CODEOWNER approval (AGENTS.md, CODEOWNERS header, docs/guides/deployment.md, master plan 25/8.8) are drift to be aligned.",
       "parameters": {
         "required_approving_review_count": 0,
         "dismiss_stale_reviews_on_push": true,
@@ -42,6 +43,7 @@
         "required_status_checks": [
           { "context": "static / toolchain" },
           { "context": "static / quality" },
+          { "context": "acceptance / offline" },
           { "context": "platform / summary" },
           { "context": "dependency / review" }
         ]

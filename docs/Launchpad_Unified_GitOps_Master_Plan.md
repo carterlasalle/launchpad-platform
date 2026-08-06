@@ -323,7 +323,7 @@ Needs:
 ### 8.8 Security and governance
 
 - PRD-SEC-001: Direct pushes to `main` MUST be blocked.
-- PRD-SEC-002: Catalog, schema, workflow, policy, and controller changes MUST require CODEOWNER approval.
+- PRD-SEC-002: Catalog, schema, workflow, policy, and controller changes MUST require CODEOWNER approval. (solo-owner exception per the reviewed §25 note: approval count and CODEOWNER review are off in the current single-maintainer ruleset; CODEOWNERS ownership and the no-bypass ruleset still prevent silent weakening).
 - PRD-SEC-003: Production credentials MUST not be exposed to untrusted PR code.
 - PRD-SEC-004: Workflow permissions MUST default to none and be granted per job.
 - PRD-SEC-005: Secret values MUST never be persisted outside their provider and Vercel’s encrypted environment-variable storage.
@@ -1158,6 +1158,16 @@ The `main` ruleset MUST require:
 - Squash merge as the supported merge method.
 
 A separate emergency break-glass role MAY exist, but every bypass MUST create an audit event and incident issue.
+
+SOLO-OWNER MODE (reviewed exception): the current control repository has a single maintainer, so the
+reviewed ruleset in `.github/rulesets/main.json` deliberately sets
+`required_approving_review_count=0`, `require_code_owner_review=false`, and
+`require_last_push_approval=false`, documented by a `$comment` on the pull_request rule. Compensating
+controls remain in force: no bypass actors (including administrators), direct-push bans (creation,
+deletion, non-fast-forward), stale-review dismissal, review-thread resolution, strict required checks,
+and squash-only merges. This exception MUST be revisited (reviewed parameters change) before a second
+maintainer is added or automatic production operations are enabled.
+
 
 ## 26. Health-check specification
 
@@ -3788,6 +3798,14 @@ No direct pushes
 No administrator bypass during normal operation
 Squash merge only
 ```
+SOLO-OWNER MODE (reviewed exception): the current control repository has a single maintainer, so the
+reviewed ruleset in `.github/rulesets/main.json` deliberately sets
+`required_approving_review_count=0`, `require_code_owner_review=false`, and
+`require_last_push_approval=false`, documented by a `$comment` on the pull_request rule. Compensating
+controls remain in force: no bypass actors (including administrators), direct-push bans (creation,
+deletion, non-fast-forward), stale-review dismissal, review-thread resolution, strict required checks,
+and squash-only merges. This exception MUST be revisited (reviewed parameters change) before a second
+maintainer is added or automatic production operations are enabled.
 
 Required checks:
 

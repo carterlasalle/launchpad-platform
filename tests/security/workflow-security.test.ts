@@ -141,6 +141,19 @@ it('marks the GitHub-scheduled reconciliation request as automatic', () => {
   expect(reconcile?.env?.LAUNCHPAD_AUTOMATED_RECONCILIATION).toBe('true');
 });
 
+it('scopes reconcile credentials to a dedicated GitHub environment', () => {
+  const workflow = parse(readFileSync(join(workflowDirectory, 'reconcile.yml'), 'utf8')) as {
+    jobs: Record<string, { environment?: string; steps?: Array<{ run?: string; env?: Record<string, string> }> }>;
+  };
+  const reconcile = workflow.jobs.reconcile;
+  expect(reconcile?.environment).toBe('launchpad-reconcile');
+  const step = reconcile?.steps?.find((candidate) => candidate.run === 'yarn platform reconcile --catalog catalog');
+  // Provider/operator secrets must come from the environment, never repo-level defaults.
+  for (const name of ['LAUNCHPAD_OPERATOR_TOKEN', 'LAUNCHPAD_GITHUB_TOKEN', 'LAUNCHPAD_VERCEL_TOKEN', 'LAUNCHPAD_CLOUDFLARE_TOKEN']) {
+    expect(step?.env?.[name], name).toMatch(/^\$\{\{ secrets\./);
+  }
+});
+
 it('renders the runtime reconciliation gate from the repository enablement variable', () => {
   const workflow = parse(readFileSync(join(workflowDirectory, 'deploy-control-plane.yml'), 'utf8')) as {
     jobs: Record<string, { steps?: Array<{ name?: string; env?: Record<string, string> }> }>;
@@ -279,6 +292,36 @@ it('runs required static checks only for their relevant change classes', () => {
   expect(qualityGuard?.if).toContain("needs.toolchain.result != 'success'");
   expect(qualitySteps.find((step) => step.run === 'yarn typecheck')?.if).toContain("needs.changes.outputs.code == 'true'");
   expect(qualitySteps.find((step) => step.name === 'Verify documentation')?.if).toContain("needs.changes.outputs.docs == 'true'");
+});
+
+it('runs the offline acceptance gate after quality with the required status-check context', () => {
+  const workflow = parse(readFileSync(join(workflowDirectory, 'ci.yml'), 'utf8')) as {
+    jobs: Record<string, {
+      name?: string;
+      needs?: string | string[];
+      if?: string;
+      permissions?: Record<string, string>;
+      steps?: Array<{ name?: string; uses?: string; run?: string; if?: string }>;
+    }>;
+  };
+  const acceptance = workflow.jobs.acceptance;
+  expect(acceptance?.name).toBe('acceptance / offline');
+  expect(acceptance?.needs).toEqual(['changes', 'toolchain', 'quality']);
+  expect(acceptance?.if).toBe('${{ always() }}');
+  expect(acceptance?.permissions).toEqual({ contents: 'read' });
+  const guard = acceptance?.steps?.find((step) => step.name === 'Fail when a quality prerequisite failed');
+  expect(guard?.if).toContain("needs.quality.result != 'success'");
+  const gate = acceptance?.steps?.find((step) => step.run === 'yarn acceptance:offline');
+  expect(gate?.if).toContain("needs.changes.outputs.code == 'true'");
+  expect(acceptance?.steps?.some((step) => step.uses === './.github/actions/setup-launchpad')).toBe(true);
+
+  // The ruleset must require the acceptance check on main.
+  const ruleset = JSON.parse(readFileSync(join(process.cwd(), '.github/rulesets/main.json'), 'utf8')) as {
+    rules: Array<{ type: string; parameters?: { required_status_checks?: Array<{ context: string }> } }>;
+  };
+  const contexts = ruleset.rules
+    .find((rule) => rule.type === 'required_status_checks')?.parameters?.required_status_checks?.map((check) => check.context) ?? [];
+  expect(contexts).toContain('acceptance / offline');
 });
 
 it('classifies a toolchain decision-record update as a code change', () => {

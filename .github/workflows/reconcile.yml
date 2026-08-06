@@ -41,6 +41,7 @@ jobs:
     needs: control-plane-mode
     if: needs.control-plane-mode.outputs.enabled == 'true'
     runs-on: ubuntu-latest
+    environment: launchpad-reconcile
     permissions:
       contents: read
     steps:

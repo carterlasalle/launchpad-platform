@@ -276,7 +276,9 @@ describe('webhook dedupe and replay records', () => {
     const { app, store } = webhookApp();
     const sent: unknown[] = [];
     const env = { PROVIDER_EVENTS: { send: async (envelope: unknown) => { sent.push(envelope); } } };
-    const payload = JSON.stringify({ id: 'evt-1', type: 'deployment', deployment: { id: 'dep-1', token: 'launchpad-canary-e71a' } });
+    // The HMAC-covered payload carries the event creation time (epoch ms); a
+    // fresh timestamp keeps the event inside the default freshness window.
+    const payload = JSON.stringify({ id: 'evt-1', type: 'deployment', createdAt: Date.now(), deployment: { id: 'dep-1', token: 'launchpad-canary-e71a' } });
     const signature = await sign(payload);
 
     const first = await app.request('/webhooks/vercel', { method: 'POST', body: payload, headers: { 'content-type': 'application/json', 'x-vercel-signature': signature } }, env as never);
@@ -306,8 +308,10 @@ describe('webhook dedupe and replay records', () => {
     expect(bad.status).toBe(401);
 
     const storeless = createControllerApp({ operatorToken: 'op-token', webhookSecret: 'wh-secret' });
-    const signature = await sign('{"id":"evt-3"}');
-    const noStore = await storeless.request('/webhooks/vercel', { method: 'POST', body: '{"id":"evt-3"}', headers: { 'x-vercel-signature': signature } });
+    const createdAt = Date.now();
+    const body = `{"id":"evt-3","createdAt":${createdAt}}`;
+    const signature = await sign(body);
+    const noStore = await storeless.request('/webhooks/vercel', { method: 'POST', body, headers: { 'x-vercel-signature': signature } });
     expect(noStore.status).toBe(503);
   });
 });

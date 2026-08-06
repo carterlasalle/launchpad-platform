@@ -47,7 +47,9 @@
     "LAUNCHPAD_ALERT_ERROR_RATE_THRESHOLD": "0.1",
     "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
     "OIDC_AUDIENCE": "https://launchpad.example.internal",
-    "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
+    "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks",
+    "OIDC_REPOSITORY_ALLOWLIST": "replace-in-environment",
+    "OIDC_WORKFLOW_ALLOWLIST": "replace-in-environment"
   },
   "env": {
     "production": {
@@ -92,7 +94,9 @@
         "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-production",
         "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
         "OIDC_AUDIENCE": "replace-in-production",
-        "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
+        "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks",
+        "OIDC_REPOSITORY_ALLOWLIST": "replace-in-production",
+        "OIDC_WORKFLOW_ALLOWLIST": "replace-in-production"
       },
       "secrets_store_secrets": [
         { "binding": "SECRETS_OPERATOR_TOKEN", "store_id": "replace-in-production", "secret_name": "launchpad-operator-token" },
@@ -144,7 +148,9 @@
         "LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL": "replace-in-test",
         "OIDC_ISSUER": "https://token.actions.githubusercontent.com",
         "OIDC_AUDIENCE": "replace-in-test",
-        "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks"
+        "OIDC_JWKS": "https://token.actions.githubusercontent.com/.well-known/jwks",
+        "OIDC_REPOSITORY_ALLOWLIST": "replace-in-test",
+        "OIDC_WORKFLOW_ALLOWLIST": "replace-in-test"
       },
       "secrets_store_secrets": [
         { "binding": "SECRETS_OPERATOR_TOKEN", "store_id": "replace-in-test", "secret_name": "launchpad-operator-token" },

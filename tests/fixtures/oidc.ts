@@ -63,3 +63,19 @@ export function pushClaims(sourceCommit: string, overrides: Record<string, unkno
 export function prClaims(prNumber: number, mergeSha: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return githubClaims({ event_name: 'pull_request', sha: mergeSha, ref: `refs/pull/${prNumber}/merge`, pull_request_number: String(prNumber), ...overrides });
 }
+
+
+/**
+ * GitHub Actions OIDC claims for workflows running in the CONTROL repository
+ * (tests/integration/harness.ts CONTROL_REPOSITORY = 'example/control').
+ * The gzg.3 middleware gate rejects non-control-repo claims on plan/verify,
+ * preview/apply/health enqueue, and operation polling; cross-repo
+ * preview/status reporting keeps the plain app-repo claims above.
+ */
+export function controlPushClaims(sourceCommit: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return pushClaims(sourceCommit, { sub: 'repo:987654321:example/control:ref:refs/heads/main', repository: 'example/control', workflow_ref: 'example/control/.github/workflows/apply.yml@refs/heads/main', ...overrides });
+}
+
+export function controlPrClaims(prNumber: number, mergeSha: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return prClaims(prNumber, mergeSha, { sub: 'repo:987654321:example/control:ref:refs/pull/' + prNumber + '/merge', repository: 'example/control', workflow_ref: 'example/control/.github/workflows/preview.yml@refs/heads/main', ...overrides });
+}

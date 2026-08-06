@@ -238,7 +238,7 @@ describe('operator dashboard and queue surface (integration)', () => {
 
   it('deduplicates Vercel webhook deliveries, enqueues one sanitized envelope, and rejects bad signatures', async () => {
     const canary = 'launchpad-canary-e71a';
-    const payload = JSON.stringify({ id: 'evt_1', type: 'deployment', payload: { deploymentId: 'dpl_1', projectId: 'prj_1', token: canary }, deployment: { id: 'dpl_1', url: 'https://private.example/deploy' } });
+    const payload = JSON.stringify({ id: 'evt_1', type: 'deployment', createdAt: Date.now(), payload: { deploymentId: 'dpl_1', projectId: 'prj_1', token: canary }, deployment: { id: 'dpl_1', url: 'https://private.example/deploy' } });
     const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('webhook-secret'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     const digest = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
     const signature = `sha256=${[...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;

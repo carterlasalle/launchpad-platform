@@ -21,8 +21,17 @@ export class SensitiveValue<T> {
   }
 
   /**
-   * Stable non-keyed fingerprint (FNV-1a, 64-bit). Prefer `keyedFingerprint` whenever the
-   * secret is bound to a reference so fingerprints cannot be confused across keys.
+   * LEGACY non-keyed fingerprint (FNV-1a, 64-bit).
+   *
+   * Kept only for compatibility with pre-keyed callers and tests. It is reference-blind
+   * (the same value under two different references fingerprints identically) and
+   * low-entropy (16 hex chars, 64 bits), so it is NOT a security-relevant equality
+   * marker and MUST NOT be used to persist equality markers (D1 rows, drift records,
+   * credential value fingerprints, plan artifacts) or to compare secret material.
+   *
+   * Use `keyedFingerprint(key)` when the secret is bound to a stored reference (the key
+   * keeps fingerprints from being confused across keys) and `secureFingerprint(value)`
+   * for keyless one-off verification.
    */
   fingerprint(): string {
     const text = typeof this.#value === 'string' ? this.#value : JSON.stringify(this.#value);
@@ -36,8 +45,13 @@ export class SensitiveValue<T> {
 
   /**
    * SHA-256 fingerprint keyed by `key` (for example the secret reference the value was
-   * retrieved from). Stable for the same key and value; changes when either changes.
-   * The raw value is never exposed in the fingerprint.
+   * retrieved from). Deterministic for the same key and value across processes, so a
+   * keyed fingerprint may be persisted as a stable equality marker (for example a D1
+   * `value_fingerprint` column or a drift record): the persisted key makes the marker
+   * reproducible on any later run. A random-keyed HMAC would break that cross-process
+   * determinism, so the caller-supplied key is the required keying material — never a
+   * per-process secret. Changes when either the key or the value changes; the raw value
+   * is never exposed in the fingerprint.
    */
   async keyedFingerprint(key: string): Promise<string> {
     const raw = typeof this.#value === 'string' ? this.#value : JSON.stringify(this.#value);
@@ -101,6 +115,13 @@ export function redactValue(value: unknown): unknown {
   return redact(value);
 }
 
+/**
+ * Unkeyed SHA-256 fingerprint of a secret value. Deterministic for the same value
+ * across processes, but NOT reference-bound: the same value in two different bindings
+ * fingerprints identically, so prefer `SensitiveValue.keyedFingerprint(key)` whenever a
+ * stable key (secret reference) exists. Reserved for keyless one-off verification;
+ * never use it to persist equality markers for secret material when a key is available.
+ */
 export async function secureFingerprint(value: SensitiveValue<unknown>): Promise<string> {
   const raw = value.reveal();
   return sha256Hex(typeof raw === 'string' ? raw : JSON.stringify(raw));

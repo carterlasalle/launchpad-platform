@@ -10,3 +10,10 @@ CLOUDFLARE_TOKEN=
 GITHUB_TOKEN=
 VERCEL_WEBHOOK_SECRET=
 LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL=
+
+# Optional OIDC claim allowlists for local runs (comma-separated exact match).
+# Leave empty to skip claim allowlisting locally; set to the exact repository /
+# workflow_ref values the controller should trust and CONFIRM against real
+# GitHub OIDC tokens before use. See .env.example for value guidance.
+OIDC_REPOSITORY_ALLOWLIST=
+OIDC_WORKFLOW_ALLOWLIST=

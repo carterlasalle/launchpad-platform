@@ -20,6 +20,8 @@
  *   LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL  HTTPS authoritative DNS resolver endpoint
  *   LAUNCHPAD_CONTROLLER_URL                   Public HTTPS controller URL
  *   LAUNCHPAD_OIDC_AUDIENCE                    GitHub Actions OIDC audience URI
+ *   LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST        Comma-separated exact-match GitHub OIDC repository allowlist
+ *   LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST          Comma-separated exact-match GitHub OIDC workflow_ref allowlist
  *   LAUNCHPAD_CONTROL_PLANE_ENABLED             Exact `true` enables automatic reconciliation; absent or `false` keeps it dormant
  *
  * Usage:
@@ -58,6 +60,11 @@ function isHttpsUrl(value) {
     return false;
   }
   return parsed.protocol === 'https:' && parsed.hostname.length > 0 && parsed.username === '' && parsed.password === '';
+}
+
+/** Exact-match claim allowlist: non-empty, comma-separated, no blank entries. */
+function isAllowlist(value) {
+  return value.length > 0 && value.split(',').every((entry) => entry.trim().length > 0);
 }
 
 function parseArgs(argv) {
@@ -138,6 +145,8 @@ const identifiers = [
   readIdentifier('LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
   readIdentifier('LAUNCHPAD_CONTROLLER_URL', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
   readIdentifier('LAUNCHPAD_OIDC_AUDIENCE', isHttpsUrl, 'an absolute, credential-free https:// URL', (value) => value),
+  readIdentifier('LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST', isAllowlist, 'a non-empty comma-separated exact-match allowlist', (value) => value.split(',').map((entry) => entry.trim()).join(',')),
+  readIdentifier('LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST', isAllowlist, 'a non-empty comma-separated exact-match allowlist', (value) => value.split(',').map((entry) => entry.trim()).join(',')),
 ];
 const failures = [...identifiers, controlPlaneEnabled].filter((identifier) => !identifier.ok);
 if (failures.length > 0) {
@@ -145,7 +154,7 @@ if (failures.length > 0) {
   for (const { error } of failures) console.error(`  - ${error}`);
   process.exit(1);
 }
-const [d1Id, storeId, teamId, resolverUrl, controllerUrl, oidcAudience] = identifiers.map((identifier) => identifier.value);
+const [d1Id, storeId, teamId, resolverUrl, controllerUrl, oidcAudience, repositoryAllowlist, workflowAllowlist] = identifiers.map((identifier) => identifier.value);
 
 let template;
 try {
@@ -180,6 +189,14 @@ if (typeof environment.vars?.OIDC_AUDIENCE !== 'string') {
   console.error(`${TEMPLATE} must declare vars.OIDC_AUDIENCE for '${options.env}'.`);
   process.exit(1);
 }
+if (typeof environment.vars?.OIDC_REPOSITORY_ALLOWLIST !== 'string') {
+  console.error(`${TEMPLATE} must declare vars.OIDC_REPOSITORY_ALLOWLIST for '${options.env}'.`);
+  process.exit(1);
+}
+if (typeof environment.vars?.OIDC_WORKFLOW_ALLOWLIST !== 'string') {
+  console.error(`${TEMPLATE} must declare vars.OIDC_WORKFLOW_ALLOWLIST for '${options.env}'.`);
+  process.exit(1);
+}
 
 const rendered = JSON.parse(JSON.stringify(template));
 const selected = rendered.env[options.env];
@@ -189,6 +206,8 @@ selected.vars.VERCEL_TEAM_ID = teamId;
 selected.vars.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL = resolverUrl;
 selected.vars.CONTROLLER_INTERNAL_URL = controllerUrl;
 selected.vars.OIDC_AUDIENCE = oidcAudience;
+selected.vars.OIDC_REPOSITORY_ALLOWLIST = repositoryAllowlist;
+selected.vars.OIDC_WORKFLOW_ALLOWLIST = workflowAllowlist;
 selected.vars.LAUNCHPAD_CONTROL_PLANE_ENABLED = controlPlaneEnabled.value;
 
 const outputPath = join(root, options.output);
@@ -199,5 +218,5 @@ try {
   process.exit(1);
 }
 console.log(
-  `Rendered ${options.output} for environment '${options.env}': ${selected.d1_databases.length} D1 database id, ${selected.secrets_store_secrets.length} secrets store ids, VERCEL_TEAM_ID, LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL, CONTROLLER_INTERNAL_URL, OIDC_AUDIENCE, and LAUNCHPAD_CONTROL_PLANE_ENABLED substituted; all other fields preserved.`
+  `Rendered ${options.output} for environment '${options.env}': ${selected.d1_databases.length} D1 database id, ${selected.secrets_store_secrets.length} secrets store ids, VERCEL_TEAM_ID, LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL, CONTROLLER_INTERNAL_URL, OIDC_AUDIENCE, OIDC_REPOSITORY_ALLOWLIST, OIDC_WORKFLOW_ALLOWLIST, and LAUNCHPAD_CONTROL_PLANE_ENABLED substituted; all other fields preserved.`
 );

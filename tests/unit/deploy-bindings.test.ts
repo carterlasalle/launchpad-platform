@@ -35,6 +35,8 @@ const TEAM_ID = 'team_launchpad-production';
 const RESOLVER_URL = 'https://dns-resolver.launchpad.internal/v1/dns';
 const CONTROLLER_URL = 'https://launchpad-control-plane.example.workers.dev';
 const OIDC_AUDIENCE = 'https://launchpad.example.internal';
+const OIDC_REPOSITORY_ALLOWLIST = 'carterlasalle/launchpad-platform';
+const OIDC_WORKFLOW_ALLOWLIST = 'carterlasalle/launchpad-platform/.github/workflows/validate-plan.yml@refs/heads/main';
 const RENDERED_OUTPUT = 'wrangler.deploy.test.json';
 const RENDERED_PATH = join(root, RENDERED_OUTPUT);
 
@@ -48,6 +50,8 @@ const run = (script: string, args: string[], overrides: Record<string, string> =
       LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL: RESOLVER_URL,
       LAUNCHPAD_CONTROLLER_URL: CONTROLLER_URL,
       LAUNCHPAD_OIDC_AUDIENCE: OIDC_AUDIENCE,
+      LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST: OIDC_REPOSITORY_ALLOWLIST,
+      LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST: OIDC_WORKFLOW_ALLOWLIST,
       ...process.env,
       ...overrides,
     },
@@ -96,6 +100,8 @@ it('renders a deployable config for the selected environment and nothing else', 
   expect(production?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe(RESOLVER_URL);
   expect(production?.vars?.CONTROLLER_INTERNAL_URL).toBe(CONTROLLER_URL);
   expect(production?.vars?.OIDC_AUDIENCE).toBe(OIDC_AUDIENCE);
+  expect(production?.vars?.OIDC_REPOSITORY_ALLOWLIST).toBe(OIDC_REPOSITORY_ALLOWLIST);
+  expect(production?.vars?.OIDC_WORKFLOW_ALLOWLIST).toBe(OIDC_WORKFLOW_ALLOWLIST);
 
   // Every other environment keeps its reviewed placeholders.
   expect(rendered.env?.test?.d1_databases?.[0]?.database_id).toBe('replace-in-test');
@@ -104,6 +110,8 @@ it('renders a deployable config for the selected environment and nothing else', 
   expect(rendered.env?.test?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe('replace-in-test');
   expect(rendered.env?.test?.vars?.CONTROLLER_INTERNAL_URL).toBe('replace-in-test');
   expect(rendered.env?.test?.vars?.OIDC_AUDIENCE).toBe('replace-in-test');
+  expect(rendered.env?.test?.vars?.OIDC_REPOSITORY_ALLOWLIST).toBe('replace-in-test');
+  expect(rendered.env?.test?.vars?.OIDC_WORKFLOW_ALLOWLIST).toBe('replace-in-test');
   expect(rendered.d1_databases?.[0]?.database_id).toBe('replace-in-environment');
   expect(rendered.vars?.VERCEL_TEAM_ID).toBeUndefined();
   expect(rendered.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBeUndefined();
@@ -134,11 +142,15 @@ it('renders test without touching the production placeholders', () => {
   expect(rendered.env?.test?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe(RESOLVER_URL);
   expect(rendered.env?.test?.vars?.CONTROLLER_INTERNAL_URL).toBe(CONTROLLER_URL);
   expect(rendered.env?.test?.vars?.OIDC_AUDIENCE).toBe(OIDC_AUDIENCE);
+  expect(rendered.env?.test?.vars?.OIDC_REPOSITORY_ALLOWLIST).toBe(OIDC_REPOSITORY_ALLOWLIST);
+  expect(rendered.env?.test?.vars?.OIDC_WORKFLOW_ALLOWLIST).toBe(OIDC_WORKFLOW_ALLOWLIST);
   expect(rendered.env?.production?.d1_databases?.[0]?.database_id).toBe('replace-in-production');
   expect(rendered.env?.production?.vars?.VERCEL_TEAM_ID).toBe('replace-in-production');
   expect(rendered.env?.production?.vars?.LAUNCHPAD_AUTHORITATIVE_DNS_RESOLVER_URL).toBe('replace-in-production');
   expect(rendered.env?.production?.vars?.CONTROLLER_INTERNAL_URL).toBe('replace-in-production');
   expect(rendered.env?.production?.vars?.OIDC_AUDIENCE).toBe('replace-in-production');
+  expect(rendered.env?.production?.vars?.OIDC_REPOSITORY_ALLOWLIST).toBe('replace-in-production');
+  expect(rendered.env?.production?.vars?.OIDC_WORKFLOW_ALLOWLIST).toBe('replace-in-production');
 });
 
 it('preserves every other field and keeps deploy paths root-relative', () => {
@@ -165,6 +177,8 @@ it('fails before writing when deployment variables are missing or empty', () => 
     LAUNCHPAD_VERCEL_TEAM_ID: '',
     LAUNCHPAD_CONTROLLER_URL: '',
     LAUNCHPAD_OIDC_AUDIENCE: '',
+    LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST: '',
+    LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST: '',
   });
   expect(missing.status).not.toBe(0);
   expect(missing.stderr).toContain('LAUNCHPAD_D1_DATABASE_ID');
@@ -172,6 +186,8 @@ it('fails before writing when deployment variables are missing or empty', () => 
   expect(missing.stderr).toContain('LAUNCHPAD_VERCEL_TEAM_ID');
   expect(missing.stderr).toContain('LAUNCHPAD_CONTROLLER_URL');
   expect(missing.stderr).toContain('LAUNCHPAD_OIDC_AUDIENCE');
+  expect(missing.stderr).toContain('LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST');
+  expect(missing.stderr).toContain('LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST');
   expect(existsSync(RENDERED_PATH)).toBe(false);
 
   const singleMissing = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], { LAUNCHPAD_VERCEL_TEAM_ID: '' });
@@ -209,6 +225,22 @@ it('rejects placeholder values even when they match an identifier shape', () => 
   });
   expect(slugPlaceholder.status).not.toBe(0);
   expect(slugPlaceholder.stderr).toContain('placeholder');
+});
+
+it('rejects placeholder or malformed OIDC allowlists before writing', () => {
+  const placeholder = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], {
+    LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST: 'replace-in-production',
+  });
+  expect(placeholder.status).not.toBe(0);
+  expect(placeholder.stderr).toContain('LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST');
+  expect(existsSync(RENDERED_PATH)).toBe(false);
+
+  const malformed = run(renderScript, ['--env', 'production', '--output', RENDERED_OUTPUT], {
+    LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST: 'owner/repo/.github/workflows/a.yml@refs/heads/main,,owner/repo/.github/workflows/b.yml@refs/heads/main',
+  });
+  expect(malformed.status).not.toBe(0);
+  expect(malformed.stderr).toContain('LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST');
+  expect(existsSync(RENDERED_PATH)).toBe(false);
 });
 
 it('never embeds secret values into the rendered config', () => {

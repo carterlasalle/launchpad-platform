@@ -880,20 +880,29 @@ describe('controller token selection', () => {
     rmSync(catalog, { recursive: true, force: true });
   });
 
-  it('destroy authenticates with the explicit operator token even when workflow OIDC env is present', async () => {
+  it('destroy authenticates with the explicit operator token and calls the reviewed delete endpoint', async () => {
     const catalog = tempCatalog();
     bothEnv();
     stubFetch([
       oidcRoute(),
-      { match: /\/v1\/cli\/destroy$/, response: (url, init) => {
+      { match: /\/v1\/applications\/invalid-root\/delete$/, response: (url, init) => {
         expect(bearerOf(init)).toBe('Bearer operator-token');
-        expect(JSON.parse(String(init?.body))).toMatchObject({ applicationId: 'invalid-root', approvalToken: 'approval-1' });
-        return jsonResponse({ status: 'QUEUED', workflowId: 'wf-1' }, 202);
+        expect(JSON.parse(String(init?.body))).toMatchObject({ approvalId: 'approval-7', approvalToken: 'approval-1', sourceCommit: sha, domain: 'invalid-root.example.com' });
+        return jsonResponse({ status: 'QUEUED', workflowId: 'wf-1', operationId: 'op-1' }, 202);
       } },
     ]);
     const out = writer();
-    const exitCode = await runCli(['destroy', '--catalog', catalog, '--app', 'invalid-root', '--approval-token', 'approval-1', '--controller', controller], out);
+    const exitCode = await runCli(['destroy', '--catalog', catalog, '--app', 'invalid-root', '--approval-id', 'approval-7', '--approval-token', 'approval-1', '--domain', 'invalid-root.example.com', '--sha', sha, '--controller', controller], out);
     expect(exitCode).toBe(0);
+    rmSync(catalog, { recursive: true, force: true });
+  });
+
+  it('destroy fails closed without the approval binding flags', async () => {
+    const catalog = tempCatalog();
+    bothEnv();
+    stubFetch([oidcRoute()]);
+    const out = writer();
+    await expect(runCli(['destroy', '--catalog', catalog, '--app', 'invalid-root', '--approval-token', 'approval-1', '--controller', controller], out)).rejects.toThrow(/LP-DESTROY-APPROVAL-ID-REQUIRED/);
     rmSync(catalog, { recursive: true, force: true });
   });
 

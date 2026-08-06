@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesiredApplication } from '@launchpad/core';
 import { AppPreviewStatusWorkflow, PreviewApplicationWorkflow } from '../../apps/controller/src/workflows.js';
-import { prClaims, signGithubToken } from '../fixtures/oidc.js';
+import { controlPrClaims, prClaims, signGithubToken } from '../fixtures/oidc.js';
 import { HEAD_SHA, MAIN_SHA, MERGE_SHA, SOURCE_COMMIT, createHarness, type ControllerHarness } from './harness.js';
 
 vi.mock('cloudflare:workers', () => ({
@@ -11,7 +11,7 @@ vi.mock('cloudflare:workers', () => ({
   },
 }));
 
-const WORKFLOW_REF = 'example/fixture/.github/workflows/preview.yml@refs/heads/main';
+const WORKFLOW_REF = 'example/control/.github/workflows/preview.yml@refs/heads/main';
 const PR_NUMBER = 42;
 
 async function previewEnqueueBody(harness: ControllerHarness, desired: DesiredApplication, overrides: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
@@ -22,7 +22,7 @@ async function previewEnqueueBody(harness: ControllerHarness, desired: DesiredAp
     idempotencyKey: 'preview-key-1',
     repositoryId: '123456789',
     ownerId: '987654321',
-    repository: 'example/fixture',
+    repository: 'example/control',
     workflowRef: WORKFLOW_REF,
     event: 'pull_request',
     prNumber: PR_NUMBER,
@@ -56,7 +56,7 @@ describe('catalog PR preview flow (integration)', () => {
   afterEach(() => { harness.restore(); });
 
   it('enqueues a claim-bound preview: 202, D1 idempotency, one workflow instance', async () => {
-    const token = await signGithubToken(harness.oidc, prClaims(PR_NUMBER, MERGE_SHA));
+    const token = await signGithubToken(harness.oidc, controlPrClaims(PR_NUMBER, MERGE_SHA));
     const body = await previewEnqueueBody(harness, desired);
     const response = await harness.request('/v1/applications/fixture-app/preview/verify', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
     expect(response.status).toBe(202);
@@ -73,7 +73,7 @@ describe('catalog PR preview flow (integration)', () => {
     expect(idempotent?.operationId).toBe(enqueued.operationId);
     const audit = await harness.store.listAudit('fixture-app');
     const startEvent = audit.find((event) => event.action === 'OIDC_OPERATION_START');
-    expect(startEvent?.details).toMatchObject({ operationId: enqueued.operationId, workflowId: enqueued.workflowId, repositoryId: '123456789', repository: 'example/fixture', prNumber: PR_NUMBER, sourceCommit: HEAD_SHA });
+    expect(startEvent?.details).toMatchObject({ operationId: enqueued.operationId, workflowId: enqueued.workflowId, repositoryId: '123456789', repository: 'example/control', prNumber: PR_NUMBER, sourceCommit: HEAD_SHA });
 
     // Replaying the same idempotency key returns the same operation and reuses
     // the same workflow instance id (the platform dedupes by instance id).
@@ -84,7 +84,7 @@ describe('catalog PR preview flow (integration)', () => {
   });
 
   it('runs the granular preview phases through real adapters to an exact deployment URL and passed health', async () => {
-    const token = await signGithubToken(harness.oidc, prClaims(PR_NUMBER, MERGE_SHA));
+    const token = await signGithubToken(harness.oidc, controlPrClaims(PR_NUMBER, MERGE_SHA));
     const body = await previewEnqueueBody(harness, desired);
     const response = await harness.request('/v1/applications/fixture-app/preview/verify', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
     const enqueued = await response.json() as { workflowId: string; operationId: string };
@@ -132,7 +132,7 @@ describe('catalog PR preview flow (integration)', () => {
   });
 
   it('serves claim-scoped poll, status evidence, and artifacts; foreign claims are rejected', async () => {
-    const token = await signGithubToken(harness.oidc, prClaims(PR_NUMBER, MERGE_SHA));
+    const token = await signGithubToken(harness.oidc, controlPrClaims(PR_NUMBER, MERGE_SHA));
     const body = await previewEnqueueBody(harness, desired);
     const response = await harness.request('/v1/applications/fixture-app/preview/verify', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
     const enqueued = await response.json() as { workflowId: string; operationId: string };
@@ -146,15 +146,21 @@ describe('catalog PR preview flow (integration)', () => {
     const pollBody = await poll.json() as { status: string; kind: string; applicationId: string; sourceCommit: string | null; errorCode: string | null };
     expect(pollBody).toMatchObject({ status: 'READY', kind: 'preview', applicationId: 'fixture-app', sourceCommit: HEAD_SHA, errorCode: null });
 
-    // A token minted for another repository cannot poll this operation.
+    // A token minted for another repository cannot poll this operation: the
+    // gzg.3 control-repository gate rejects it at the middleware before any
+    // operation-scope binding is consulted.
     const foreignToken = await signGithubToken(harness.oidc, prClaims(PR_NUMBER, MERGE_SHA, { repository: 'acme/other', repository_id: '111111', repository_owner_id: '222222', workflow_ref: 'acme/other/.github/workflows/x.yml@refs/heads/main' }));
     const foreign = await harness.request(`/v1/operations/${enqueued.operationId}`, { headers: { authorization: `Bearer ${foreignToken}` } });
-    expect(foreign.status).toBe(403);
-    await expect(foreign.json()).resolves.toMatchObject({ error: { code: 'LP-OIDC-OPERATION-NOT-BOUND' } });
+    expect(foreign.status).toBe(401);
+    await expect(foreign.json()).resolves.toMatchObject({ error: { code: 'LP-OIDC-REPOSITORY-NOT-CONTROL' } });
 
     // Status gate: exact-commit preview evidence with build logs and redacted comment.
     const statusBody = { version: 1, applicationId: 'fixture-app', sourceCommit: HEAD_SHA, repository: 'example/fixture', repositoryId: '123456789', repositoryOwnerId: '987654321', event: 'pull_request' };
-    const status = await harness.request('/v1/applications/fixture-app/preview/status', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(statusBody) });
+    // Preview status is reported by the APPLICATION repository's workflow (not
+    // gated by the control-repository middleware; its own verification binds
+    // the app-repo token).
+    const appToken = await signGithubToken(harness.oidc, prClaims(PR_NUMBER, MERGE_SHA));
+    const status = await harness.request('/v1/applications/fixture-app/preview/status', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${appToken}` }, body: JSON.stringify(statusBody) });
     expect(status.status).toBe(200);
     const evidence = await status.json() as { status: string; gateState: string; buildState: string; healthState: string; sourceCommit: string; deployment: { url: string } | null; logs: { excerpt: string } | null; commentBody: string; deploymentStatus: { state: string } };
     expect(evidence).toMatchObject({ status: 'SUCCEEDED', gateState: 'PASSED', buildState: 'READY', healthState: 'PASSED', sourceCommit: HEAD_SHA, deploymentStatus: { state: 'success' } });
@@ -166,7 +172,7 @@ describe('catalog PR preview flow (integration)', () => {
   });
 
   it('enqueues health runs on the dedicated app-preview-status machine and reaches the real gate stages', async () => {
-    const token = await signGithubToken(harness.oidc, prClaims(PR_NUMBER, MERGE_SHA));
+    const token = await signGithubToken(harness.oidc, controlPrClaims(PR_NUMBER, MERGE_SHA));
     const body = {
       version: 1,
       applicationId: 'fixture-app',
@@ -174,7 +180,7 @@ describe('catalog PR preview flow (integration)', () => {
       idempotencyKey: 'health-key-1',
       repositoryId: '123456789',
       ownerId: '987654321',
-      repository: 'example/fixture',
+      repository: 'example/control',
       workflowRef: WORKFLOW_REF,
       event: 'pull_request',
       prNumber: PR_NUMBER,
@@ -216,7 +222,7 @@ describe('catalog PR preview flow (integration)', () => {
   });
 
   it('keeps invalid-root build failures, health failures, and stale commits failed and visible', async () => {
-    const token = await signGithubToken(harness.oidc, prClaims(PR_NUMBER, MERGE_SHA));
+    const token = await signGithubToken(harness.oidc, controlPrClaims(PR_NUMBER, MERGE_SHA));
     const cases: Array<{ name: string; script: (h: ControllerHarness) => void; expectedError: string }> = [
       { name: 'invalid root build', script: (h) => { h.states.vercel.defaultTerminalState = 'ERROR'; }, expectedError: 'LP-VERCEL-BUILD-FAILED' },
       { name: 'health failure', script: (h) => { h.states.health.defaultStatus = 503; }, expectedError: 'LP-HEALTH-PREVIEW-FAILED' },
@@ -225,7 +231,7 @@ describe('catalog PR preview flow (integration)', () => {
     for (const fixture of cases) {
       const h = await seedPreviewHarness();
       fixture.script(h);
-      const t = await signGithubToken(h.oidc, prClaims(PR_NUMBER, MERGE_SHA));
+      const t = await signGithubToken(h.oidc, controlPrClaims(PR_NUMBER, MERGE_SHA));
       const body = await previewEnqueueBody(h, desired);
       const response = await h.request('/v1/applications/fixture-app/preview/verify', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${t}` }, body: JSON.stringify(body) });
       const enqueued = await response.json() as { workflowId: string; operationId: string };

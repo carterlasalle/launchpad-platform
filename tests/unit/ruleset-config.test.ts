@@ -25,13 +25,34 @@ describe('repository ruleset application', () => {
 
     const rules = payload.rules as Array<{ type: string; parameters?: Record<string, unknown> }>;
     expect(rules.find((rule) => rule.type === 'creation')).toEqual({ type: 'creation' });
-    expect(rules.find((rule) => rule.type === 'pull_request')?.parameters?.allowed_merge_methods).toEqual(['squash']);
-    expect(rules.find((rule) => rule.type === 'required_status_checks')?.parameters?.required_status_checks).toEqual([
-      { context: 'static / toolchain' },
-      { context: 'static / quality' },
-      { context: 'platform / summary' },
-      { context: 'dependency / review' },
-    ]);
+    // The spec documents the review policy on the rule; the API payload must
+    // never carry repository-only metadata (including the $comment).
+    expect(rules.find((rule) => rule.type === 'pull_request')).not.toHaveProperty('$comment');
+    // Full pull_request contract: SOLO-OWNER MODE is the explicit, tested policy
+    // (required_approving_review_count=0, require_code_owner_review=false,
+    // require_last_push_approval=false) because the control repository has a
+    // single maintainer; the $comment in main.json documents the compensating
+    // controls (no bypass actors, direct-push bans, stale-review dismissal,
+    // thread resolution, strict required checks, squash-only). Any drift in
+    // either direction fails CI.
+    expect(rules.find((rule) => rule.type === 'pull_request')?.parameters).toEqual({
+      required_approving_review_count: 0,
+      dismiss_stale_reviews_on_push: true,
+      require_code_owner_review: false,
+      require_last_push_approval: false,
+      required_review_thread_resolution: true,
+      allowed_merge_methods: ['squash'],
+    });
+    expect(rules.find((rule) => rule.type === 'required_status_checks')?.parameters).toEqual({
+      strict_required_status_checks_policy: true,
+      required_status_checks: [
+        { context: 'static / toolchain' },
+        { context: 'static / quality' },
+        { context: 'acceptance / offline' },
+        { context: 'platform / summary' },
+        { context: 'dependency / review' },
+      ],
+    });
   });
 
   it('fails closed before network access when mutation credentials are missing', () => {
