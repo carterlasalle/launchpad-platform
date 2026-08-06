@@ -25,6 +25,7 @@ metadata:
 # DNS target extraction is deployed; retry apply.
 # DNS exists; TLS issuance window elapsed; retry apply.
 # Canonical promotion targeting is deployed; retry apply.
+# Deployment meta shapes are deployed; retry apply.
   owners:
     - "@CarterLaSalle"
   labels:
