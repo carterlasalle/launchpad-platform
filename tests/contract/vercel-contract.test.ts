@@ -59,7 +59,7 @@ it('does not issue an invalid PATCH when the project is already Git-connected', 
     baseUrl: 'https://vercel.sandbox.test',
     fetchImpl: async (input) => {
       requests.push(String(input));
-      return new Response(JSON.stringify({ id: 'prj_1', link: { repo: 'acme/app', productionBranch: 'main' } }), { status: 200 });
+      return new Response(JSON.stringify({ id: 'prj_1', link: { org: 'acme', repo: 'app', productionBranch: 'main' } }), { status: 200 });
     },
   });
   const result = await adapter.ensureGitConnection({ projectId: 'app', repository: 'acme/app', productionBranch: 'main' }, ctx);

@@ -16,6 +16,13 @@ function canonicalProjectConfiguration(value: unknown): Record<string, unknown> 
 function providerProjectSettings(settings: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(settings).map(([key, value]) => [key === 'autoAssignProductionDomains' ? 'autoAssignCustomDomains' : key, value]));
 }
+function linkedRepository(link: Record<string, unknown>): string | null {
+  const repo = text(link.repo);
+  const owner = text(link.org);
+  if (repo === null) return null;
+  return owner !== null && !repo.includes('/') ? `${owner}/${repo}` : repo;
+}
+
 
 
 function text(value: unknown): string | null {
@@ -291,7 +298,7 @@ export class VercelAdapter implements ProjectProvider {
     const project = await this.observeProject({ projectId: spec.projectId }, ctx);
     if (project === null) throw new ProviderRequestError({ code: 'LP-VERCEL-PROJECT-MISSING', class: 'NOT_FOUND', provider: 'vercel', message: `Vercel project '${spec.projectId}' was not found while verifying Git connection.`, retryable: false });
     const link = record(project.configuration.link);
-    const repository = text(link.repo);
+    const repository = linkedRepository(link);
     const productionBranch = text(link.productionBranch);
     if (repository !== spec.repository || productionBranch !== spec.productionBranch) throw new ProviderRequestError({ code: 'LP-VERCEL-GIT-CONNECTION-UNSUPPORTED', class: 'UNSUPPORTED', provider: 'vercel', message: `Vercel project '${spec.projectId}' is not connected to '${spec.repository}' on branch '${spec.productionBranch}'; the current API has no supported project-update Git-link operation.`, retryable: false });
     const configuration = { repository, productionBranch };
