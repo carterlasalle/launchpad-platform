@@ -42,7 +42,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha')"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq '.head.sha')"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
@@ -96,7 +96,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha')"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq '.head.sha')"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
@@ -135,7 +135,7 @@ jobs:
             echo "::error::Refusing to run: expected head SHA is not a 40-character hex commit."
             exit 1
           fi
-          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq -r '.head.sha')"
+          actual="$(gh api "repos/${REPOSITORY}/pulls/${PULL_REQUEST}" --jq '.head.sha')"
           if [[ "${actual:-}" != "$EXPECTED_SHA" ]]; then
             echo "::error::Superseded run: the PR head is '${actual:-unknown}', expected '$EXPECTED_SHA'."
             exit 1
