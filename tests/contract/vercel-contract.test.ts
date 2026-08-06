@@ -32,9 +32,9 @@ it('creates a project with the official POST /v10/projects body', async () => {
   expect(result.changed).toBe(true);
   const create = expectRequest(requests, 'POST', '/v10/projects');
   expect(create.body).toEqual({
-    name: 'app', framework: 'nextjs', rootDirectory: '.',
+    name: 'app', framework: 'nextjs',
     installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null,
-    autoAssignProductionDomains: false,
+    autoAssignCustomDomains: false,
   });
   expect(create.headers['idempotency-key']).toBeDefined();
 });
@@ -44,7 +44,7 @@ it('updates an existing project with PATCH and reports change via canonical read
   const result = await changed.adapter.ensureProject(project, ctx);
   expect(result.changed).toBe(true);
   const patch = expectRequest(changed.requests, 'PATCH', '/v9/projects/prj_1');
-  expect(patch.body).toMatchObject({ framework: 'nextjs', rootDirectory: '.' });
+  expect(patch.body).toMatchObject({ framework: 'nextjs', nodeVersion: '24.x', autoAssignCustomDomains: false });
 
   const noop = mount(loadScenarios('vercel').projectNoop);
   const unchanged = await noop.adapter.ensureProject(project, ctx);
