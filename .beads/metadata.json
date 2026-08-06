@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "launchpad_platform",
+  "project_id": "e493807b-a3c3-4c98-9575-232d9cf8ef95"
+}
