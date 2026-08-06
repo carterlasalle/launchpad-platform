@@ -422,7 +422,26 @@ export class VercelAdapter implements ProjectProvider {
   }
 
   async ensureDomain(spec: DomainSpec, ctx: ProviderContext): Promise<MutationResult<ObservedResource>> {
-    const response = await this.client.request<unknown>(this.client.withTeam(`/v10/projects/${encodeURIComponent(spec.projectId)}/domains`), { method: 'POST', body: JSON.stringify({ name: spec.hostname }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-domain', spec.projectId, spec.hostname) });
+    let response: unknown;
+    try {
+      response = await this.client.request<unknown>(this.client.withTeam(`/v10/projects/${encodeURIComponent(spec.projectId)}/domains`), { method: 'POST', body: JSON.stringify({ name: spec.hostname }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-domain', spec.projectId, spec.hostname) });
+    } catch (error) {
+      if (error instanceof ProviderRequestError && error.class === 'CONFLICT') {
+        // The domain is already attached (a previous apply attempt or manual
+        // adoption). Only the same project may adopt it idempotently: a
+        // readback bound to this project proceeds, anything else (missing or
+        // foreign attachment) fails closed with the original conflict.
+        try {
+          const existing = await this.getDomain(spec.projectId, spec.hostname, ctx);
+          if (existing !== null) {
+            return { resource: { provider: 'vercel', resourceType: 'vercel.domain', resourceKey: spec.hostname, providerResourceId: spec.hostname, configuration: { name: existing.hostname, projectId: existing.projectId, verified: existing.verified }, ownershipFingerprint: spec.projectId, observedAt: new Date().toISOString() }, changed: false, operationId: idempotencyKey('vercel-domain-operation', spec.projectId, spec.hostname) };
+          }
+        } catch {
+          // Foreign or unreadable attachment: the conflict stands.
+        }
+      }
+      throw error;
+    }
     return { resource: { provider: 'vercel', resourceType: 'vercel.domain', resourceKey: spec.hostname, providerResourceId: text(record(response).id) ?? spec.hostname, configuration: record(response), ownershipFingerprint: spec.projectId, observedAt: new Date().toISOString() }, changed: true, operationId: idempotencyKey('vercel-domain-operation', spec.projectId, spec.hostname) };
   }
 

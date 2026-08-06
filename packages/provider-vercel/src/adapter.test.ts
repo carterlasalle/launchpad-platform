@@ -46,6 +46,27 @@ it('normalizes the Vercel root-directory default to the manifest canonical form'
   }
 });
 
+it('adopts an already-attached domain idempotently and rejects foreign conflicts', async () => {
+  const attached = new VercelAdapter({ token: 'token', teamId: 'team', fetchImpl: async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? 'GET';
+    if (url.includes('/v10/projects/prj_1/domains') && method === 'POST') return new Response(JSON.stringify({ error: { code: 'domain_already_exists' } }), { status: 409 });
+    if (url.includes('/v9/projects/prj_1/domains/app.example.com')) return new Response(JSON.stringify({ name: 'app.example.com', projectId: 'prj_1', verified: false, verification: [] }), { status: 200 });
+    return new Response('{}', { status: 404 });
+  } });
+  const adopted = await attached.ensureDomain({ projectId: 'prj_1', hostname: 'app.example.com', environment: 'production', mode: 'dns-only' }, ctx);
+  expect(adopted.changed).toBe(false);
+  expect(adopted.resource.configuration).toMatchObject({ name: 'app.example.com', projectId: 'prj_1' });
+  const foreign = new VercelAdapter({ token: 'token', teamId: 'team', fetchImpl: async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? 'GET';
+    if (url.includes('/v10/projects/prj_2/domains') && method === 'POST') return new Response(JSON.stringify({ error: { code: 'domain_already_exists' } }), { status: 409 });
+    if (url.includes('/v9/projects/prj_2/domains/app.example.com')) return new Response(JSON.stringify({ name: 'app.example.com', projectId: 'prj_OTHER', verified: true, verification: [] }), { status: 200 });
+    return new Response('{}', { status: 404 });
+  } });
+  await expect(foreign.ensureDomain({ projectId: 'prj_2', hostname: 'app.example.com', environment: 'production', mode: 'dns-only' }, ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-HTTP-409', class: 'CONFLICT' });
+});
+
 it('fails closed when the domain belongs to a different project', async () => {
   const adapter = new VercelAdapter({ token: 'token', teamId: 'team', fetchImpl: async (input) => (String(input).includes('/v9/projects/app/domains/app.example.com') ? new Response(JSON.stringify({ name: 'app.example.com', projectId: 'prj_OTHER', verified: true, verification: [] }), { status: 200 }) : new Response('{}', { status: 404 })) });
   await expect(adapter.getDomain('app', 'app.example.com', ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DOMAIN-IDENTITY-MISMATCH' });
