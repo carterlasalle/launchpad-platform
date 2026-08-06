@@ -209,6 +209,24 @@ function stepOutput<T>(outputs: Readonly<Record<string, unknown>>, stepId: strin
   return value as T; // persisted JSON written by our own phase functions; shape is the step contract
 }
 
+/**
+ * The canonical Vercel project id observed by the ensure-project readback.
+ * Vercel accepts the project NAME in project-scoped paths but returns the
+ * canonical id in domain responses; domain operations therefore target the
+ * canonical id so the domain identity check compares like-for-like.
+ */
+function canonicalProjectIdOf(outputs: Readonly<Record<string, unknown>>, base: ApplyBase): string {
+  const ensured = outputs['ensure-project'];
+  if (ensured !== null && typeof ensured === 'object' && 'verified' in ensured) {
+    const verified = (ensured as { verified?: unknown }).verified;
+    if (verified !== null && typeof verified === 'object' && 'providerResourceId' in verified) {
+      const id = (verified as { providerResourceId?: unknown }).providerResourceId;
+      if (typeof id === 'string' && id.length > 0) return id;
+    }
+  }
+  return base.applicationId;
+}
+
 /** Optional accessor for recovery paths where a later step may never have run. */
 function tryStepOutput<T>(outputs: Readonly<Record<string, unknown>>, stepId: string): T | undefined {
   if (!(stepId in outputs)) return undefined;
@@ -447,13 +465,14 @@ export async function applyEnsureEnvironments(input: { base: ApplyBase; store: L
   return { environment: 'production', skipped: false, mutation: { changed: mutation.changed, operationId: mutation.operationId }, fingerprints, resolved: input.bindings ?? [] };
 }
 
-export async function applyEnsureDomains(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; locks: HeldLocks; context: ProviderContext }): Promise<EnsureDomainsResult> {
+export async function applyEnsureDomains(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; locks: HeldLocks; projectId?: string; context: ProviderContext }): Promise<EnsureDomainsResult> {
   await refreshLocks(input.store, input.locks);
+  const projectId = input.projectId ?? input.base.applicationId;
   const domains: EnsureDomainsResult['domains'] = [];
   for (const domain of input.desired.domains) {
-    const mutation = await input.provider.ensureDomain({ projectId: input.base.applicationId, hostname: domain.hostname, environment: domain.environment, mode: domain.cloudflare.mode, proxyAcknowledgment: domain.cloudflare.proxy?.acknowledgeDoubleCdn === true }, input.context);
+    const mutation = await input.provider.ensureDomain({ projectId, hostname: domain.hostname, environment: domain.environment, mode: domain.cloudflare.mode, proxyAcknowledgment: domain.cloudflare.proxy?.acknowledgeDoubleCdn === true }, input.context);
     if (input.provider.getDomain) {
-      const observed = await input.provider.getDomain(input.base.applicationId, domain.hostname, input.context);
+      const observed = await input.provider.getDomain(projectId, domain.hostname, input.context);
       if (!observed || observed.hostname !== domain.hostname) throw new WorkflowFailure('LP-DOMAIN-READBACK-FAILED', `Domain '${domain.hostname}' was not observed after ensure.`);
     }
     domains.push({ hostname: domain.hostname, operationId: mutation.operationId });
@@ -523,14 +542,15 @@ export async function applyVerifyAuthoritative(input: { base: ApplyBase; provide
   return { verified: true, hostnames };
 }
 
-export async function applyVerifyVercelDomain(input: { base: ApplyBase; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; context: ProviderContext }): Promise<VerifyVercelDomainResult> {
+export async function applyVerifyVercelDomain(input: { base: ApplyBase; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; projectId?: string; context: ProviderContext }): Promise<VerifyVercelDomainResult> {
   if (!input.provider.getDomain || !input.provider.verifyDomain) return { skipped: true, domains: [] };
+  const projectId = input.projectId ?? input.base.applicationId;
   const domains: VerifyVercelDomainResult['domains'] = [];
   for (const domain of input.desired.domains) {
-    let observation = await input.provider.getDomain(input.base.applicationId, domain.hostname, input.context);
+    let observation = await input.provider.getDomain(projectId, domain.hostname, input.context);
     if (observation && !observation.verified) {
-      await input.provider.verifyDomain(input.base.applicationId, domain.hostname, input.context);
-      observation = await input.provider.getDomain(input.base.applicationId, domain.hostname, input.context);
+      await input.provider.verifyDomain(projectId, domain.hostname, input.context);
+      observation = await input.provider.getDomain(projectId, domain.hostname, input.context);
     }
     if (!observation || observation.verificationState !== 'VERIFIED') {
       throw new WorkflowFailure('LP-VERCEL-DOMAIN-VERIFICATION-PENDING', `Vercel domain '${domain.hostname}' is not verified (${observation?.verificationState ?? 'UNKNOWN'}).`, true);
@@ -810,13 +830,13 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
         return applyEnsureEnvironments({ base, store: runtime.store, provider: runtime.provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context, ...(runtime.secrets !== undefined ? { secrets: runtime.secrets } : {}), ...(ctx.bindings !== undefined ? { bindings: ctx.bindings } : {}) });
       });
     case 'ensure-domains':
-      return mutationStep(name, ctx, (locks) => applyEnsureDomains({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context }));
+      return mutationStep(name, ctx, (locks, outputs) => applyEnsureDomains({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, projectId: canonicalProjectIdOf(outputs, base), context: ctx.context }));
     case 'ensure-dns':
       return mutationStep(name, ctx, (locks) => applyEnsureDns({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context }));
     case 'verify-authoritative':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 2_000, maxDelayMs: 15_000 }, run: async () => applyVerifyAuthoritative({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), context: ctx.context }) };
     case 'verify-vercel-domain':
-      return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async () => applyVerifyVercelDomain({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), context: ctx.context }) };
+      return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async (_attempt, stepContext) => applyVerifyVercelDomain({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), projectId: canonicalProjectIdOf(stepContext.outputs, base), context: ctx.context }) };
     case 'verify-tls':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async () => applyVerifyTls({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), context: ctx.context }) };
     case 'create-candidate':
@@ -887,13 +907,13 @@ function requireRuntime(ctx: ApplyStepContext): ApplyRuntime {
   return ctx.runtime;
 }
 
-function mutationStep(name: ApplyPhaseName, ctx: ApplyStepContext, run: (locks: HeldLocks) => Promise<unknown>): DurableStep {
+function mutationStep(name: ApplyPhaseName, ctx: ApplyStepContext, run: (locks: HeldLocks, outputs: Readonly<Record<string, unknown>>) => Promise<unknown>): DurableStep {
   return {
     id: name,
     preconditionHash: canonicalJson({ planFingerprint: ctx.plan?.fingerprint ?? ctx.base.planFingerprint, sourceCommit: ctx.base.sourceCommit, lockOwner: ctx.base.workflowId }),
-    run: async () => {
+    run: async (_attempt, stepContext) => {
       if (!ctx.locks) throw new WorkflowFailure('LP-LOCK-CONFLICT', `Phase '${name}' requires held locks; the machine resumed without them.`);
-      return run(ctx.locks);
+      return run(ctx.locks, stepContext.outputs);
     },
   };
 }
@@ -1001,7 +1021,7 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
     {
       id: 'ensure-domains',
       preconditionHash: canonicalJson({ planFingerprint: base.planFingerprint, sourceCommit: base.sourceCommit }),
-      run: async (_attempt, stepContext) => applyEnsureDomains({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, plan: stepOutput<ReplanVerifyResult>(stepContext.outputs, 'replan-verify').plan, locks: stepOutput<AcquireLocksResult>(stepContext.outputs, 'acquire-locks').locks, context }),
+      run: async (_attempt, stepContext) => applyEnsureDomains({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, plan: stepOutput<ReplanVerifyResult>(stepContext.outputs, 'replan-verify').plan, locks: stepOutput<AcquireLocksResult>(stepContext.outputs, 'acquire-locks').locks, projectId: canonicalProjectIdOf(stepContext.outputs, base), context }),
     },
     {
       id: 'ensure-dns',
@@ -1018,7 +1038,7 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
       id: 'verify-vercel-domain',
       preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: submitted.desired.domains.map((domain) => domain.hostname) }),
       retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 },
-      run: async () => applyVerifyVercelDomain({ base, provider: runtime.provider, desired: submitted.desired, context }),
+      run: async (_attempt, stepContext) => applyVerifyVercelDomain({ base, provider: runtime.provider, desired: submitted.desired, projectId: canonicalProjectIdOf(stepContext.outputs, base), context }),
     },
     {
       id: 'verify-tls',

@@ -180,9 +180,9 @@ function applyTransport(options: ApplyTransportOptions = {}): RecordedSandboxTra
     // verify POST then flips it to verified and the post-verify read serves
     // the verified observation (LP-VERCEL-DOMAIN-VERIFICATION-PENDING would
     // fire without the real verify round-trip).
-    { id: 'vercel.domain.get.unverified', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${ACCEPTANCE_APP_ID}/domains/${ACCEPTANCE_DOMAIN}`, json: { name: ACCEPTANCE_DOMAIN, projectId: ACCEPTANCE_APP_ID, verified: false, verification: [{ type: 'cname', domain: `_vercel.${ACCEPTANCE_DOMAIN}`, value: DNS_TARGET }] }, times: 2 },
-    { id: 'vercel.domain.verify', method: 'POST', url: `https://vercel.sandbox.test/v9/projects/${ACCEPTANCE_APP_ID}/domains/${ACCEPTANCE_DOMAIN}/verify`, json: { name: ACCEPTANCE_DOMAIN, projectId: ACCEPTANCE_APP_ID, verified: true, verification: [] } },
-    { id: 'vercel.domain.get.verified', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${ACCEPTANCE_APP_ID}/domains/${ACCEPTANCE_DOMAIN}`, json: { name: ACCEPTANCE_DOMAIN, projectId: ACCEPTANCE_APP_ID, verified: true, verification: [] }, times: 1 },
+    { id: 'vercel.domain.get.unverified', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${ACCEPTANCE_PROJECT_ID}/domains/${ACCEPTANCE_DOMAIN}`, json: { name: ACCEPTANCE_DOMAIN, projectId: ACCEPTANCE_PROJECT_ID, verified: false, verification: [{ type: 'cname', domain: `_vercel.${ACCEPTANCE_DOMAIN}`, value: DNS_TARGET }] }, times: 2 },
+    { id: 'vercel.domain.verify', method: 'POST', url: `https://vercel.sandbox.test/v9/projects/${ACCEPTANCE_PROJECT_ID}/domains/${ACCEPTANCE_DOMAIN}/verify`, json: { name: ACCEPTANCE_DOMAIN, projectId: ACCEPTANCE_PROJECT_ID, verified: true, verification: [] } },
+    { id: 'vercel.domain.get.verified', method: 'GET', url: `https://vercel.sandbox.test/v9/projects/${ACCEPTANCE_PROJECT_ID}/domains/${ACCEPTANCE_DOMAIN}`, json: { name: ACCEPTANCE_DOMAIN, projectId: ACCEPTANCE_PROJECT_ID, verified: true, verification: [] }, times: 1 },
     // TLS readiness gate (applyVerifyTls): an issued certificate covering the
     // domain with a far-future expiry yields READY; without this exchange the
     // gate would fail with LP-TLS-READINESS-PENDING.
@@ -195,7 +195,7 @@ function applyTransport(options: ApplyTransportOptions = {}): RecordedSandboxTra
     // project-scoped POST (env/domains/promote), so the more specific routes
     // are recorded first.
     { id: 'vercel.env.create', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_APP_ID}/env`, json: { key: 'LAUNCHPAD_ENV', id: 'env_acceptance_1' } },
-    { id: 'vercel.domain.attach', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_APP_ID}/domains`, json: { id: 'dom_acceptance_1', name: ACCEPTANCE_DOMAIN } },
+    { id: 'vercel.domain.attach', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_PROJECT_ID}/domains`, json: { id: 'dom_acceptance_1', name: ACCEPTANCE_DOMAIN } },
     {
       id: 'vercel.promote', method: 'POST', url: `https://vercel.sandbox.test/v10/projects/${ACCEPTANCE_APP_ID}/promote`,
       json: {
