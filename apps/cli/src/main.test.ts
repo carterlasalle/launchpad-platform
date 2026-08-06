@@ -897,10 +897,13 @@ describe('controller token selection', () => {
     const plansDir = tempDir('launchpad-cli-plans-');
     writeFileSync(join(plansDir, 'plans.json'), JSON.stringify([planFor()]));
     bothEnv();
+    vi.stubEnv('GITHUB_REPOSITORY_ID', '123');
+    vi.stubEnv('GITHUB_REPOSITORY_OWNER_ID', '456');
     stubFetch([
       oidcRoute(),
       { match: /\/v1\/plans\/verify$/, response: (url, init) => {
         expect(bearerOf(init)).toBe(`Bearer ${oidcJwt}`);
+        expect(JSON.parse(String(init?.body))).toMatchObject({ repositoryId: 123, ownerId: 456 });
         return jsonResponse({ accepted: true, deduplicated: false, attestationId: 'att-1' });
       } },
       { match: /\/v1\/applications\/invalid-root\/preview\/verify$/, response: (url, init) => {
