@@ -600,8 +600,9 @@ function buildStages(input: PreviewWorkflowInput, runId: string, repositoryId: n
       status: 'CREATING_DEPLOYMENT',
       preconditionHash: canonicalJson({ projectName, sourceCommit: input.sourceCommit, revision: input.revision, repository: desired.repository.name }),
       run: async () => {
-        const deployment = await input.provider.createDeployment({ projectId: projectName, environment: 'preview', repository: desired.repository.name, commitSha: input.sourceCommit, desiredGeneration: input.revision, staged: false, rootDirectory: desired.vercel.project.rootDirectory }, input.context);
-        if (deployment.commitSha !== input.sourceCommit) throw new WorkflowFailure('LP-VERCEL-DEPLOYMENT-COMMIT-MISMATCH', `Deployment '${deployment.id}' targets commit ${deployment.commitSha}, not ${input.sourceCommit}.`);
+        const buildCommit = await resolvePreviewBuildCommit(input);
+        const deployment = await input.provider.createDeployment({ projectId: projectName, environment: 'preview', repository: desired.repository.name, commitSha: buildCommit, desiredGeneration: input.revision, staged: false, rootDirectory: desired.vercel.project.rootDirectory }, input.context);
+        if (deployment.commitSha !== buildCommit) throw new WorkflowFailure('LP-VERCEL-DEPLOYMENT-COMMIT-MISMATCH', `Deployment '${deployment.id}' targets commit ${deployment.commitSha}, not ${buildCommit}.`);
         await input.store.recordDeployment({ id: deployment.id, applicationId: desired.metadata.id, projectId: projectName, environment: 'preview', repository: desired.repository.name, commitSha: deployment.commitSha, desiredGeneration: input.revision, state: deployment.state, url: deployment.url });
         return deployment;
       },
@@ -718,6 +719,25 @@ export function redactBuildLog(excerpt: DeploymentLogExcerpt, desired: DesiredAp
 // ---------------------------------------------------------------------------
 // Public entry points
 // ---------------------------------------------------------------------------
+
+/**
+ * The shadow preview builds the APPLICATION repository at its production
+ * branch HEAD. The catalog PR commit lives in the control repository and
+ * does not exist in the application repository, so it can never be the
+ * deployment target; the source provider resolves the real app commit.
+ */
+async function resolvePreviewBuildCommit(input: PreviewWorkflowInput): Promise<string> {
+  const source = input.source;
+  if (!source || typeof source.resolveRef !== 'function') {
+    throw new WorkflowFailure('LP-PREVIEW-COMMIT-UNRESOLVABLE', `The application repository branch '${input.desired.repository.productionBranch}' could not be resolved for the shadow preview; a source provider with ref resolution is required.`);
+  }
+  const ref = await source.resolveRef(input.desired.repository.name, input.desired.repository.productionBranch, input.context);
+  const sha = ref?.sha;
+  if (typeof sha !== 'string' || !/^[0-9a-f]{40}$/.test(sha)) {
+    throw new WorkflowFailure('LP-PREVIEW-COMMIT-UNRESOLVABLE', `The application repository '${input.desired.repository.name}' did not resolve to a valid commit for the shadow preview.`);
+  }
+  return sha;
+}
 
 async function resolveRepositoryId(input: PreviewWorkflowInput): Promise<number> {
   if (typeof input.repositoryId === 'number' && input.repositoryId > 0) return input.repositoryId;

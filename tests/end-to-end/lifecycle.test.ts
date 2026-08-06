@@ -39,7 +39,7 @@ it('proves catalog, preview, apply, drift, reconciliation, and safe deletion', a
   if (!desired) throw new Error('Fixture application missing');
   const provider = new FakeProvider();
   const store = new InMemoryLaunchpadStore({ now: () => new Date(NOW) });
-  const preview = await runPreviewWorkflow({ store, provider, desired, pullRequestNumber: 1, repositoryId: 12345, revision: 1, sourceCommit: COMMIT, planFingerprint: 'e2e-preview', health: desired.environments.preview?.health ?? { path: '/api/health', method: 'GET', expectedStatus: [200], timeoutSeconds: 1, attempts: 1, intervalSeconds: 0 }, context, fetchImpl: async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 }), sleep: async () => undefined });
+  const preview = await runPreviewWorkflow({ store, provider, source: provider as never, desired, pullRequestNumber: 1, repositoryId: 12345, revision: 1, sourceCommit: COMMIT, planFingerprint: 'e2e-preview', health: desired.environments.preview?.health ?? { path: '/api/health', method: 'GET', expectedStatus: [200], timeoutSeconds: 1, attempts: 1, intervalSeconds: 0 }, context, fetchImpl: async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 }), sleep: async () => undefined });
   expect(preview.status, `preview failed with ${preview.errorCode ?? 'unknown'}`).toBe('READY');
   expect(preview.health === null || preview.health.result === 'PASSED').toBe(true);
   provider.capabilities = async () => FULL_CAPABILITIES;

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesiredApplication } from '@launchpad/core';
 import { AppPreviewStatusWorkflow, PreviewApplicationWorkflow } from '../../apps/controller/src/workflows.js';
 import { prClaims, signGithubToken } from '../fixtures/oidc.js';
-import { HEAD_SHA, MERGE_SHA, SOURCE_COMMIT, createHarness, type ControllerHarness } from './harness.js';
+import { HEAD_SHA, MAIN_SHA, MERGE_SHA, SOURCE_COMMIT, createHarness, type ControllerHarness } from './harness.js';
 
 vi.mock('cloudflare:workers', () => ({
   WorkflowEntrypoint: class WorkflowEntrypoint {
@@ -111,7 +111,7 @@ describe('catalog PR preview flow (integration)', () => {
     expect(stepsRows.filter((step) => step.status === 'SUCCEEDED')).toHaveLength(11);
     const deployments = await harness.store.listDeployments('fixture-app', { environment: 'preview' });
     const previewDeployment = deployments.find((deployment) => deployment.id.startsWith('dpl_'));
-    expect(previewDeployment?.commitSha).toBe(HEAD_SHA);
+    expect(previewDeployment?.commitSha).toBe(MAIN_SHA);
     expect(previewDeployment?.url).toMatch(/^https:\/\/lp-pr-42-.*\.vercel\.app$/);
     const health = await harness.store.listHealthChecks('fixture-app', { environment: 'preview' });
     expect(health[0]).toMatchObject({ result: 'PASSED', url: previewDeployment?.url ?? '' });
@@ -122,7 +122,7 @@ describe('catalog PR preview flow (integration)', () => {
     // Exact-commit transport: the deployment was created for the PR head sha and the shadow project is collision-resistant.
     const createCalls = harness.transport.jsonBodies('POST', '/v13/deployments');
     expect(createCalls).toHaveLength(1);
-    expect((createCalls[0] as Record<string, unknown>).gitSource).toMatchObject({ sha: HEAD_SHA, ref: HEAD_SHA });
+    expect((createCalls[0] as Record<string, unknown>).gitSource).toMatchObject({ sha: MAIN_SHA, ref: MAIN_SHA });
     const projectCalls = harness.transport.jsonBodies('POST', '/v10/projects');
     expect((projectCalls[0] as Record<string, unknown>).name).toMatch(/^lp-pr-42-/);
     // The string repositoryId from the OIDC binding must reach the shadow
