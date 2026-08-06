@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "launchpad-control-plane",
+  "workers_dev": true,
   "main": "apps/controller/src/worker.ts",
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["nodejs_compat"],
