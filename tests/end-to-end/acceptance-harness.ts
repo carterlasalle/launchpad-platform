@@ -448,6 +448,7 @@ export function recordedProject(overrides: Record<string, unknown> = {}): Record
     skewProtection: false,
     functions: [],
     settings: { autoAssignProductionDomains: false },
+    link: { repo: ACCEPTANCE_REPOSITORY, productionBranch: 'main' },
     domains: [],
     ...overrides,
   };

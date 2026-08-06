@@ -302,6 +302,7 @@ export function vercelProject(id: string, overrides: Record<string, unknown> = {
     protection: {},
     functions: [],
     target: 'production',
+    link: { repo: 'example/fixture', productionBranch: 'main' },
     ...overrides,
   };
 }

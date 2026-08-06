@@ -35,6 +35,7 @@ it('creates a project with the official POST /v10/projects body', async () => {
     name: 'app', framework: 'nextjs',
     installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null,
     autoAssignCustomDomains: false,
+    gitRepository: { type: 'github', repo: 'acme/app' },
   });
   expect(create.headers['idempotency-key']).toBeDefined();
 });
@@ -51,12 +52,20 @@ it('updates an existing project with PATCH and reports change via canonical read
   expect(unchanged.changed).toBe(false);
 });
 
-it('connects the git repository with the official PATCH body', async () => {
-  const { adapter, requests } = mount(loadScenarios('vercel').gitConnection);
+it('does not issue an invalid PATCH when the project is already Git-connected', async () => {
+  const requests: string[] = [];
+  const adapter = new VercelAdapter({
+    token: 'token',
+    baseUrl: 'https://vercel.sandbox.test',
+    fetchImpl: async (input) => {
+      requests.push(String(input));
+      return new Response(JSON.stringify({ id: 'prj_1', link: { repo: 'acme/app', productionBranch: 'main' } }), { status: 200 });
+    },
+  });
   const result = await adapter.ensureGitConnection({ projectId: 'app', repository: 'acme/app', productionBranch: 'main' }, ctx);
-  expect(result.resource.providerResourceId).toBe('app');
-  const patch = expectRequest(requests, 'PATCH', '/v9/projects/app');
-  expect(patch.body).toEqual({ gitRepository: { type: 'github', repo: 'acme/app' }, productionBranch: 'main' });
+  expect(result.changed).toBe(false);
+  expect(result.resource.configuration).toEqual({ repository: 'acme/app', productionBranch: 'main' });
+  expect(requests).toEqual(['https://vercel.sandbox.test/v9/projects/app']);
 });
 
 const DB_SECRET = 'postgres://contract-db-secret';
