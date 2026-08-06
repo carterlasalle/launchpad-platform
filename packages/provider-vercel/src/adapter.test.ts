@@ -46,6 +46,11 @@ it('normalizes the Vercel root-directory default to the manifest canonical form'
   }
 });
 
+it('fails closed when the domain belongs to a different project', async () => {
+  const adapter = new VercelAdapter({ token: 'token', teamId: 'team', fetchImpl: async (input) => (String(input).includes('/v9/projects/app/domains/app.example.com') ? new Response(JSON.stringify({ name: 'app.example.com', projectId: 'prj_OTHER', verified: true, verification: [] }), { status: 200 }) : new Response('{}', { status: 404 })) });
+  await expect(adapter.getDomain('app', 'app.example.com', ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DOMAIN-IDENTITY-MISMATCH' });
+});
+
 it('fails closed when the deployments list is malformed', async () => {
   const adapter = new VercelAdapter({ token: 'token', fetchImpl: async (input) => (String(input).includes('/v7/deployments') ? new Response(JSON.stringify({ deployments: 'nope' }), { status: 200 }) : new Response('{}', { status: 200 })) });
   await expect(adapter.findDeploymentByCommit('app', COMMIT, ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DEPLOYMENTS-MALFORMED' });
