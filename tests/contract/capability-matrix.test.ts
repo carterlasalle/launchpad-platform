@@ -182,6 +182,19 @@ describe('planner boundary with real capability snapshots', () => {
   const manifest = loadCatalog([{ path: 'catalog/apps/fixture.yaml', content: readFileSync('catalog/apps/fixture.yaml', 'utf8') }]);
   const desired = manifest.applications[0];
   if (!desired) throw new Error('Fixture manifest did not load');
+  const unsupportedDesired: DesiredApplication = {
+    ...desired,
+    vercel: {
+      ...desired.vercel,
+      project: {
+        ...desired.vercel.project,
+        build: { ...desired.vercel.project.build, developmentCommand: 'yarn dev' },
+        regions: { functions: ['iad1'] },
+        protection: { preview: 'public', production: 'public' },
+        settings: { ...desired.vercel.project.settings, webAnalytics: true, speedInsights: true },
+      },
+    },
+  };
 
   function observedWith(projectConfig: Record<string, unknown>): ObservedApplication {
     return {
@@ -198,7 +211,7 @@ describe('planner boundary with real capability snapshots', () => {
 
   it('blocks any field the real Vercel matrix does not advertise', async () => {
     const caps: ProviderCapabilities = await vercelAdapter([]).adapter.capabilities();
-    const plan = await buildPlan({ desired, observed: observedWith({}), capabilities: caps, sourceCommit: 'a'.repeat(40), desiredGeneration: 1, now: NOW });
+    const plan = await buildPlan({ desired: unsupportedDesired, observed: observedWith({}), capabilities: caps, sourceCommit: 'a'.repeat(40), desiredGeneration: 1, now: NOW });
     expect(plan.result).toBe('BLOCKED');
     expect(plan.blockedReason).toBe('LP-UNSUPPORTED-FIELD');
     const unsupported = plan.policyResults.filter((result) => result.rule === 'capability.unsupported' && result.result === 'BLOCK');

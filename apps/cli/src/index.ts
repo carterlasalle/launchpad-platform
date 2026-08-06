@@ -5,11 +5,11 @@ import { loadCatalog, parseZoneRegistry, ZONE_REGISTRY_FILE, type CatalogIssue }
 import { buildPlan, buildResourceGraph, desiredStateHash, renderPlanMarkdown, type DeploymentRecord, type DesiredApplication, type HealthCheckRecord, type ObservedApplication, type ObservedResource, type PlatformPlan, type ResourceGraph } from '@launchpad/core';
 import { checkHealth } from '@launchpad/health';
 import { artifactFiles, escapeHtml, renderDotGraph, renderFailureStickyComment, renderStickyComment, type HealthSummary, type JobResult, type PreviewSummary, type ProviderErrorSummary } from '@launchpad/github-reporting';
-import { boundStickyCommentBody, redactText } from '@launchpad/shared';
+import { boundStickyCommentBody, canonicalJson, redactText, sha256Hex } from '@launchpad/shared';
 import { GitHubAdapter } from '@launchpad/provider-github';
 import { CloudflareAdapter } from '@launchpad/provider-cloudflare';
 import { VercelAdapter } from '@launchpad/provider-vercel';
-import type { ProviderContext } from '@launchpad/provider-contract';
+import type { ProviderCapabilities, ProviderContext } from '@launchpad/provider-contract';
 
 export type CliCommand = 'validate' | 'preflight' | 'plan' | 'status' | 'graph' | 'health' | 'reconcile' | 'logs' | 'preview' | 'report-pr' | 'apply' | 'destroy' | 'app-preview' | 'controller-smoke';
 export interface CliArgs { command: CliCommand; flags: Record<string, string | boolean>; }
@@ -308,13 +308,23 @@ function observedFrom(application: DesiredApplication, project: ObservedResource
   };
 }
 
-interface PlanAdapters { github: GitHubAdapter; vercel: VercelAdapter; }
+interface PlanAdapters { github: GitHubAdapter; vercel: VercelAdapter; cloudflare: CloudflareAdapter; }
 
 function providerPlanAdapters(): PlanAdapters {
   const githubToken = process.env.LAUNCHPAD_GITHUB_TOKEN;
   const vercelToken = process.env.LAUNCHPAD_VERCEL_TOKEN;
   if (!githubToken || !vercelToken) throw new CliFailure('LP-PROVIDER-STATE-UNAVAILABLE', 'Planning requires live provider state: set LAUNCHPAD_GITHUB_TOKEN and LAUNCHPAD_VERCEL_TOKEN (read-only credentials).');
-  return { github: new GitHubAdapter({ token: githubToken }), vercel: new VercelAdapter({ token: vercelToken, ...(process.env.LAUNCHPAD_VERCEL_TEAM_ID ? { teamId: process.env.LAUNCHPAD_VERCEL_TEAM_ID } : {}) }) };
+  return {
+    github: new GitHubAdapter({ token: githubToken }),
+    vercel: new VercelAdapter({ token: vercelToken, ...(process.env.LAUNCHPAD_VERCEL_TEAM_ID ? { teamId: process.env.LAUNCHPAD_VERCEL_TEAM_ID } : {}) }),
+    cloudflare: new CloudflareAdapter({ token: process.env.LAUNCHPAD_CLOUDFLARE_TOKEN }),
+  };
+}
+
+async function plannerCapabilities(adapters: PlanAdapters): Promise<ProviderCapabilities> {
+  const [vercel, cloudflare] = await Promise.all([adapters.vercel.capabilities(), adapters.cloudflare.capabilities()]);
+  const fields = { ...vercel.fields, ...cloudflare.fields };
+  return { provider: 'vercel', adapterVersion: 'composite-v1', features: { ...vercel.features, ...cloudflare.features }, fields, snapshotHash: await sha256Hex(canonicalJson(fields)) };
 }
 
 function providerContext(applicationId: string, flags: Record<string, string | boolean>): ProviderContext {
@@ -440,13 +450,13 @@ async function buildPlans(applications: readonly DesiredApplication[], sha: stri
   const plans: PlatformPlan[] = [];
   const graphs: ResourceGraph[] = [];
   const providerState: Record<string, unknown> = {};
+  const capabilities = await plannerCapabilities(adapters);
   for (const application of applications) {
     const context = providerContext(application.metadata.id, flags);
     const repository = await adapters.github.observeRepository(application.repository.name, context);
     if (repository.archived || !repository.access) throw new CliFailure('LP-GITHUB-REPO-INACCESSIBLE', `Repository ${application.repository.name} is archived or not accessible.`);
     const root = await adapters.github.hasPath(application.repository.name, application.repository.deploymentRef, application.vercel.project.rootDirectory, context);
     if (root === 'missing') throw new CliFailure('LP-GITHUB-ROOT-MISSING', `Root directory '${application.vercel.project.rootDirectory}' does not exist in ${application.repository.name}@${application.repository.deploymentRef}.`);
-    const capabilities = await adapters.vercel.capabilities();
     const project = await adapters.vercel.observeProject({ projectId: application.metadata.id }, context);
     const deployment = project === null ? null : await adapters.vercel.findDeploymentByCommit(application.metadata.id, sha, context);
     const observed = observedFrom(application, project, deployment);
@@ -796,7 +806,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
   const controller = requireController(args.flags);
 
   if (args.command === 'controller-smoke') {
-    const response = await fetch(`${controller.replace(/\/$/, '')}/healthz`);
+    const response = await fetch(`${controller.replace(/\/$/, '')}/healthz`, { headers: { 'user-agent': 'launchpad-controller-smoke' } });
     output.write(`${await response.text()}\n`);
     return response.ok ? 0 : 1;
   }
