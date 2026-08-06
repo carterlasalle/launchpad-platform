@@ -141,6 +141,12 @@ function bindingMissing(field: string): OidcBindingError {
  * (the route calls `verifyPullRequestHead`). For every other event the token
  * `sha` claim must equal the request's `sourceCommit` exactly.
  */
+function pullRequestNumberFromClaims(claims: GithubOidcClaims): string | null {
+  if (claims.pull_request_number !== undefined) return claims.pull_request_number;
+  const match = /^refs\/pull\/(\d+)\/merge$/.exec(claims.ref ?? '');
+  return match?.[1] ?? null;
+}
+
 export function assertOidcBinding(claims: GithubOidcClaims, binding: OidcBinding): void {
   if (binding.repository !== undefined && binding.repository !== null) {
     if (claims.repository !== binding.repository) throw bindingMismatch('repository');
@@ -166,7 +172,7 @@ export function assertOidcBinding(claims: GithubOidcClaims, binding: OidcBinding
     throw bindingMismatch('event_name');
   }
   if (binding.prNumber !== undefined && binding.prNumber !== null) {
-    if (claims.pull_request_number !== String(binding.prNumber)) throw bindingMismatch('pull_request_number');
+    if (pullRequestNumberFromClaims(claims) !== String(binding.prNumber)) throw bindingMismatch('pull_request_number');
   }
   if (binding.ref !== undefined && binding.ref !== null && claims.ref !== binding.ref) {
     throw bindingMismatch('ref');
@@ -178,7 +184,7 @@ export function assertOidcBinding(claims: GithubOidcClaims, binding: OidcBinding
     if (claims.event_name === 'pull_request') {
       // GitHub never includes the PR head SHA in OIDC claims; the caller must
       // verify it server-side against the pull request API instead.
-      if (!claims.pull_request_number) throw bindingMissing('pull_request_number');
+      if (pullRequestNumberFromClaims(claims) === null) throw bindingMissing('pull_request_number');
     } else {
       if (!claims.sha) throw bindingMissing('sha');
       if (claims.sha !== binding.sourceCommit) throw bindingMismatch('sourceCommit');

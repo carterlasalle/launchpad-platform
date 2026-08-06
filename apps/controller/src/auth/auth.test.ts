@@ -65,6 +65,8 @@ it('applies GitHub pull_request OIDC semantics: no merge-sha equality, PR number
   const prClaims = claims({ event_name: 'pull_request', sha: 'c'.repeat(40), pull_request_number: '42', ref: 'refs/pull/42/merge' });
   expect(() => assertOidcBinding(prClaims, { event: 'pull_request', prNumber: 42, ref: 'refs/pull/42/merge', sourceCommit: 'b'.repeat(40) })).not.toThrow();
   expectBindingError(() => assertOidcBinding(prClaims, { event: 'pull_request', prNumber: 43, sourceCommit: 'b'.repeat(40) }), 'LP-OIDC-CLAIM-MISMATCH-PULL_REQUEST_NUMBER');
+  const refBoundClaims = claims({ event_name: 'pull_request', pull_request_number: undefined, ref: 'refs/pull/42/merge' });
+  expect(() => assertOidcBinding(refBoundClaims, { event: 'pull_request', prNumber: 42, ref: 'refs/pull/42/merge', sourceCommit: 'b'.repeat(40) })).not.toThrow();
   expectBindingError(() => assertOidcBinding(claims({ event_name: 'pull_request', pull_request_number: undefined }), { event: 'pull_request', prNumber: 42, sourceCommit: 'b'.repeat(40) }), 'LP-OIDC-CLAIM-MISMATCH-PULL_REQUEST_NUMBER');
   expectBindingError(() => assertOidcBinding(claims({ event_name: 'pull_request', pull_request_number: undefined }), { event: 'pull_request', sourceCommit: 'b'.repeat(40) }), 'LP-OIDC-CLAIM-MISSING-PULL_REQUEST_NUMBER');
 });
