@@ -90,8 +90,11 @@ it('grants read-only pull-request metadata access to stale-head guards', () => {
 
 it('uses valid gh API jq syntax for stale-head guards', () => {
   const workflow = readFileSync(join(workflowDirectory, 'validate-plan.yml'), 'utf8');
+  const action = readFileSync(join(process.cwd(), '.github/actions/assert-pr-head/action.yml'), 'utf8');
   expect(workflow).toContain("--jq '.head.sha'");
+  expect(action).toContain("--jq '.head.sha'");
   expect(workflow).not.toContain("--jq -r '.head.sha'");
+  expect(action).not.toContain("--jq -r '.head.sha'");
 });
 
 it('keeps automatic production workflows dormant until explicitly enabled', () => {
