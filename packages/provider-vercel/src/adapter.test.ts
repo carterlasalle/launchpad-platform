@@ -72,6 +72,21 @@ it('fails closed when the domain belongs to a different project', async () => {
   await expect(adapter.getDomain('app', 'app.example.com', ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DOMAIN-IDENTITY-MISMATCH' });
 });
 
+it('reads the git repository and commit from every Vercel deployment meta shape during wait', async () => {
+  const shapes = [
+    { meta: { gitRepo: 'acme/app', gitCommitSha: COMMIT } },
+    { meta: { repo: 'acme/app', githubCommitSha: COMMIT } },
+    { meta: { commitSha: COMMIT, repo: 'acme/app' } },
+  ];
+  for (const meta of shapes) {
+    const adapter = new VercelAdapter({ token: 'token', fetchImpl: async (input) => (String(input).includes('/v13/deployments/dpl_wait') ? new Response(JSON.stringify({ id: 'dpl_wait', projectId: 'prj_1', state: 'READY', target: 'production', meta: meta.meta }), { status: 200 }) : new Response('{}', { status: 404 })) });
+    const ready = await adapter.waitForDeployment({ projectId: 'prj_1', deploymentId: 'dpl_wait', timeoutMs: 5_000, pollMs: 10 }, ctx);
+    expect(ready.repository, JSON.stringify(meta)).toBe('acme/app');
+    expect(ready.commitSha, JSON.stringify(meta)).toBe(COMMIT);
+    expect(ready.environment, JSON.stringify(meta)).toBe('production');
+  }
+});
+
 it('fails closed when the deployments list is malformed', async () => {
   const adapter = new VercelAdapter({ token: 'token', fetchImpl: async (input) => (String(input).includes('/v7/deployments') ? new Response(JSON.stringify({ deployments: 'nope' }), { status: 200 }) : new Response('{}', { status: 200 })) });
   await expect(adapter.findDeploymentByCommit('app', COMMIT, ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DEPLOYMENTS-MALFORMED' });
