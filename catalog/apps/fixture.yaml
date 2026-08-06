@@ -18,6 +18,7 @@ metadata:
 # Application-branch deployment resolution is live.
 # Preview result projection is deployed; retry final apply.
 # Observed-state parity is deployed; retry apply.
+# Plan artifacts are faithful; fresh attestation will bind this revision.
   owners:
     - "@CarterLaSalle"
   labels:
