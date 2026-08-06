@@ -4,6 +4,7 @@ metadata:
   id: tokentest
   displayName: Token Test
   description: Personal token calculator managed by Launchpad
+# Activation evidence is tracked through the protected apply workflow.
   owners:
     - "@CarterLaSalle"
   labels:
