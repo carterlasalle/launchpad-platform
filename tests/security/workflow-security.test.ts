@@ -78,6 +78,16 @@ it('executes credentialed and report-writing PR steps only from the trusted base
   expect(report?.env?.GITHUB_TOKEN).toBe('${{ github.token }}');
 });
 
+it('grants read-only pull-request metadata access to stale-head guards', () => {
+  const workflow = parse(readFileSync(join(workflowDirectory, 'validate-plan.yml'), 'utf8')) as {
+    jobs: Record<string, { permissions?: Record<string, string> }>;
+  };
+  for (const job of ['changes', 'schema', 'catalog', 'provider-preflight', 'plan', 'preview', 'health']) {
+    expect(workflow.jobs[job]?.permissions?.['pull-requests'], job).toBe('read');
+  }
+  expect(workflow.jobs.summary?.permissions?.['pull-requests']).toBe('write');
+});
+
 it('keeps automatic production workflows dormant until explicitly enabled', () => {
   const automaticWorkflows = [
     { file: 'apply.yml', job: 'apply' },
