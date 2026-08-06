@@ -58,7 +58,10 @@ export interface VercelProjectSpec {
       ignoredBuildStep: string | null;
     };
     git: { connected: boolean; productionBranch: string };
-    deployment: { autoAssignProductionDomains: boolean; prioritizeProductionBuilds: boolean; rollingRelease: string | null; skewProtection: boolean };
+    // Only API-applicable deployment settings are declarable; the Vercel
+    // project API rejects the dashboard-only settings (prioritizeProductionBuilds,
+    // rollingRelease, skewProtection), so they are not part of the model.
+    deployment: { autoAssignProductionDomains: boolean };
     regions: { functions: string[] };
     protection: Record<string, string>;
     settings: Record<string, boolean | string | number | null>;

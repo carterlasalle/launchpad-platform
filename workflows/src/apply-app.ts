@@ -176,9 +176,6 @@ function projectSpec(application: DesiredApplication): ProjectSpec {
     settings: {
       ...project.settings,
       autoAssignProductionDomains: project.deployment.autoAssignProductionDomains,
-      prioritizeProductionBuilds: project.deployment.prioritizeProductionBuilds,
-      rollingRelease: project.deployment.rollingRelease,
-      skewProtection: project.deployment.skewProtection,
     },
   };
 }
@@ -437,9 +434,6 @@ export async function applyEnsureSettings(input: { base: ApplyBase; store: Launc
     developmentCommand: input.desired.vercel.project.build.developmentCommand,
     ignoredBuildStep: input.desired.vercel.project.build.ignoredBuildStep,
     autoAssignProductionDomains: input.desired.vercel.project.deployment.autoAssignProductionDomains,
-    prioritizeProductionBuilds: input.desired.vercel.project.deployment.prioritizeProductionBuilds,
-    rollingRelease: input.desired.vercel.project.deployment.rollingRelease,
-    skewProtection: input.desired.vercel.project.deployment.skewProtection,
     functions: input.desired.vercel.project.regions.functions,
   };
   const mismatches: string[] = [];

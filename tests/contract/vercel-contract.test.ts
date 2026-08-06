@@ -25,7 +25,7 @@ it('observes a project and returns null when it does not exist', async () => {
   await expect(missing.adapter.observeProject({ projectId: 'app' }, ctx)).resolves.toBeNull();
 });
 
-it('creates a project with the official POST /v10/projects body', async () => {
+it('creates a project with the official POST /v10/projects body and applies declared settings via PATCH', async () => {
   const { adapter, requests } = mount(loadScenarios('vercel').projectCreate);
   const result = await adapter.ensureProject(project, ctx);
   expect(result.resource.providerResourceId).toBe('prj_1');
@@ -34,10 +34,13 @@ it('creates a project with the official POST /v10/projects body', async () => {
   expect(create.body).toEqual({
     name: 'app', framework: 'nextjs',
     installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null,
-    autoAssignCustomDomains: false,
     gitRepository: { type: 'github', repo: 'acme/app' },
   });
   expect(create.headers['idempotency-key']).toBeDefined();
+  // Settings that map to API fields are honored through the update contract;
+  // the create body itself stays within Vercel's accepted schema.
+  const patch = expectRequest(requests, 'PATCH', '/v9/projects/prj_1');
+  expect(patch.body).toEqual({ autoAssignCustomDomains: false });
 });
 
 it('updates an existing project with PATCH and reports change via canonical readback', async () => {

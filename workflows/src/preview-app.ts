@@ -311,13 +311,26 @@ function cleanupJobIdFor(applicationId: string, providerResourceId: string, expi
  * (the testkit projection). Ownership and expiry must be honored whichever
  * shape the observing adapter returned, so both are read here.
  */
-function launchpadMetadata(configuration: Record<string, unknown> | null | undefined): { launchpadApplicationId: unknown; launchpadExpiresAt: unknown } {
-  const config = configuration ?? {};
-  const nested = config.settings !== null && typeof config.settings === 'object' && !Array.isArray(config.settings) ? config.settings as Record<string, unknown> : {};
-  return {
-    launchpadApplicationId: nested.launchpadApplicationId ?? config.launchpadApplicationId ?? null,
-    launchpadExpiresAt: nested.launchpadExpiresAt ?? config.launchpadExpiresAt ?? null,
-  };
+/**
+ * Ownership of a shadow project is derived from its collision-resistant name
+ * (lp-pr-<pr>-<app>-<repoId>-<commit>-<rev>): the Vercel project API exposes
+ * no arbitrary metadata fields, so the name itself is the only provider-side
+ * ownership evidence. The parsed segment is sanitized exactly like
+ * shadowProjectName sanitizes it, so comparisons are lossless.
+ */
+function shadowProjectApplicationId(projectName: string): string | null {
+  const segments = projectName.split('-');
+  if (segments.length < 6 || segments[0] !== 'lp' || segments[1] !== 'pr') return null;
+  if (!/^\d+$/.test(segments[2] ?? '')) return null;
+  // The trailing segments are fixed-shape (repoId-commit-revision), so the
+  // application id is everything between them — which keeps sanitized ids
+  // containing dashes (e.g. `my-app`) parseable.
+  const repoId = segments[segments.length - 3] ?? '';
+  const commit = segments[segments.length - 2] ?? '';
+  const revision = segments[segments.length - 1] ?? '';
+  if (!/^\d+$/.test(repoId) || !/^(?:[0-9a-f]{8}|none)$/.test(commit) || !/^\d+$/.test(revision)) return null;
+  const applicationId = segments.slice(3, segments.length - 3).join('-');
+  return applicationId.length > 0 ? applicationId : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -376,9 +389,9 @@ export async function cleanupShadowProject(input: CleanupInput): Promise<Cleanup
       await input.store.appendAudit({ actor: input.context.actor.id, action: 'PREVIEW_CLEANUP', applicationId: input.applicationId, details: { projectId: input.projectId, providerResourceId: input.providerResourceId, reason: input.reason, result: 'CLEANED', message: 'Shadow project was already absent.' } });
       return { projectId: input.projectId, status: 'CLEANED', errorCode: null, message: 'Shadow project was already absent.', cleanupJobId };
     }
-    const owner = launchpadMetadata(existing.configuration).launchpadApplicationId;
-    if (typeof owner === 'string' && owner !== input.applicationId) {
-      const message = `Shadow project '${input.projectId}' is owned by '${owner}', not '${input.applicationId}'; refusing to delete an unowned resource.`;
+    const owner = shadowProjectApplicationId(input.projectId);
+    if (owner === null || owner !== sanitizeNamePart(input.applicationId).slice(0, 20)) {
+      const message = `Shadow project '${input.projectId}' is owned by '${owner ?? '(unknown)'}', not '${input.applicationId}'; refusing to delete an unowned resource.`;
       if (claimed && cleanupJobId) await input.store.completeCleanupJob(cleanupJobId, 'FAILED', message);
       await input.store.updateWorkflowRun(run.id, { status: 'FAILED', completedAt: now().toISOString(), errorCode: 'LP-PREVIEW-CLEANUP-UNOWNED' });
       await input.store.appendAudit({ actor: input.context.actor.id, action: 'PREVIEW_CLEANUP', applicationId: input.applicationId, details: { projectId: input.projectId, providerResourceId: input.providerResourceId, reason: input.reason, result: 'FAILED', errorCode: 'LP-PREVIEW-CLEANUP-UNOWNED' } });
@@ -455,26 +468,21 @@ export async function sweepExpiredPreviewResources(input: { store: LaunchpadStor
     }
   }
   for (const project of providerProjects) {
-    const configuration = project.configuration;
-    const metadata = launchpadMetadata(configuration);
-    const owner = typeof metadata.launchpadApplicationId === 'string' ? metadata.launchpadApplicationId : null;
-    const expiresValue = metadata.launchpadExpiresAt ?? null;
-    const expiresAt = typeof expiresValue === 'string' ? new Date(expiresValue) : null;
-    if (!expiresAt || expiresAt.getTime() > now.getTime()) continue;
-    if (owner === null) {
-      failed.push({ projectId: project.providerResourceId, errorCode: 'LP-PREVIEW-CLEANUP-UNOWNED', message: 'Expired shadow project carries no Launchpad ownership metadata; refusing to delete an unowned resource.' });
-      continue;
-    }
+    // The durable cleanup job is the only reliable expiry evidence: the
+    // provider API stores no metadata on the project itself, so a project
+    // without a job can never be proven expired or owned. Such projects are
+    // left untouched rather than force-deleted.
     const job = jobs.get(project.providerResourceId) ?? null;
+    if (job === null || new Date(job.expiresAt).getTime() > now.getTime()) continue;
     const result = await cleanupShadowProject({
       store: input.store,
       provider: input.provider,
       context: input.context,
-      applicationId: owner,
+      applicationId: job.applicationId,
       projectId: project.resourceKey,
       providerResourceId: project.providerResourceId,
       reason: 'TTL_EXPIRED',
-      cleanupJobId: job?.id,
+      cleanupJobId: job.id,
       now: () => now,
     });
     if (result.status === 'CLEANED') cleaned.push(project.resourceKey);

@@ -13,7 +13,7 @@ const desired: DesiredApplication = {
   apiVersion: 'launchpad.dev/v1', kind: 'Application',
   metadata: { id: 'app', displayName: 'App', owners: ['@platform'], labels: { tier: 'gold' }, annotations: { 'launchpad.dev/team': 'platform' } },
   repository: { provider: 'github', name: 'acme/app', productionBranch: 'main', deploymentRef: 'main' },
-  vercel: { scope: {}, project: { name: 'app', framework: 'nextjs', rootDirectory: 'apps/web', nodeVersion: '24.x', build: { installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null, developmentCommand: null, ignoredBuildStep: null }, git: { connected: true, productionBranch: 'main' }, deployment: { autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false }, regions: { functions: [] }, protection: {}, settings: {} } },
+  vercel: { scope: {}, project: { name: 'app', framework: 'nextjs', rootDirectory: 'apps/web', nodeVersion: '24.x', build: { installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null, developmentCommand: null, ignoredBuildStep: null }, git: { connected: true, productionBranch: 'main' }, deployment: { autoAssignProductionDomains: false}, regions: { functions: [] }, protection: {}, settings: {} } },
   environments: { production: { enabled: true, variables: { LOG_LEVEL: 'info' }, health: { path: '/health', method: 'GET', expectedStatus: [200], timeoutSeconds: 1, attempts: 1, intervalSeconds: 0 } } },
   domains: [{ hostname: 'app.example.com', environment: 'production', cloudflare: { zoneRef: 'config://cloudflare/example.com', mode: 'dns-only', ttl: 'auto' }, redirects: [] }],
   secrets: [],
@@ -32,7 +32,7 @@ function manifestContent(application: DesiredApplication = desired): string {
 
 async function seeded(options: { rootDirectory?: string } = {}): Promise<{ provider: FakeProvider; store: InMemoryLaunchpadStore }> {
   const provider = new FakeProvider();
-  await provider.ensureProject({ id: 'app', name: 'app', teamId: null, framework: 'nextjs', rootDirectory: options.rootDirectory ?? '.', nodeVersion: '24.x', build: { installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null }, repository: 'acme/app', productionBranch: 'main', settings: { autoAssignProductionDomains: false, prioritizeProductionBuilds: true, rollingRelease: null, skewProtection: false } }, context);
+  await provider.ensureProject({ id: 'app', name: 'app', teamId: null, framework: 'nextjs', rootDirectory: options.rootDirectory ?? '.', nodeVersion: '24.x', build: { installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null }, repository: 'acme/app', productionBranch: 'main', settings: { autoAssignProductionDomains: false} }, context);
   // The applied DNS record exists in the provider, matching the manifest.
   await provider.ensureRecord('zone_example.com', { hostname: 'app.example.com', type: 'CNAME', value: 'app.vercel-dns.example', ttl: 'auto', providerRecordId: null }, 'owned-dns', context);
   provider.files.set(MANIFEST_PATH, manifestContent());
