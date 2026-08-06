@@ -1,0 +1,46 @@
+name: Launchpad Live Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  live-acceptance:
+    name: live / sandbox acceptance
+    runs-on: ubuntu-latest
+    environment: launchpad-control-plane
+    permissions:
+      contents: read
+    env:
+      LAUNCHPAD_LIVE_ACCEPTANCE: '1'
+      LP_LIVE_SANDBOX_PREFIX: carterlasalle-
+      LP_LIVE_GITHUB_TOKEN: ${{ secrets.LP_LIVE_GITHUB_TOKEN }}
+      LP_LIVE_GITHUB_REPOSITORY: carterlasalle/carterlasalle-lp-live-20260805
+      LP_LIVE_GITHUB_REPOSITORY_ID: '1324781224'
+      LP_LIVE_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
+      LP_LIVE_VERCEL_TEAM_ID: ${{ vars.LAUNCHPAD_VERCEL_TEAM_ID }}
+      LP_LIVE_VERCEL_PROJECT: carterlasalle-lp-live-20260805
+      LP_LIVE_CLOUDFLARE_TOKEN: ${{ secrets.LAUNCHPAD_CLOUDFLARE_TOKEN }}
+      LP_LIVE_CLOUDFLARE_ZONE: carterlasalle.com
+      LP_LIVE_DOMAIN: carterlasalle-lp-live-20260805.carterlasalle.com
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version-file: .node-version
+      - uses: ./.github/actions/setup-launchpad
+      - name: Run live sandbox acceptance
+        run: yarn acceptance:live
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ always() }}
+        continue-on-error: true
+        with:
+          name: launchpad-live-acceptance
+          path: artifacts/acceptance-live-report.json
+          retention-days: 14
+          if-no-files-found: warn
