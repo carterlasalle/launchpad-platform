@@ -150,8 +150,8 @@ function controllerIdentity(token: string, flags: Record<string, string | boolea
   const prNumber = integer(claims.pull_request_number) ?? (process.env.GITHUB_PR_NUMBER && /^\d+$/.test(process.env.GITHUB_PR_NUMBER) ? Number(process.env.GITHUB_PR_NUMBER) : null) ?? flagPr;
   return {
     repository: typeof claims.repository === 'string' ? claims.repository : process.env.GITHUB_REPOSITORY ?? null,
-    repositoryId: integer(claims.repository_id),
-    ownerId: integer(claims.repository_owner_id),
+    repositoryId: integer(claims.repository_id) ?? integer(process.env.GITHUB_REPOSITORY_ID),
+    ownerId: integer(claims.repository_owner_id) ?? integer(process.env.GITHUB_REPOSITORY_OWNER_ID),
     workflowRef: typeof claims.workflow_ref === 'string' ? claims.workflow_ref : null,
     event: typeof claims.event_name === 'string' ? claims.event_name : process.env.GITHUB_EVENT_NAME ?? null,
     prNumber: Number.isInteger(prNumber) && (prNumber ?? 0) > 0 ? prNumber : null,
