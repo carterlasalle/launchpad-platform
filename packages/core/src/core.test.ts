@@ -91,6 +91,11 @@ describe('plan review fingerprint', () => {
     expect(await desiredStateHash(desired)).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('ignores loader-only sourcePath metadata in desired-state hashes', async () => {
+    const withPath = { ...desired, sourcePath: 'catalog/apps/fixture.yaml' } as DesiredApplication;
+    expect(await desiredStateHash(withPath)).toBe(await desiredStateHash(desired));
+  });
+
   it('treats a plan-shaped fingerprint input consistently for blocked plans', async () => {
     const blocked: PlatformPlan = {
       schemaVersion: 'launchpad.plan/v1', applicationId: 'app', desiredGeneration: 1, sourceCommit: 'a'.repeat(40),
