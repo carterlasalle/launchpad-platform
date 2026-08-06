@@ -94,7 +94,7 @@ For environment setup, provider preflight, and local command examples, follow th
 6. Pass the required checks and merge the pull request.
 7. Launchpad revalidates the merged state, applies through the controller, stages a production candidate, verifies it, and promotes the exact deployment.
 
-Start with [`catalog/apps/fixture.yaml`](catalog/apps/fixture.yaml) and the [application management guide](docs/guides/managing-applications.md). The schema contract is [`schema/app.schema.json`](schema/app.schema.json).
+Start with [`catalog/apps/fixture.yaml`](catalog/apps/fixture.yaml), which declares the `tokentest` pilot, and the [application management guide](docs/guides/managing-applications.md). The schema contract is [`schema/app.schema.json`](schema/app.schema.json).
 
 ## Architecture
 

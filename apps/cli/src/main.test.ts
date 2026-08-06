@@ -221,6 +221,28 @@ describe('plan', () => {
     rmSync(outputDir, { recursive: true, force: true });
   });
 
+  it('plans a missing Vercel project without querying deployments for a nonexistent project', async () => {
+    const catalog = tempCatalog();
+    const outputDir = tempDir('launchpad-cli-plan-create-');
+    const manifestPath = join(catalog, 'apps', 'invalid-root.yaml');
+    writeFileSync(manifestPath, readFileSync(manifestPath, 'utf8').replace('developmentCommand: yarn dev', 'developmentCommand: null').replace('protection: {preview: public, production: public}', 'protection: {}'));
+    let deploymentLookups = 0;
+    vi.stubEnv('LAUNCHPAD_GITHUB_TOKEN', 'github-token');
+    vi.stubEnv('LAUNCHPAD_VERCEL_TOKEN', 'vercel-token');
+    stubFetch([
+      { match: /\/repos\/example\/invalid-root$/, response: () => jsonResponse({ id: 42, archived: false, private: true, default_branch: 'main' }) },
+      { match: /\/contents\//, response: () => jsonResponse({ type: 'dir' }) },
+      { match: /\/v9\/projects\//, response: () => jsonResponse({ message: 'Not Found' }, 404) },
+      { match: /\/v7\/deployments\?/, response: () => { deploymentLookups += 1; return jsonResponse({ deployments: [] }); } },
+    ]);
+    const out = writer();
+    const exitCode = await runCli(['plan', '--catalog', catalog, '--sha', sha, '--format', 'json', '--output', outputDir], out);
+    expect(exitCode, out.text).toBe(0);
+    expect(JSON.parse(out.text) as Array<{ operations: Array<{ action: string }> }>).toEqual(expect.arrayContaining([expect.objectContaining({ operations: expect.arrayContaining([expect.objectContaining({ action: 'CREATE' })]) })]));
+    rmSync(catalog, { recursive: true, force: true });
+    rmSync(outputDir, { recursive: true, force: true });
+  });
+
   it('builds a plan bound to the exact commit from live provider responses and writes bounded artifacts', async () => {
     const validApp = `apiVersion: launchpad.dev/v1
 kind: Application

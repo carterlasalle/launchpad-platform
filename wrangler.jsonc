@@ -51,6 +51,7 @@
   "env": {
     "production": {
       "triggers": { "crons": ["*/30 * * * *"] },
+      "routes": [{ "pattern": "launchpad.carterlasalle.com", "custom_domain": true }],
       "d1_databases": [{ "binding": "DB", "database_name": "launchpad", "database_id": "replace-in-production", "migrations_dir": "migrations/d1" }],
       "workflows": [
         { "name": "apply-application", "binding": "APPLY_WORKFLOW", "class_name": "ApplyApplicationWorkflow" },

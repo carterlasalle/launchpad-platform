@@ -99,6 +99,7 @@ check(has(environment.queues?.producers, (producer) => producer.binding === 'HEA
 check(has(environment.queues?.consumers, (consumer) => consumer.queue === 'launchpad-provider-events' && consumer.dead_letter_queue === 'launchpad-dead-letter' && Number.isInteger(consumer.max_retries) && consumer.max_retries >= 1), `[${envName}] queues.consumers must route launchpad-provider-events to the dead-letter queue with retries.`);
 check(has(environment.queues?.consumers, (consumer) => consumer.queue === 'launchpad-health-checks' && consumer.dead_letter_queue === 'launchpad-dead-letter' && Number.isInteger(consumer.max_retries) && consumer.max_retries >= 1), `[${envName}] queues.consumers must route launchpad-health-checks to the dead-letter queue with retries.`);
 check(has(environment.queues?.consumers, (consumer) => consumer.queue === 'launchpad-dead-letter' && Number.isInteger(consumer.max_retries) && consumer.max_retries >= 1), `[${envName}] queues.consumers must consume the dead-letter queue with retries so incident records are never silently dropped.`);
+if (envName === 'production') check(has(environment.routes, (route) => route.pattern === 'launchpad.carterlasalle.com' && route.custom_domain === true), `[${envName}] routes must attach the Worker to launchpad.carterlasalle.com as a custom domain.`);
 
 // Vars (non-inherited)
 const vars = environment.vars ?? {};

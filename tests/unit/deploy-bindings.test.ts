@@ -17,7 +17,7 @@ interface EnvironmentConfig {
   d1_databases?: Array<{ database_id?: string; migrations_dir?: string }>;
   secrets_store_secrets?: Array<{ store_id?: string; secret_name?: string }>;
   workflows?: unknown;
-  queues?: unknown;
+  routes?: unknown;
   triggers?: unknown;
 }
 
@@ -152,6 +152,7 @@ it('preserves every other field and keeps deploy paths root-relative', () => {
   expect(rendered.assets).toEqual(config.assets);
   expect(rendered.d1_databases?.[0]?.migrations_dir).toBe('migrations/d1');
   expect(rendered.env?.production?.workflows).toEqual(config.env?.production?.workflows);
+  expect(rendered.env?.production?.routes).toEqual(config.env?.production?.routes);
   expect(rendered.env?.production?.queues).toEqual(config.env?.production?.queues);
   expect(rendered.env?.production?.triggers).toEqual(config.env?.production?.triggers);
   expect(rendered.env?.production?.d1_databases?.[0]?.migrations_dir).toBe('migrations/d1');
