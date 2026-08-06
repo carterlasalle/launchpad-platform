@@ -222,6 +222,21 @@ describe('verifyGithubOidc allowlist and trust-config negatives (real signed tok
     await expect(verifyGithubOidc(token, config({ workflowAllowlist: ['acme/web-app/.github/workflows/preview.yml@refs/heads/main'] }))).rejects.toThrow(/OIDC workflow is not allowed/);
   });
 
+  it('accepts a pull_request workflow_ref when the same workflow path is allowlisted', async () => {
+    const token = await sign(githubClaims({ workflow_ref: 'acme/web-app/.github/workflows/preview.yml@refs/pull/42/merge' }));
+    await expect(verifyGithubOidc(token, config({ workflowAllowlist: ['acme/web-app/.github/workflows/preview.yml@refs/heads/main'] }))).resolves.toMatchObject({ repository: 'acme/web-app' });
+  });
+
+  it('rejects a pull_request workflow_ref whose path is not allowlisted', async () => {
+    const token = await sign(githubClaims({ workflow_ref: 'acme/web-app/.github/workflows/other.yml@refs/pull/42/merge' }));
+    await expect(verifyGithubOidc(token, config({ workflowAllowlist: ['acme/web-app/.github/workflows/preview.yml@refs/heads/main'] }))).rejects.toThrow(/OIDC workflow is not allowed/);
+  });
+
+  it('rejects a non-PR transient ref even when the workflow path is allowlisted', async () => {
+    const token = await sign(githubClaims({ workflow_ref: 'acme/web-app/.github/workflows/preview.yml@refs/heads/feature' }));
+    await expect(verifyGithubOidc(token, config({ workflowAllowlist: ['acme/web-app/.github/workflows/preview.yml@refs/heads/main'] }))).rejects.toThrow(/OIDC workflow is not allowed/);
+  });
+
   it('rejects a signed token with a wrong issuer', async () => {
     const token = await sign(githubClaims(), { issuer: 'https://evil.test' });
     await expect(verifyGithubOidc(token, config())).rejects.toThrow();

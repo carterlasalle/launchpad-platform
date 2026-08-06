@@ -53,6 +53,18 @@ export function bindOidcBody(claims: GithubOidcClaims, body: OidcBoundBody): voi
   if (body.ref !== undefined && body.ref !== claims.ref) throw claimMismatch('LP-OIDC-CLAIM-REF-MISMATCH', 'ref', body.ref);
 }
 
+/** PR-triggered runs claim a transient pull-request ref; the workflow identity is the path. */
+const PR_REF = /^refs\/pull\/\d+\/(?:merge|head)$/;
+
+function workflowAllowed(claim: string, allowlist: string[]): boolean {
+  if (allowlist.includes(claim)) return true;
+  const at = claim.indexOf('@');
+  if (at <= 0) return false;
+  const path = claim.slice(0, at);
+  if (!PR_REF.test(claim.slice(at + 1))) return false;
+  return allowlist.some((entry) => entry.split('@')[0] === path);
+}
+
 export async function verifyGithubOidc(token: string | null, config: OidcConfig): Promise<GithubOidcClaims> {
   if (!token) throw new Error('OIDC bearer token is required.');
   const jwks = createRemoteJWKSet(new URL(config.jwks), { timeoutDuration: 5_000, cooldownDuration: 30_000 });
@@ -63,7 +75,7 @@ export async function verifyGithubOidc(token: string | null, config: OidcConfig)
     ...(config.clockToleranceSeconds !== undefined ? { clockTolerance: config.clockToleranceSeconds } : {}),
   });
   if (config.repositoryAllowlist && (!payload.repository || !config.repositoryAllowlist.includes(payload.repository))) throw new Error('OIDC repository is not allowed.');
-  if (config.workflowAllowlist && (!payload.workflow_ref || !config.workflowAllowlist.includes(payload.workflow_ref))) throw new Error('OIDC workflow is not allowed.');
+  if (config.workflowAllowlist && (!payload.workflow_ref || !workflowAllowed(payload.workflow_ref, config.workflowAllowlist))) throw new Error('OIDC workflow is not allowed.');
   if (payload.repository_id === undefined || payload.repository_owner_id === undefined || payload.workflow_ref === undefined) throw new Error('OIDC token is missing required GitHub identity claims.');
   return payload;
 }
