@@ -3,145 +3,976 @@
   "$id": "https://launchpad.dev/schema/application-v1.json",
   "type": "object",
   "additionalProperties": false,
-  "required": ["apiVersion", "kind", "metadata", "repository", "vercel", "environments", "domains", "secrets", "dependencies", "policies", "lifecycle"],
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "repository",
+    "vercel",
+    "environments",
+    "domains",
+    "secrets",
+    "dependencies",
+    "policies",
+    "lifecycle"
+  ],
   "properties": {
-    "apiVersion": { "const": "launchpad.dev/v1" },
-    "kind": { "const": "Application" },
+    "apiVersion": {
+      "const": "launchpad.dev/v1"
+    },
+    "kind": {
+      "const": "Application"
+    },
     "metadata": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "displayName", "owners", "labels", "annotations"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "owners",
+        "labels",
+        "annotations"
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,62}[a-z0-9]$" },
-        "displayName": { "type": "string", "minLength": 1, "maxLength": 160 },
-        "description": { "type": ["string", "null"] },
-        "owners": { "type": "array", "items": { "type": "string", "pattern": "^@[A-Za-z0-9_.-]+$" }, "minItems": 1 },
-        "labels": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 128 } },
-        "annotations": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 2048 } }
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}[a-z0-9]$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owners": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^@[A-Za-z0-9_.-]+$"
+          },
+          "minItems": 1
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        }
       }
     },
     "repository": {
-      "type": "object", "additionalProperties": false,
-      "required": ["provider", "name", "productionBranch", "deploymentRef"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "name",
+        "productionBranch",
+        "deploymentRef"
+      ],
       "properties": {
-        "provider": { "const": "github" },
-        "name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
-        "productionBranch": { "type": "string", "minLength": 1 },
-        "stagingBranch": { "type": ["string", "null"] },
-        "deploymentRef": { "type": "string", "minLength": 1 },
-        "expectedRepositoryId": { "type": ["integer", "null"], "minimum": 1 },
+        "provider": {
+          "const": "github"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "productionBranch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stagingBranch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deploymentRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedRepositoryId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
         "access": {
-          "type": "object", "additionalProperties": false,
-          "properties": { "requirePrivateAccessVerification": { "type": "boolean" }, "requireVercelGitAccess": { "type": "boolean" } }
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requirePrivateAccessVerification": {
+              "type": "boolean"
+            },
+            "requireVercelGitAccess": {
+              "type": "boolean"
+            }
+          }
         },
         "onboarding": {
-          "type": "object", "additionalProperties": false,
-          "properties": { "managedWorkflow": { "type": "boolean" }, "workflowVersion": { "type": "string" }, "openOnboardingPr": { "type": "boolean" } }
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "managedWorkflow": {
+              "type": "boolean"
+            },
+            "workflowVersion": {
+              "type": "string"
+            },
+            "openOnboardingPr": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
     "vercel": {
-      "type": "object", "additionalProperties": false, "required": ["scope", "project"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "project"
+      ],
       "properties": {
-        "scope": { "type": "object", "additionalProperties": false, "properties": { "teamIdRef": { "type": ["string", "null"] } } },
-        "project": {
-          "type": "object", "additionalProperties": false,
-          "required": ["name", "framework", "rootDirectory", "nodeVersion", "build", "git", "deployment", "regions", "protection", "settings"],
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
           "properties": {
-            "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$" },
-            "framework": { "type": ["string", "null"] },
-            "rootDirectory": { "type": "string", "minLength": 1 },
-            "nodeVersion": { "type": ["string", "null"] },
-            "build": {
-              "type": "object", "additionalProperties": false, "required": ["installCommand", "buildCommand", "outputDirectory", "developmentCommand", "ignoredBuildStep"],
-              "properties": { "installCommand": { "type": ["string", "null"] }, "buildCommand": { "type": ["string", "null"] }, "outputDirectory": { "type": ["string", "null"] }, "developmentCommand": { "type": ["string", "null"] }, "ignoredBuildStep": { "type": ["string", "null"] } }
+            "teamIdRef": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "project": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "framework",
+            "rootDirectory",
+            "nodeVersion",
+            "build",
+            "git",
+            "deployment",
+            "regions",
+            "protection",
+            "settings"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$"
             },
-            "git": { "type": "object", "additionalProperties": false, "required": ["connected", "productionBranch"], "properties": { "connected": { "type": "boolean" }, "productionBranch": { "type": "string" } } },
-            "deployment": { "type": "object", "additionalProperties": false, "required": ["autoAssignProductionDomains", "prioritizeProductionBuilds", "rollingRelease", "skewProtection"], "properties": { "autoAssignProductionDomains": { "type": "boolean" }, "prioritizeProductionBuilds": { "type": "boolean" }, "rollingRelease": { "type": ["string", "null"] }, "skewProtection": { "type": "boolean" } } },
-            "regions": { "type": "object", "additionalProperties": false, "required": ["functions"], "properties": { "functions": { "type": "array", "items": { "type": "string" } } } },
-            "protection": { "type": "object", "additionalProperties": { "type": "string" } },
-            "settings": { "type": "object", "additionalProperties": { "type": ["boolean", "string", "number", "null"] } }
+            "framework": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rootDirectory": {
+              "type": "string",
+              "minLength": 1
+            },
+            "nodeVersion": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "build": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "installCommand",
+                "buildCommand",
+                "outputDirectory",
+                "developmentCommand",
+                "ignoredBuildStep"
+              ],
+              "properties": {
+                "installCommand": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "buildCommand": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "outputDirectory": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "developmentCommand": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ignoredBuildStep": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "git": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "connected",
+                "productionBranch"
+              ],
+              "properties": {
+                "connected": {
+                  "type": "boolean"
+                },
+                "productionBranch": {
+                  "type": "string"
+                }
+              }
+            },
+            "deployment": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {
+                "autoAssignProductionDomains": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "regions": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "functions"
+              ],
+              "properties": {
+                "functions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "protection": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "settings": {
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "boolean",
+                  "string",
+                  "number",
+                  "null"
+                ]
+              }
+            }
           }
         }
       }
     },
     "environments": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "preview": { "$ref": "#/$defs/environment" },
-        "staging": { "$ref": "#/$defs/environment" },
-        "production": { "$ref": "#/$defs/environment" }
+        "preview": {
+          "$ref": "#/$defs/environment"
+        },
+        "staging": {
+          "$ref": "#/$defs/environment"
+        },
+        "production": {
+          "$ref": "#/$defs/environment"
+        }
       }
     },
     "domains": {
       "type": "array",
-      "items": { "$ref": "#/$defs/domain" }
+      "items": {
+        "$ref": "#/$defs/domain"
+      }
     },
     "secrets": {
       "type": "array",
       "items": {
-        "type": "object", "additionalProperties": false, "required": ["name", "environments"],
-        "properties": { "name": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$" }, "source": { "type": "string", "pattern": "^[a-z][a-z0-9+.-]*://" }, "value": { "type": "string" }, "sensitive": { "type": "boolean" }, "environments": { "type": "array", "items": { "enum": ["preview", "staging", "production"] }, "minItems": 1 } }
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "environments"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9+.-]*://"
+          },
+          "value": {
+            "type": "string"
+          },
+          "sensitive": {
+            "type": "boolean"
+          },
+          "environments": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "preview",
+                "staging",
+                "production"
+              ]
+            },
+            "minItems": 1
+          }
+        }
       }
     },
     "dependencies": {
-      "type": "object", "additionalProperties": false, "required": ["applications", "external"],
-      "properties": { "applications": { "type": "array", "items": { "type": "string" } }, "external": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "type", "url", "requiredBefore"], "properties": { "id": { "type": "string" }, "type": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "requiredBefore": { "type": "array", "items": { "enum": ["preview", "staging", "production"] } } } } } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "applications",
+        "external"
+      ],
+      "properties": {
+        "applications": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "external": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "url",
+              "requiredBefore"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "requiredBefore": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "preview",
+                    "staging",
+                    "production"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "policies": {
-      "type": "object", "additionalProperties": false, "required": ["drift", "destructiveChanges", "preview", "staging", "health", "failures"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "drift",
+        "destructiveChanges",
+        "preview",
+        "staging",
+        "health",
+        "failures"
+      ],
       "properties": {
-        "drift": { "type": "object", "additionalProperties": false, "required": ["mode", "checkIntervalMinutes"], "properties": { "mode": { "enum": ["open-pr", "auto-restore"] }, "checkIntervalMinutes": { "type": "integer", "minimum": 1 } } },
-        "destructiveChanges": { "type": "object", "additionalProperties": false, "required": ["allowInNormalApply"], "properties": { "allowInNormalApply": { "const": false } } },
-        "preview": { "type": "object", "additionalProperties": false, "required": ["requiredForMerge"], "properties": { "requiredForMerge": { "type": "boolean" } } },
-        "staging": { "type": "object", "additionalProperties": false, "required": ["requiredForProduction"], "properties": { "requiredForProduction": { "type": "boolean" } } },
-        "health": { "type": "object", "additionalProperties": false, "required": ["requiredForPromotion"], "properties": { "requiredForPromotion": { "type": "boolean" } } },
-        "failures": { "type": "object", "additionalProperties": false, "required": ["createIssueAfterFinalRetry", "notifyOwners"], "properties": { "createIssueAfterFinalRetry": { "type": "boolean" }, "notifyOwners": { "type": "boolean" } } }
+        "drift": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "checkIntervalMinutes"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "open-pr",
+                "auto-restore"
+              ]
+            },
+            "checkIntervalMinutes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "destructiveChanges": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowInNormalApply"
+          ],
+          "properties": {
+            "allowInNormalApply": {
+              "const": false
+            }
+          }
+        },
+        "preview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredForMerge"
+          ],
+          "properties": {
+            "requiredForMerge": {
+              "type": "boolean"
+            }
+          }
+        },
+        "staging": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredForProduction"
+          ],
+          "properties": {
+            "requiredForProduction": {
+              "type": "boolean"
+            }
+          }
+        },
+        "health": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredForPromotion"
+          ],
+          "properties": {
+            "requiredForPromotion": {
+              "type": "boolean"
+            }
+          }
+        },
+        "failures": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "createIssueAfterFinalRetry",
+            "notifyOwners"
+          ],
+          "properties": {
+            "createIssueAfterFinalRetry": {
+              "type": "boolean"
+            },
+            "notifyOwners": {
+              "type": "boolean"
+            }
+          }
+        }
       }
     },
     "lifecycle": {
-      "type": "object", "additionalProperties": false, "required": ["state", "deletionProtection", "orphanPolicy", "decommission"],
-      "properties": { "state": { "enum": ["active", "decommissioning", "approved-for-deletion", "deleted"] }, "deletionProtection": { "type": "boolean" }, "orphanPolicy": { "enum": ["retain", "destroy"] }, "recoveryPolicy": { "type": "object", "additionalProperties": false, "required": ["allowReactivateBeforeDeletionApproval"], "properties": { "allowReactivateBeforeDeletionApproval": { "type": "boolean" } } }, "decommission": { "type": "object", "additionalProperties": false, "required": ["requestedAt", "deleteAfter", "approvalToken", "preserveDeployments"], "properties": { "requestedAt": { "type": ["string", "null"], "format": "date-time" }, "deleteAfter": { "type": ["string", "null"], "format": "date-time" }, "approvalToken": { "type": ["string", "null"] }, "preserveDeployments": { "type": "boolean" } } } }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "deletionProtection",
+        "orphanPolicy",
+        "decommission"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "active",
+            "decommissioning",
+            "approved-for-deletion",
+            "deleted"
+          ]
+        },
+        "deletionProtection": {
+          "type": "boolean"
+        },
+        "orphanPolicy": {
+          "enum": [
+            "retain",
+            "destroy"
+          ]
+        },
+        "recoveryPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowReactivateBeforeDeletionApproval"
+          ],
+          "properties": {
+            "allowReactivateBeforeDeletionApproval": {
+              "type": "boolean"
+            }
+          }
+        },
+        "decommission": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestedAt",
+            "deleteAfter",
+            "approvalToken",
+            "preserveDeployments"
+          ],
+          "properties": {
+            "requestedAt": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "deleteAfter": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            },
+            "approvalToken": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "preserveDeployments": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
     "health": {
-      "type": "object", "additionalProperties": false, "required": ["path", "method", "expectedStatus", "timeoutSeconds", "attempts", "intervalSeconds"],
-      "properties": { "path": { "type": "string", "pattern": "^/" }, "method": { "type": "string", "enum": ["GET", "HEAD", "POST", "PUT", "PATCH"] }, "headers": { "type": "object", "additionalProperties": { "anyOf": [ { "type": "string" }, { "type": "object", "additionalProperties": false, "required": ["secretRef"], "properties": { "secretRef": { "type": "string", "minLength": 1 } } } ] } }, "expectedStatus": { "type": "array", "items": { "type": "integer", "minimum": 100, "maximum": 599 }, "minItems": 1 }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 }, "attempts": { "type": "integer", "minimum": 1, "maximum": 100 }, "intervalSeconds": { "type": "integer", "minimum": 0, "maximum": 3600 }, "backoff": { "type": "object", "additionalProperties": false, "properties": { "multiplier": { "type": "number", "exclusiveMinimum": 1 }, "maxDelaySeconds": { "type": "integer", "minimum": 0 } } }, "dependencies": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["id", "type", "required"], "properties": { "id": { "type": "string", "minLength": 1 }, "type": { "enum": ["application", "external"] }, "url": { "type": ["string", "null"], "format": "uri" }, "required": { "type": "boolean" } } } }, "body": { "type": "object", "additionalProperties": false, "properties": { "jsonPath": { "type": "string" }, "equals": {}, "contains": { "type": "string" }, "matches": { "type": "string" } } }, "tls": { "type": "object", "additionalProperties": false, "required": ["required"], "properties": { "required": { "type": "boolean" }, "minimumDaysRemaining": { "type": "integer", "minimum": 0 } } }, "redirects": { "type": "object", "additionalProperties": false, "required": ["allowed"], "properties": { "allowed": { "type": "boolean" } } }, "latencyMs": { "type": "integer", "minimum": 0 } }
-    },
-    "environment": {
-      "type": "object", "additionalProperties": false, "required": ["enabled", "health"],
-      "properties": { "enabled": { "type": "boolean" }, "strategy": { "enum": ["native-preview", "shadow-project", "custom-environment", "separate-project"] }, "source": { "type": "object", "additionalProperties": false, "required": ["ref"], "properties": { "ref": { "type": "string" } } }, "branch": { "type": "string" }, "domain": { "type": ["string", "null"] }, "variables": { "type": "object", "additionalProperties": { "anyOf": [ { "type": "string" }, { "type": "object", "additionalProperties": false, "required": ["secretRef", "sensitive"], "properties": { "secretRef": { "type": "string" }, "sensitive": { "const": true } } } ] } }, "cleanup": { "type": "object", "additionalProperties": false, "required": ["onPrClose", "retentionHours"], "properties": { "onPrClose": { "type": "boolean" }, "retentionHours": { "type": "integer", "minimum": 1 } } }, "health": { "$ref": "#/$defs/health" }, "release": { "type": "object", "additionalProperties": false, "required": ["strategy", "promoteExactBuild", "autoPromoteAfterChecks"], "properties": { "strategy": { "const": "staged-production" }, "promoteExactBuild": { "type": "boolean" }, "autoPromoteAfterChecks": { "type": "boolean" } } }, "rollback": { "type": "object", "additionalProperties": false, "required": ["enabled", "onFailedHealthCheck", "previousKnownGood"], "properties": { "enabled": { "type": "boolean" }, "onFailedHealthCheck": { "type": "boolean" }, "previousKnownGood": { "type": "boolean" } } } }
-    },
-    "domain": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["hostname", "environment", "cloudflare", "redirects"],
+      "required": [
+        "path",
+        "method",
+        "expectedStatus",
+        "timeoutSeconds",
+        "attempts",
+        "intervalSeconds"
+      ],
       "properties": {
-        "hostname": { "type": "string", "format": "hostname" },
-        "environment": { "enum": ["preview", "staging", "production"] },
-        "canonical": { "type": "boolean" },
-        "cloudflare": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "GET",
+            "HEAD",
+            "POST",
+            "PUT",
+            "PATCH"
+          ]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "secretRef"
+                ],
+                "properties": {
+                  "secretRef": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "expectedStatus": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "minItems": 1
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "intervalSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600
+        },
+        "backoff": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["zoneRef", "mode", "ttl"],
           "properties": {
-            "zoneRef": { "type": "string", "pattern": "^config://cloudflare/" },
-            "mode": { "enum": ["dns-only", "proxied"] },
-            "ttl": { "anyOf": [{ "const": "auto" }, { "type": "integer", "minimum": 60 }] },
-            "proxy": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["acknowledgeDoubleCdn", "bypassWellKnownPaths", "verifyConnectingIpHeader", "cachePolicy"],
-              "properties": {
-                "acknowledgeDoubleCdn": { "type": "boolean" },
-                "bypassWellKnownPaths": { "type": "boolean" },
-                "verifyConnectingIpHeader": { "type": "boolean" },
-                "cachePolicy": { "type": "string" }
+            "multiplier": {
+              "type": "number",
+              "exclusiveMinimum": 1
+            },
+            "maxDelaySeconds": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "required"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "enum": [
+                  "application",
+                  "external"
+                ]
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uri"
+              },
+              "required": {
+                "type": "boolean"
               }
             }
           }
         },
-        "redirects": { "type": "array", "items": { "type": "string", "format": "hostname" } }
+        "body": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "jsonPath": {
+              "type": "string"
+            },
+            "equals": {},
+            "contains": {
+              "type": "string"
+            },
+            "matches": {
+              "type": "string"
+            }
+          }
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "required"
+          ],
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "minimumDaysRemaining": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "redirects": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowed"
+          ],
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "latencyMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "health"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "strategy": {
+          "enum": [
+            "native-preview",
+            "shadow-project",
+            "custom-environment",
+            "separate-project"
+          ]
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref"
+          ],
+          "properties": {
+            "ref": {
+              "type": "string"
+            }
+          }
+        },
+        "branch": {
+          "type": "string"
+        },
+        "domain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "secretRef",
+                  "sensitive"
+                ],
+                "properties": {
+                  "secretRef": {
+                    "type": "string"
+                  },
+                  "sensitive": {
+                    "const": true
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "onPrClose",
+            "retentionHours"
+          ],
+          "properties": {
+            "onPrClose": {
+              "type": "boolean"
+            },
+            "retentionHours": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "health": {
+          "$ref": "#/$defs/health"
+        },
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "strategy",
+            "promoteExactBuild",
+            "autoPromoteAfterChecks"
+          ],
+          "properties": {
+            "strategy": {
+              "const": "staged-production"
+            },
+            "promoteExactBuild": {
+              "type": "boolean"
+            },
+            "autoPromoteAfterChecks": {
+              "type": "boolean"
+            }
+          }
+        },
+        "rollback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "onFailedHealthCheck",
+            "previousKnownGood"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "onFailedHealthCheck": {
+              "type": "boolean"
+            },
+            "previousKnownGood": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hostname",
+        "environment",
+        "cloudflare",
+        "redirects"
+      ],
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "format": "hostname"
+        },
+        "environment": {
+          "enum": [
+            "preview",
+            "staging",
+            "production"
+          ]
+        },
+        "canonical": {
+          "type": "boolean"
+        },
+        "cloudflare": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "zoneRef",
+            "mode",
+            "ttl"
+          ],
+          "properties": {
+            "zoneRef": {
+              "type": "string",
+              "pattern": "^config://cloudflare/"
+            },
+            "mode": {
+              "enum": [
+                "dns-only",
+                "proxied"
+              ]
+            },
+            "ttl": {
+              "anyOf": [
+                {
+                  "const": "auto"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 60
+                }
+              ]
+            },
+            "proxy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "acknowledgeDoubleCdn",
+                "bypassWellKnownPaths",
+                "verifyConnectingIpHeader",
+                "cachePolicy"
+              ],
+              "properties": {
+                "acknowledgeDoubleCdn": {
+                  "type": "boolean"
+                },
+                "bypassWellKnownPaths": {
+                  "type": "boolean"
+                },
+                "verifyConnectingIpHeader": {
+                  "type": "boolean"
+                },
+                "cachePolicy": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "redirects": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "hostname"
+          }
+        }
       }
     }
   }

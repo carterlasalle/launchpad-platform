@@ -13,9 +13,6 @@ function canonicalProjectConfiguration(value: unknown): Record<string, unknown> 
   return project;
 }
 
-function providerProjectSettings(settings: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(settings).map(([key, value]) => [key === 'autoAssignProductionDomains' ? 'autoAssignCustomDomains' : key, value]));
-}
 function linkedRepository(link: Record<string, unknown>): string | null {
   const repo = text(link.repo);
   const owner = text(link.org);
@@ -251,10 +248,12 @@ export class VercelAdapter implements ProjectProvider {
       'project.build.installCommand': { read: true, create: true, update: true, delete: false, requiresRedeploy: true, destructiveWhenChanged: false },
       'project.build.buildCommand': { read: true, create: true, update: true, delete: false, requiresRedeploy: true, destructiveWhenChanged: false },
       'project.build.outputDirectory': { read: true, create: true, update: true, delete: false, requiresRedeploy: true, destructiveWhenChanged: false },
+      // autoAssignProductionDomains maps to the API's autoAssignCustomDomains
+      // (update contract only; create defaults true and is corrected via an
+      // immediate update). The other dashboard settings are not exposed by the
+      // project API and therefore advertise no capability: declaring them in a
+      // catalog blocks the plan instead of being silently dropped.
       'project.settings.autoAssignProductionDomains': { read: true, create: true, update: true, delete: false, requiresRedeploy: false, destructiveWhenChanged: false },
-      'project.settings.prioritizeProductionBuilds': { read: true, create: true, update: true, delete: false, requiresRedeploy: false, destructiveWhenChanged: false },
-      'project.settings.rollingRelease': { read: true, create: true, update: true, delete: false, requiresRedeploy: false, destructiveWhenChanged: false },
-      'project.settings.skewProtection': { read: true, create: true, update: true, delete: false, requiresRedeploy: false, destructiveWhenChanged: false },
       'domain.hostname': { read: true, create: true, update: true, delete: true, requiresRedeploy: false, destructiveWhenChanged: false },
       // Catalog-side domain attributes managed by the apply machine through
       // ensureDomain/ensureRecord (the planner validates these leaves against
@@ -282,22 +281,36 @@ export class VercelAdapter implements ProjectProvider {
 
   async ensureProject(spec: ProjectSpec, ctx: ProviderContext): Promise<MutationResult<ObservedResource>> {
     const before = await this.observeProject({ projectId: spec.id, teamId: spec.teamId }, ctx);
-    const baseBody = {
+    // The Vercel API rejects arbitrary settings objects and metadata keys on
+    // both the create and update contracts (verified against the live API:
+    // settings, nodeVersion-on-create, productionBranch, and custom keys all
+    // return 400 "should NOT have additional property"). Only the fields
+    // below are accepted; declared settings that map to API fields are applied
+    // through the update contract.
+    const body = {
       ...(before ? {} : { name: spec.name, gitRepository: { type: 'github', repo: spec.repository } }),
       framework: spec.framework,
-      ...(spec.rootDirectory === '.' ? {} : { rootDirectory: spec.rootDirectory }),
+      ...(spec.rootDirectory && spec.rootDirectory !== '.' ? { rootDirectory: spec.rootDirectory } : {}),
       installCommand: spec.build.installCommand,
       buildCommand: spec.build.buildCommand,
       outputDirectory: spec.build.outputDirectory,
-      ...providerProjectSettings(spec.settings),
     };
-    // Vercel's create contract does not accept nodeVersion; the PATCH path does.
-    const body = before ? { ...baseBody, nodeVersion: spec.nodeVersion } : baseBody;
-    const afterResponse = before ? await this.client.request<unknown>(this.client.withTeam(`/v9/projects/${encodeURIComponent(before.providerResourceId)}`), { method: 'PATCH', body: JSON.stringify(body), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-project', spec.id, canonicalJson(body)) }) : await this.client.request<unknown>(this.client.withTeam('/v10/projects'), { method: 'POST', body: JSON.stringify(body), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-project', spec.id, canonicalJson(body)) });
+    const declaredDomains = spec.settings.autoAssignProductionDomains;
+    const updateBody = { ...body, nodeVersion: spec.nodeVersion, ...(declaredDomains !== undefined ? { autoAssignCustomDomains: declaredDomains } : {}) };
+    const idempotencyKeyFor = (payload: unknown): string => idempotencyKey('vercel-project', spec.id, canonicalJson(payload));
+    const afterResponse = before
+      ? await this.client.request<unknown>(this.client.withTeam(`/v9/projects/${encodeURIComponent(before.providerResourceId)}`), { method: 'PATCH', body: JSON.stringify(updateBody), correlationId: ctx.correlationId, idempotencyKey: idempotencyKeyFor(updateBody) })
+      : await this.client.request<unknown>(this.client.withTeam('/v10/projects'), { method: 'POST', body: JSON.stringify(body), correlationId: ctx.correlationId, idempotencyKey: idempotencyKeyFor(body) });
+    if (!before && declaredDomains !== undefined) {
+      // Create defaults autoAssignCustomDomains to true; honor the declared
+      // value through the update contract immediately after creation.
+      const projectId = text(record(afterResponse).id) ?? spec.id;
+      await this.client.request<unknown>(this.client.withTeam(`/v9/projects/${encodeURIComponent(projectId)}`), { method: 'PATCH', body: JSON.stringify({ autoAssignCustomDomains: declaredDomains }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-project-settings', spec.id, canonicalJson({ autoAssignCustomDomains: declaredDomains })) });
+    }
     const configuration = canonicalProjectConfiguration(afterResponse);
     const observed = { provider: 'vercel' as const, resourceType: 'vercel.project', resourceKey: spec.id, providerResourceId: text(configuration.id) ?? before?.providerResourceId ?? spec.id, configuration, ownershipFingerprint: text(configuration.id) ?? spec.id, observedAt: new Date().toISOString() };
     const changed = before === null || canonicalJson(before.configuration) !== canonicalJson(observed.configuration);
-    return { resource: observed, changed, operationId: idempotencyKey('vercel-project-operation', spec.id, canonicalJson(body)) };
+    return { resource: observed, changed, operationId: idempotencyKey('vercel-project-operation', spec.id, canonicalJson(updateBody)) };
   }
 
   async ensureGitConnection(spec: GitConnectionSpec, ctx: ProviderContext): Promise<MutationResult<ObservedResource>> {

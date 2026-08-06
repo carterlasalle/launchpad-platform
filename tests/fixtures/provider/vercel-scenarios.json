@@ -7,7 +7,8 @@
   ],
   "projectCreate": [
     { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 404, "body": { "error": { "code": "not_found" } } } },
-    { "request": { "method": "POST", "path": "/v10/projects" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } }
+    { "request": { "method": "POST", "path": "/v10/projects" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } },
+    { "request": { "method": "PATCH", "path": "/v9/projects/prj_1" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x", "autoAssignCustomDomains": false } } }
   ],
   "projectUpdate": [
     { "request": { "method": "GET", "path": "/v9/projects/app" }, "response": { "status": 200, "body": { "id": "prj_1", "name": "app", "framework": "nextjs", "rootDirectory": ".", "nodeVersion": "24.x" } } },

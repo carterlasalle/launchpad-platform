@@ -50,9 +50,6 @@ vercel:
       productionBranch: main
     deployment:
       autoAssignProductionDomains: false
-      prioritizeProductionBuilds: true
-      rollingRelease: null
-      skewProtection: false
     regions:
       functions: []
     protection: {}
