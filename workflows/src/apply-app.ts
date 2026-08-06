@@ -1,4 +1,4 @@
-import { buildPlan, canonicalEqual, desiredStateHash, planReviewFingerprint, secretBindingFingerprint, type DesiredApplication, type DeploymentRecord, type EnvironmentName, type HealthCheckRecord, type HealthSpec, type ObservedApplication, type ObservedResource, type PlatformPlan, type ProviderCapabilities } from '@launchpad/core';
+import { buildPlan, buildPlanObservedState, canonicalEqual, desiredStateHash, planReviewFingerprint, secretBindingFingerprint, satisfiedProjection, type DesiredApplication, type DeploymentRecord, type EnvironmentName, type HealthCheckRecord, type HealthSpec, type ObservedApplication, type ObservedResource, type PlanDnsObservation, type PlatformPlan, type ProviderCapabilities } from '@launchpad/core';
 import { loadCatalog } from '@launchpad/catalog';
 import { checkHealth } from '@launchpad/health';
 import { canonicalJson, idempotencyKey, sha256Hex, stableId, type SensitiveValue } from '@launchpad/shared';
@@ -188,16 +188,6 @@ function knownGoodOf(observed: ObservedApplication): DeploymentRecord | null {
   return observed.deployments.find((deployment) => deployment.environment === 'production' && deployment.state === 'CURRENT') ?? null;
 }
 
-/** Non-trivial desired projection that satisfies the planner's comparison when the apply pipeline does not read the resource back. */
-export function satisfiedProjection(desired: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(desired)) {
-    if (value === undefined) continue;
-    out[key] = value;
-  }
-  return out;
-}
-
 function isTrivial(value: unknown): boolean {
   return value === null || value === undefined || value === ''
     || (Array.isArray(value) && value.length === 0)
@@ -280,63 +270,35 @@ export async function applyLoadDesired(input: { base: ApplyBase; source: SourceP
   return { desired };
 }
 
-export async function applyObserveLiveState(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; context: ProviderContext }): Promise<ObserveLiveStateResult> {
-  const { base, store, provider, desired } = input;
-  const [capabilities, application, generation] = await Promise.all([
-    provider.capabilities(input.context),
-    store.getApplication(base.applicationId),
-    store.getDesiredGeneration(base.applicationId),
-  ]);
-  const resources: ObservedResource[] = [];
+export async function applyObserveLiveState(input: { base: ApplyBase; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; context: ProviderContext }): Promise<ObserveLiveStateResult> {
+  const { base, provider, desired } = input;
+  const capabilities = await provider.capabilities(input.context);
   const project = await provider.observeProject({ projectId: desired.metadata.id }, input.context);
-  if (project) {
-    resources.push(project);
-    // `vercel.settings` is deliberately not pushed: the planner falls back to
-    // the project resource for settings comparison (extracting only declared
-    // settings keys). Pushing the full project configuration as a separate
-    // settings resource would surface every undeclared project key as
-    // settings drift and block the plan (mirrors reconcileObserveLiveState).
-  }
+  // The provider-visible deployment for the exact source commit: the same
+  // observation the approving CLI makes (findDeploymentByCommit is optional
+  // on the contract; absence means no deployment evidence for this commit).
+  const deployment = project === null ? null : await (provider.findDeploymentByCommit?.(base.applicationId, base.sourceCommit, input.context) ?? Promise.resolve(null));
+  const dns: PlanDnsObservation[] = [];
   for (const domain of desired.domains.filter((candidate) => candidate.environment === 'production')) {
-    // The Vercel domain attachment is not read back by the observe contract;
-    // it is projected so an applied application never shows phantom drift and
-    // the replan gate stays passable for the manifest's declared domains
-    // (mirrors reconcileObserveLiveState; the planner's settings comparison
-    // falls back to the project resource and extracts only declared keys).
-    const domainKey = `vercel.domain.${domain.hostname}`;
-    const domainProjection = satisfiedProjection({ hostname: domain.hostname, environment: domain.environment, canonical: domain.canonical ?? false, mode: domain.cloudflare.mode, ttl: domain.cloudflare.ttl, zoneRef: domain.cloudflare.zoneRef });
-    resources.push({ provider: 'vercel', resourceType: 'project-domain', resourceKey: domainKey, providerResourceId: `${desired.metadata.id}:${domain.hostname}`, configuration: domainProjection, ownershipFingerprint: stableId('ownership', 'project-domain', domainKey), observedAt: new Date().toISOString() });
     const zone = await provider.observeZone(domain.cloudflare.zoneRef, input.context);
     const record = await provider.observeRecord(zone.zoneId, domain.hostname, input.context);
-    if (record) {
-      resources.push({ provider: 'cloudflare', resourceType: 'dns-record', resourceKey: `cloudflare.dns.${domain.hostname}`, providerResourceId: record.id, configuration: { zoneRef: domain.cloudflare.zoneRef, mode: domain.cloudflare.mode, ttl: domain.cloudflare.ttl, proxied: domain.cloudflare.mode === 'proxied' }, ownershipFingerprint: record.ownershipFingerprint, observedAt: new Date().toISOString() });
-    }
+    dns.push({ domain, zoneId: zone.zoneId, record });
   }
-  const deploymentRows = await store.listDeployments(base.applicationId, { limit: 50 });
-  // Store rows may carry the store-internal SUPERSEDED marker for replaced known-good
-  // deployments; the observed domain model has no such state, and only CURRENT matters
-  // for known-good selection, so superseded rows project as REJECTED.
-  const deployments: DeploymentRecord[] = deploymentRows.map((row) => ({ id: row.id, projectId: row.projectId, environment: row.environment, repository: row.repository, commitSha: row.commitSha, desiredGeneration: row.desiredGeneration, state: row.state === 'SUPERSEDED' ? 'REJECTED' : row.state, url: row.url, createdAt: row.createdAt }));
-  const latestChecks = await store.listHealthChecks(base.applicationId, { limit: 1 });
-  const observed: ObservedApplication = {
-    applicationId: base.applicationId,
-    observedAt: new Date().toISOString(),
-    desiredGeneration: generation?.generation ?? base.desiredGeneration,
-    desiredHash: generation?.desiredHash ?? '',
-    observedHash: '',
-    lifecycleState: application?.lifecycleState ?? null,
-    resources,
-    deployments,
-    health: latestChecks[0] === undefined ? { status: 'UNKNOWN', latest: null } : { status: latestChecks[0].result === 'PASSED' ? 'HEALTHY' : 'UNHEALTHY', latest: latestChecks[0] },
-  };
+  // Shared projection with the approving CLI: provider-visible state only.
+  // Store bookkeeping (deployment rows, health history, generation records,
+  // lifecycle state, ownership tables) is deliberately excluded so the replan
+  // fingerprint is satisfiable by construction. Health is checked at
+  // execution time; lifecycle state comes from the manifest.
+  const observed = buildPlanObservedState({ applicationId: base.applicationId, desired, project, deployment, dns });
   return { observed, capabilities };
 }
 
 export async function applyReplanVerify(input: { base: ApplyBase; store: LaunchpadStore; desired: DesiredApplication; observed: ObservedApplication; capabilities: ProviderCapabilities; context: ProviderContext }): Promise<ReplanVerifyResult> {
+  // Ownership parity with the approving CLI plan: the CLI cannot see the
+  // store's ownership records, so a store-derived ownership map here would
+  // make the replan fingerprint unsatisfiable by construction. Ownership
+  // ambiguity detection remains in the reconcile flow, which owns the store.
   const ownership: Record<string, string> = {};
-  for (const resource of await input.store.listResources(input.base.applicationId)) {
-    ownership[resource.resourceKey] = resource.ownershipFingerprint ?? '';
-  }
   const plan = await buildPlan({ desired: input.desired, observed: input.observed, capabilities: input.capabilities, sourceCommit: input.base.sourceCommit, desiredGeneration: input.base.desiredGeneration, ownership, mode: 'apply', now: new Date().toISOString() });
   const checks = { applicationId: plan.applicationId === input.base.applicationId, sourceCommit: plan.sourceCommit === input.base.sourceCommit, desiredGeneration: plan.desiredGeneration === input.base.desiredGeneration, fingerprint: plan.fingerprint === input.base.planFingerprint, result: plan.result };
   if (!checks.applicationId || !checks.sourceCommit || !checks.desiredGeneration || !checks.fingerprint) {
@@ -720,7 +682,12 @@ export async function applyReleaseLocks(input: { base: ApplyBase; store: Launchp
 export async function applyRecoverOnFailure(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; context: ProviderContext; failure: { failedStep: string; error: unknown }; candidate: DeploymentRecord | null; knownGood: DeploymentRecord | null; productionHealth: HealthCheckRecord | null; fetchImpl?: typeof fetch; sleep?: (delayMs: number) => Promise<void> }): Promise<RecoverOnFailureResult> {
   const policy = input.desired.environments.production?.rollback;
   const candidate = input.candidate;
-  const observedKnownGood = input.knownGood;
+  // The observed projection is provider-visible only (catalog commits never
+  // match application deployments), so the durable known-good record is the
+  // rollback claim; it is written only by the verified promotion path, and
+  // the corroboration below requires the same record, so nothing written by
+  // another path can trigger a rollback.
+  const observedKnownGood = input.knownGood ?? (await input.store.getKnownGoodDeployment(input.base.applicationId, 'production'));
   const project = projectSpec(input.desired);
   let rollback: RollbackResult | null = null;
   let rollbackError: { name: string; message: string } | null = null;
@@ -814,7 +781,7 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
     case 'observe-live-state':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, planFingerprint: base.planFingerprint, applicationId: base.applicationId }), run: async () => {
         if (!ctx.runtime) throw new WorkflowFailure('LP-WORKFLOW-PAYLOAD-MISSING', 'observe-live-state requires the apply runtime.');
-        return applyObserveLiveState({ base, store: ctx.runtime.store, provider: ctx.runtime.provider, desired: requireDesired(ctx), context: ctx.context });
+        return applyObserveLiveState({ base, provider: ctx.runtime.provider, desired: requireDesired(ctx), context: ctx.context });
       } };
     case 'replan-verify':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, planFingerprint: base.planFingerprint, desiredGeneration: base.desiredGeneration }), run: async () => {
@@ -988,7 +955,7 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
         return { accepted: true } as const;
       },
     },
-    { id: 'observe-live-state', preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, planFingerprint: base.planFingerprint, applicationId: base.applicationId }), run: async () => applyObserveLiveState({ base, store: runtime.store, provider: runtime.provider, desired: submitted.desired, context }) },
+    { id: 'observe-live-state', preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, planFingerprint: base.planFingerprint, applicationId: base.applicationId }), run: async () => applyObserveLiveState({ base, provider: runtime.provider, desired: submitted.desired, context }) },
     {
       id: 'replan-verify',
       preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, planFingerprint: base.planFingerprint, desiredGeneration: base.desiredGeneration }),

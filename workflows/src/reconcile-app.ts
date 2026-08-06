@@ -4,7 +4,8 @@ import type { LaunchpadStore, ReconciliationMode, SyncStatus } from '@launchpad/
 import { canonicalJson, idempotencyKey, sha256Hex, stableId } from '@launchpad/shared';
 import { ProviderRequestError, type DnsProvider, type ProjectProvider, type ProviderContext, type SourceProvider } from '@launchpad/provider-contract';
 import { DurableOperationRunner, errorCodeOf, type DurableStep, type OperationRunResult, type StepOutcome } from './operation-runner.js';
-import { WorkflowFailure, satisfiedProjection } from './apply-app.js';
+import { WorkflowFailure } from './apply-app.js';
+import { satisfiedProjection } from '@launchpad/core';
 import { stringify } from 'yaml';
 
 export type { DriftRecord } from '@launchpad/core';
