@@ -14,7 +14,10 @@ export class ProviderHttpClient {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.token = options.token;
     this.provider = options.provider;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    // Workerd's global fetch is this-sensitive; storing it in a property and
+    // calling `this.fetchImpl(...)` throws "Illegal invocation". The arrow
+    // wrapper preserves a bare call so the default path always works.
+    this.fetchImpl = options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
     this.timeoutMs = options.timeoutMs ?? 30_000;
     // CR/LF can never be legitimate token characters; a paste artifact with
     // embedded newlines would otherwise throw TypeError on Headers.set and
