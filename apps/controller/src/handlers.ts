@@ -395,7 +395,7 @@ export function createWorkflowHandlers(env: ControllerEnv['Bindings'], repositor
         source: github,
         desired,
         pullRequestNumber: Number(payload.pullRequestNumber ?? payload.prNumber ?? 0),
-        repositoryId: typeof payload.repositoryId === 'number' ? payload.repositoryId : undefined,
+        repositoryId: (typeof payload.repositoryId === 'number' || typeof payload.repositoryId === 'string') && /^\d+$/.test(String(payload.repositoryId)) ? Number(payload.repositoryId) : undefined,
         revision,
         sourceCommit,
         planFingerprint,

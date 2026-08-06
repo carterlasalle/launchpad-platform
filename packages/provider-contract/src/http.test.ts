@@ -21,6 +21,12 @@ describe('provider HTTP client', () => {
     await expect(malformedClient.request('/malformed')).rejects.toMatchObject({ code: 'LP-GITHUB-MALFORMED-RESPONSE' });
   });
 
+  it('names the underlying exception class in network failures', async () => {
+    const failing: typeof fetch = async () => { throw new TypeError('fetch failed'); };
+    const client = new ProviderHttpClient({ baseUrl: 'https://provider.test', token: 'token', provider: 'github', fetchImpl: failing });
+    await expect(client.request('/v1')).rejects.toMatchObject({ code: 'LP-GITHUB-NETWORK', message: expect.stringContaining('TypeError') });
+  });
+
   it('fails closed when credentials are missing', async () => {
     const client = new ProviderHttpClient({ baseUrl: 'https://provider.test', provider: 'cloudflare', fetchImpl: fetch });
     await expect(client.request('/v4')).rejects.toBeInstanceOf(ProviderRequestError);

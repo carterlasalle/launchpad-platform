@@ -9,6 +9,7 @@ metadata:
 # Retry after successful control-plane deployment.
 # Manifest source path is now controller-bound.
 # Final activation attempt uses normalized source paths.
+# Hash normalization is now deployed before this retry.
   owners:
     - "@CarterLaSalle"
   labels:
