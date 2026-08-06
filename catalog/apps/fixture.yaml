@@ -23,6 +23,7 @@ metadata:
 # Idempotent domain adoption is deployed; retry apply.
 # Phase output hydration is deployed; retry apply.
 # DNS target extraction is deployed; retry apply.
+# DNS exists; TLS issuance window elapsed; retry apply.
   owners:
     - "@CarterLaSalle"
   labels:
