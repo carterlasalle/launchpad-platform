@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ProviderHttpClient, ProviderRequestError } from './index.js';
 
 describe('provider HTTP client', () => {
@@ -36,6 +36,23 @@ describe('provider HTTP client', () => {
     const failing: typeof fetch = async () => { throw new TypeError('fetch failed'); };
     const client = new ProviderHttpClient({ baseUrl: 'https://provider.test', token: 'token', provider: 'github', fetchImpl: failing });
     await expect(client.request('/v1')).rejects.toMatchObject({ code: 'LP-GITHUB-NETWORK', message: expect.stringContaining('TypeError: fetch failed') });
+  });
+
+  it('keeps the global fetch this-binding when no fetchImpl is provided', async () => {
+    // Workerd's global fetch is this-sensitive: invoking it through a
+    // detached method reference throws "Illegal invocation". The stub
+    // reproduces that behavior so the default path is exercised faithfully.
+    const stub = function (this: unknown): Promise<Response> {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    } as typeof fetch;
+    vi.stubGlobal('fetch', stub);
+    try {
+      const client = new ProviderHttpClient({ baseUrl: 'https://provider.test', token: 'token', provider: 'github' });
+      await expect(client.request('/v1')).resolves.toEqual({ ok: true });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('fails closed when credentials are missing', async () => {

@@ -12,6 +12,7 @@ metadata:
 # Hash normalization is now deployed before this retry.
 # Provider fetch causes are now instrumented.
 # Credential sanitation is deployed before this retry.
+# Full provider error details are now recorded.
   owners:
     - "@CarterLaSalle"
   labels:
