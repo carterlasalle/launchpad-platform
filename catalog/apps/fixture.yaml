@@ -15,6 +15,7 @@ metadata:
 # Full provider error details are now recorded.
 # Global fetch binding is preserved in provider clients.
 # Vercel API contract repair is deployed before this apply.
+# Application-branch deployment resolution is live.
   owners:
     - "@CarterLaSalle"
   labels:
