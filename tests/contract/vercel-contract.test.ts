@@ -263,7 +263,7 @@ it('creates preview, staged-production, and production deployments with the offi
   const previewDeployment = await preview.adapter.createDeployment({ projectId: 'app', environment: 'preview', repository: 'acme/app', commitSha: COMMIT, desiredGeneration: 1, staged: false }, ctx);
   expect(previewDeployment).toMatchObject({ id: 'dpl_1', state: 'QUEUED', url: 'https://app-1.vercel.app', commitSha: COMMIT, createdAt: new Date(CREATED_AT).toISOString() });
   const previewBody = expectRequest(preview.requests, 'POST', '/v13/deployments');
-  expect(previewBody.body).toMatchObject({ name: 'app', project: 'app', gitSource: { type: 'github', repo: 'acme/app', ref: COMMIT, sha: COMMIT }, meta: { launchpadApplicationId: 'app', desiredGeneration: '1' } });
+  expect(previewBody.body).toMatchObject({ name: 'app', project: 'app', gitSource: { type: 'github', org: 'acme', repo: 'app', ref: COMMIT, sha: COMMIT }, meta: { launchpadApplicationId: 'app', desiredGeneration: '1' } });
   if (previewBody.body !== null && typeof previewBody.body === 'object') {
     expect('target' in previewBody.body).toBe(false);
   }
