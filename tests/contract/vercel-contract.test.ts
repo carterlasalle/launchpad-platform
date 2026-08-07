@@ -276,7 +276,7 @@ it('creates preview, staged-production, and production deployments with the offi
   // Staged candidates bypass Vercel deduplication (forceNew=1) so a corrected
   // gitSource always produces a fresh, promotable staged production build.
   const stagedRequest = expectRequest(staged.requests, 'POST', '/v13/deployments?forceNew=1');
-  expect(stagedRequest.body).toMatchObject({ target: 'staging' });
+  expect(stagedRequest.body).toMatchObject({ target: 'production' });
 
   const production = mount(loadScenarios('vercel').deploymentCreateProduction);
   await production.adapter.createDeployment({ projectId: 'app', environment: 'production', repository: 'acme/app', commitSha: COMMIT, desiredGeneration: 1, staged: false }, ctx);

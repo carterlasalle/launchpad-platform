@@ -85,7 +85,7 @@ it('creates staged production candidates against the production branch ref and e
   const deploymentRequest = requests.find((request) => request.url.includes('/v13/deployments'));
   expect(deploymentRequest?.url).toContain('forceNew=1');
   expect(deploymentRequest?.body.gitSource).toMatchObject({ type: 'github', org: 'acme', repo: 'app', ref: 'main', sha: COMMIT });
-  expect(deploymentRequest?.body.target).toBe('staging');
+  expect(deploymentRequest?.body.target).toBe('production');
 });
 
 it('reads the git repository and commit from every Vercel deployment meta shape during wait', async () => {
