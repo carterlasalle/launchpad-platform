@@ -539,10 +539,13 @@ export class VercelAdapter implements ProjectProvider {
       // A staged production candidate is created with target 'staging' (see
       // createDeployment) but remains a production-bound deployment: its
       // Launchpad environment is 'production', never 'preview'. Vercel's
-      // deployment meta reports the git repository under either `gitRepo` or
-      // `repo` and the commit under `gitCommitSha`/`githubCommitSha`/`commitSha`;
-      // accept every shape so the promotion gates compare like-for-like.
-      last = mapDeployment(response, { projectId: text(data.projectId) ?? '', environment: data.target === 'production' || data.target === 'staging' ? 'production' : 'preview', repository: text(meta.gitRepo) ?? text(meta.repo) ?? '', commitSha: text(meta.gitCommitSha) ?? text(meta.githubCommitSha) ?? text(meta.commitSha) ?? '', desiredGeneration: Number(meta.desiredGeneration ?? 0) });
+      // deployment meta reports the git repository under `gitRepo`/`repo` or
+      // as `githubOrg`/`githubRepo` parts, and the commit under
+      // `gitCommitSha`/`githubCommitSha`/`commitSha`; accept every shape so
+      // the promotion gates compare like-for-like.
+      const githubOrg = text(meta.githubOrg);
+      const githubRepo = text(meta.githubRepo);
+      last = mapDeployment(response, { projectId: text(data.projectId) ?? '', environment: data.target === 'production' || data.target === 'staging' ? 'production' : 'preview', repository: text(meta.gitRepo) ?? text(meta.repo) ?? (githubOrg !== null && githubRepo !== null ? `${githubOrg}/${githubRepo}` : '') ?? '', commitSha: text(meta.gitCommitSha) ?? text(meta.githubCommitSha) ?? text(meta.commitSha) ?? '', desiredGeneration: Number(meta.desiredGeneration ?? 0) });
       if (['READY', 'ERROR', 'CANCELED', 'STAGED', 'CURRENT'].includes(last.state)) return last;
       await new Promise<void>((resolve) => setTimeout(resolve, request.pollMs));
     }
@@ -589,7 +592,9 @@ export class VercelAdapter implements ProjectProvider {
       if (explicitSha !== commitSha) continue;
       if (data.target === 'production') continue;
       if (options?.expectedRepository) {
-        const repository = text(meta.gitRepo) ?? text(meta.repo) ?? text(record(data.gitSource).repo) ?? text(record(data.gitSource).repository);
+        const githubOrg = text(meta.githubOrg);
+        const githubRepo = text(meta.githubRepo);
+        const repository = text(meta.gitRepo) ?? text(meta.repo) ?? (githubOrg !== null && githubRepo !== null ? `${githubOrg}/${githubRepo}` : null) ?? null;
         if (repository && repository !== options.expectedRepository) continue;
       }
       const matched = mapDeployment(deployment, { projectId, environment: 'preview', repository: '', commitSha, desiredGeneration: 0 });
