@@ -91,6 +91,15 @@ export const APPLY_PHASES: readonly ApplyPhaseName[] = [
 ];
 
 const LOCK_LEASE_SECONDS = 900;
+
+/**
+ * Lock acquisition retry policy: contention is transient (a live operation
+ * releases, a stale lease expires after LOCK_LEASE_SECONDS), so wait with
+ * bounded backoff rather than failing the run. The 30-attempt window (~28
+ * minutes) exceeds a full stale lease so acquisition self-heals even when
+ * the previous owner never released.
+ */
+const LOCK_ACQUIRE_RETRY = { maxAttempts: 30, baseDelayMs: 10_000, maxDelayMs: 60_000 };
 const CANDIDATE_WAIT_TIMEOUT_MS = 300_000;
 const CANDIDATE_WAIT_POLL_MS = 2_000;
 export const DEFAULT_HEALTH_SPEC: HealthSpec = { path: '/api/health', method: 'GET', expectedStatus: [200], timeoutSeconds: 10, attempts: 1, intervalSeconds: 0 };
@@ -238,7 +247,7 @@ export async function refreshLocks(store: LaunchpadStore, locks: HeldLocks): Pro
   for (const key of lockKeys(locks)) {
     if (await store.renewLock(key, locks.ownerId, locks.leaseSeconds)) continue;
     if (await store.acquireLock(key, locks.ownerId, locks.leaseSeconds)) continue;
-    throw new WorkflowFailure('LP-LOCK-CONFLICT', `Lock '${key}' is held by another operation after lease expiry.`);
+    throw new WorkflowFailure('LP-LOCK-CONFLICT', `Lock '${key}' is held by another operation after lease expiry.`, true);
   }
 }
 
@@ -362,13 +371,16 @@ export async function applyAcquireLocks(input: { base: ApplyBase; store: Launchp
     domains: input.desired.domains.map((domain) => domain.hostname),
   };
   if (!(await input.store.acquireLock(locks.application, locks.ownerId, locks.leaseSeconds))) {
-    throw new WorkflowFailure('LP-LOCK-CONFLICT', `Application lock '${locks.application}' is held by another operation.`);
+    // Lock contention is transient by design: a live concurrent operation
+    // releases when it finishes, and a stale lease expires. Retryable so the
+    // step's bounded backoff absorbs the wait instead of failing the run.
+    throw new WorkflowFailure('LP-LOCK-CONFLICT', `Application lock '${locks.application}' is held by another operation.`, true);
   }
   const acquired: string[] = [];
   try {
     for (const hostname of locks.domains) {
       const key = `domain:${hostname}`;
-      if (!(await input.store.acquireLock(key, locks.ownerId, locks.leaseSeconds))) throw new WorkflowFailure('LP-LOCK-CONFLICT', `Domain lock '${key}' is held by another operation.`);
+      if (!(await input.store.acquireLock(key, locks.ownerId, locks.leaseSeconds))) throw new WorkflowFailure('LP-LOCK-CONFLICT', `Domain lock '${key}' is held by another operation.`, true);
       acquired.push(key);
     }
   } catch (error) {
@@ -998,7 +1010,7 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
       preconditionHash: canonicalJson({ planFingerprint: base.planFingerprint }),
       run: async (_attempt, stepContext) => applyNoDestroyGate({ plan: stepOutput<ReplanVerifyResult>(stepContext.outputs, 'replan-verify').plan }),
     },
-    { id: 'acquire-locks', preconditionHash: canonicalJson({ applicationId: base.applicationId, planFingerprint: base.planFingerprint, hostnames: submitted.desired.domains.map((domain) => domain.hostname) }), run: async () => applyAcquireLocks({ base, store: runtime.store, desired: submitted.desired }) },
+    { id: 'acquire-locks', preconditionHash: canonicalJson({ applicationId: base.applicationId, planFingerprint: base.planFingerprint, hostnames: submitted.desired.domains.map((domain) => domain.hostname) }), retry: LOCK_ACQUIRE_RETRY, run: async () => applyAcquireLocks({ base, store: runtime.store, desired: submitted.desired }) },
     {
       id: 'ensure-project',
       preconditionHash: canonicalJson({ planFingerprint: base.planFingerprint, sourceCommit: base.sourceCommit }),
