@@ -28,6 +28,7 @@ metadata:
 # Deployment meta shapes are deployed; retry apply.
 # Control plane is enabled with allowlists; final apply.
 # Plan re-attested after provider-state drift (rollback + candidate deployments).
+# Plan re-attested with the stable observed-state projection.
   owners:
     - "@CarterLaSalle"
   labels:
