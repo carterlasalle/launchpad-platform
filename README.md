@@ -84,6 +84,56 @@ The dashboard is available at `http://localhost:8787`; the controller health end
 
 For environment setup, provider preflight, and local command examples, follow the [getting-started guide](docs/guides/getting-started.md).
 
+## Production access
+
+### Dashboard
+
+The live operator dashboard is served by the deployed control-plane Worker:
+
+| URL | What it is |
+|---|---|
+| https://launchpad.carterlasalle.com | Production dashboard (custom domain) |
+| https://launchpad-control-plane-production.carterlasalle.workers.dev | Same Worker, fallback host |
+| https://launchpad.carterlasalle.com/healthz | Controller health check |
+
+The dashboard asks for the operator token (below) on first load. The same host is also the OIDC audience value (`LAUNCHPAD_OIDC_AUDIENCE`) — that is an identifier used by GitHub Actions token validation, not a separate service.
+
+### The Launchpad key (operator token)
+
+The operator token authenticates the dashboard and every direct operator command (`yarn platform status`, `logs`, retry/rollback/cancel). It is a single high-entropy value kept in **two places that must match**:
+
+1. **Cloudflare Workers Secrets Store** — entry `launchpad-operator-token` in the store whose ID is `LAUNCHPAD_SECRETS_STORE_ID` (binding `SECRETS_OPERATOR_TOKEN`); this is what the running controller verifies.
+2. **GitHub Actions secret** `LAUNCHPAD_OPERATOR_TOKEN` — used by scheduled reconciliation and CI operators.
+
+**Read it back** (account owner, from a machine with Cloudflare auth):
+
+```bash
+yarn wrangler secrets-store secret get '<LAUNCHPAD_SECRETS_STORE_ID>' --name launchpad-operator-token --remote
+```
+
+or in the Cloudflare dashboard: **Workers & Pages → Workers Secrets Store → your store → `launchpad-operator-token`**. GitHub never returns stored secret values, so the Secrets Store is the source of truth.
+
+**Rotate it** (if lost or compromised):
+
+```bash
+# 1. Generate a new high-entropy value (e.g. openssl rand -hex 32)
+# 2. Update the Secrets Store entry
+yarn wrangler secrets-store secret update '<LAUNCHPAD_SECRETS_STORE_ID>' --name launchpad-operator-token --scopes workers --remote
+# 3. Update the GitHub secret to the SAME value (interactive prompt, never on the command line)
+gh secret set LAUNCHPAD_OPERATOR_TOKEN
+# 4. Redeploy the Worker so the new binding value is picked up, then smoke-test the dashboard
+```
+
+Operator operations also require the controller URL:
+
+```bash
+export LAUNCHPAD_CONTROLLER_URL='https://launchpad.carterlasalle.com'
+export LAUNCHPAD_OPERATOR_TOKEN='<the value from the Secrets Store>'
+yarn platform status --catalog catalog --controller "$LAUNCHPAD_CONTROLLER_URL"
+```
+
+All other automation (PR plans, previews, applies) authenticates with GitHub Actions OIDC and needs no key. See [credential rotation](docs/runbooks/credentials.md) and the [deployment guide](docs/guides/deployment.md) for the full provisioning procedure.
+
 ## Application workflow
 
 1. Copy and edit a manifest under `catalog/apps/`.
