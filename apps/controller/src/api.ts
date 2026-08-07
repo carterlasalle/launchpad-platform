@@ -407,9 +407,24 @@ async function enqueueDurableOperation(context: Context<AppEnv>, dependencies: C
   try {
     await ensureApplicationRegistered(store, input.applicationId, dependencies.controlCatalogRoot, typeof input.params.manifestPath === 'string' ? input.params.manifestPath : undefined);
     run = await store.startWorkflowRun({ applicationId: input.applicationId, workflowType: input.kind, idempotencyKey: input.idempotencyKey, payloadHash });
+    // A terminal run is immutable and its workflow instance already exists:
+    // a QUEUED/RUNNING/SUCCEEDED replay is returned as-is (the caller dedupes
+    // on the response), while a FAILED/BLOCKED run is retried under a fresh
+    // derived key so the same logical operation can be re-enqueued without
+    // losing the original run or its audit trail.
+    let retryAttempt = 1;
+    while (run.status === 'FAILED' || run.status === 'BLOCKED') {
+      run = await store.startWorkflowRun({ applicationId: input.applicationId, workflowType: input.kind, idempotencyKey: `${input.idempotencyKey}:retry:${retryAttempt}`, payloadHash });
+      retryAttempt += 1;
+    }
     await store.registerIdempotentRequest({ idempotencyKey: input.idempotencyKey, operationId: run.id, payloadHash });
   } catch (error) {
     return mapEnqueueError(context, error);
+  }
+  if (run.status !== 'QUEUED') {
+    // Replay of an already-enqueued or completed operation: report the
+    // recorded run without dispatching a duplicate workflow instance.
+    return context.json({ workflowId: run.id, operationId: run.id, status: run.status, replayed: true }, 202);
   }
   const workflowId = `lp-${input.kind}-${run.id}`;
   let instance: { id: string };
