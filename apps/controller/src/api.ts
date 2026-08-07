@@ -2109,6 +2109,10 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       : deployment !== null || health !== null
         ? projectSafeOperationResult({ deployment, health })
         : null;
+    // Granular machines (apply/reconcile/decommission) persist per-phase
+    // steps; surface the failed step and its redacted error so the polling
+    // caller can report the concrete provider failure.
+    const failedStep = steps.find((step) => step.status === 'FAILED' && step.error !== null);
     return context.json({
       operationId,
       workflowId: typeof details.workflowId === 'string' ? details.workflowId : operationId,
@@ -2120,6 +2124,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       completedAt: run.completedAt,
       sourceCommit: typeof details.sourceCommit === 'string' ? details.sourceCommit : null,
       result,
+      ...(failedStep !== undefined ? { failedStep: workflowStepView(failedStep) } : {}),
     });
   });
 

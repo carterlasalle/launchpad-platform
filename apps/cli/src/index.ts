@@ -215,7 +215,7 @@ async function controllerGet(controller: string, path: string, token: string): P
 const TERMINAL_OPERATION_STATUSES: Record<string, true> = { SUCCEEDED: true, FAILED: true, BLOCKED: true, ROLLED_BACK: true, CANCELED: true, CLEANED: true, SYNCED: true, READY: true };
 const SUCCESS_OPERATION_STATUSES: Record<string, true> = { SUCCEEDED: true, READY: true, CLEANED: true, SYNCED: true };
 
-interface OperationStatus { operationId: string; workflowId: string | null; applicationId: string | null; kind: string | null; status: string; errorCode: string | null; sourceCommit: string | null; result: Record<string, unknown> | null; }
+interface OperationStatus { operationId: string; workflowId: string | null; applicationId: string | null; kind: string | null; status: string; errorCode: string | null; sourceCommit: string | null; result: Record<string, unknown> | null; failedStep: { stepId: string; status: string; attempt: number; error: { code: string | null; message: string | null } | null } | null; }
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
@@ -240,7 +240,9 @@ async function fetchOperationStatus(controller: string, operationId: string, tok
   const returnedOperationId = stringOrNull(body.operationId);
   if (!status || !returnedOperationId) throw new CliFailure('LP-OPERATION-RESPONSE-INVALID', `GET /v1/operations/${operationId} is missing operationId or status.`);
   const result = body.result !== null && typeof body.result === 'object' && !Array.isArray(body.result) ? body.result as Record<string, unknown> : null;
-  return { operationId: returnedOperationId, workflowId: stringOrNull(body.workflowId), applicationId: stringOrNull(body.applicationId), kind: stringOrNull(body.kind), status, errorCode: stringOrNull(body.errorCode), sourceCommit: stringOrNull(body.sourceCommit), result };
+  const failedStepBody = body.failedStep !== null && typeof body.failedStep === 'object' ? body.failedStep as Record<string, unknown> : null;
+  const failedStep = failedStepBody !== null && typeof failedStepBody.stepId === 'string' ? { stepId: failedStepBody.stepId, status: typeof failedStepBody.status === 'string' ? failedStepBody.status : 'FAILED', attempt: typeof failedStepBody.attempt === 'number' ? failedStepBody.attempt : 1, error: failedStepBody.error !== null && typeof failedStepBody.error === 'object' ? { code: typeof (failedStepBody.error as Record<string, unknown>).code === 'string' ? (failedStepBody.error as Record<string, unknown>).code as string : null, message: typeof (failedStepBody.error as Record<string, unknown>).message === 'string' ? (failedStepBody.error as Record<string, unknown>).message as string : null } : null } : null;
+  return { operationId: returnedOperationId, workflowId: stringOrNull(body.workflowId), applicationId: stringOrNull(body.applicationId), kind: stringOrNull(body.kind), status, errorCode: stringOrNull(body.errorCode), sourceCommit: stringOrNull(body.sourceCommit), result, failedStep };
 }
 
 /** Polls the claim-scoped operation status route until a terminal state; fails closed on timeout or malformed responses. */
@@ -836,7 +838,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       if (!operationId) throw new CliFailure('LP-APPLY-START-INVALID', `Apply start for '${applyApplication.metadata.id}' is missing operationId.`);
       const operation = await pollOperation(controller, operationId, token, timeoutMs);
       const applied = SUCCESS_OPERATION_STATUSES[operation.status] === true;
-      output.write(`${JSON.stringify({ applicationId: applyApplication.metadata.id, status: operation.status, operationId: operation.operationId, errorCode: operation.errorCode, result: operation.result }, null, 2)}\n`);
+      output.write(`${JSON.stringify({ applicationId: applyApplication.metadata.id, status: operation.status, operationId: operation.operationId, errorCode: operation.errorCode, failedStep: operation.failedStep, result: operation.result }, null, 2)}\n`);
       success = success && applied;
     }
     return success ? 0 : 1;

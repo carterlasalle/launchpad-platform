@@ -594,6 +594,24 @@ describe('claim-scoped operation polling', () => {
     await expect(response.json()).resolves.toMatchObject({ status: 'SUCCEEDED', errorCode: null, completedAt: expect.any(String) as unknown as string, result: { previewUrl: 'https://app-demo-abc.vercel.app', buildState: 'READY', healthState: 'PASSED' } });
   });
 
+  it('surfaces the failed granular step with a redacted error to the bound caller', async () => {
+    const harness = createHarness();
+    const { operationId } = await startOperation(harness, baseClaims(), baseBody());
+    await harness.store.updateWorkflowRun(operationId, { status: 'FAILED', completedAt: new Date().toISOString(), errorCode: 'LP-VERCEL-HTTP-422' });
+    await harness.store.recordWorkflowStep({ workflowId: operationId, stepId: 'create-candidate', status: 'FAILED', attempt: 1, preconditionHash: 'h', error: { code: 'LP-VERCEL-HTTP-422', message: 'provider body leaked: super-secret-token-value' } });
+    const token = await signToken(baseClaims());
+    const response = await request(harness, `/v1/operations/${operationId}`, { headers: bearer(token) });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { failedStep: { stepId: string; status: string; attempt: number; error: { code: string | null; message: string | null } } };
+    expect(body.failedStep).toMatchObject({ stepId: 'create-candidate', status: 'FAILED', attempt: 1, error: { code: 'LP-VERCEL-HTTP-422', message: 'provider body leaked: super-secret-token-value' } });
+    // A credential-shaped value inside the provider message is masked before
+    // it reaches the polling caller (shared redactText contract).
+    await harness.store.recordWorkflowStep({ workflowId: operationId, stepId: 'wait-candidate', status: 'FAILED', attempt: 1, preconditionHash: 'h', error: { code: 'LP-VERCEL-HTTP-422', message: 'provider body leaked: vercel_token_abcdef123456' } });
+    const second = await request(harness, `/v1/operations/${operationId}`, { headers: bearer(token) });
+    const secondBody = await second.json() as { failedStep: { error: { code: string | null; message: string | null } | null } };
+    expect(secondBody.failedStep.error?.message).not.toContain('vercel_token_abcdef123456');
+  });
+
   it('returns 403 for an operation bound to a different repository', async () => {
     const harness = createHarness();
     const { operationId } = await startOperation(harness, baseClaims(), baseBody());
