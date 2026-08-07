@@ -311,8 +311,11 @@ it('fails the release while reporting successful rollback and keeps the original
   await store.recordDeployment({ id: previous.id, applicationId: 'app', projectId: 'app', environment: 'production', repository: 'acme/app', commitSha: previous.commitSha, desiredGeneration: 0, state: 'CURRENT', url: previous.url, createdAt: previous.createdAt });
   await store.recordKnownGoodDeployment('app', 'production', previous.id);
   const { plan, observed: observedState } = await planFor(provider, store);
-  let healthCalls = 0;
-  const result = await run(store, provider, plan, observedState, { fetchImpl: async () => { healthCalls += 1; return new Response(JSON.stringify({ status: healthCalls === 1 ? 'ok' : 'bad' }), { status: healthCalls === 1 ? 200 : 500 }); } });
+  // Deterministic by target URL, not call count: the candidate host is
+  // healthy, the production domain is degraded, regardless of how many
+  // attempts the health check makes (count-based routing flakes under
+  // slower CI when retry/attempt interleavings shift).
+  const result = await run(store, provider, plan, observedState, { fetchImpl: async (input) => (String(input).includes('app.example.com') ? new Response(JSON.stringify({ status: 'bad' }), { status: 500 }) : new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) });
   expect(result.status).toBe('FAILED');
   expect(result.errorCode).toBe('LP-HEALTH-PRODUCTION-FAILED');
   expect(result.rollback?.restored).toBe(true);
