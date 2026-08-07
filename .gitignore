@@ -22,3 +22,4 @@ wrangler.deploy.test.json
 *.db
 .beads-credential-key
 .beads/proxieddb/
+prime-agent-session-*.html
