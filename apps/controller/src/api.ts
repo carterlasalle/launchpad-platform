@@ -404,6 +404,7 @@ async function enqueueDurableOperation(context: Context<AppEnv>, dependencies: C
   if (typeof input.params.planFingerprint === 'string') hashInput.planFingerprint = input.params.planFingerprint;
   const payloadHash = await workflowPayloadHash(hashInput);
   let run: WorkflowRunRecord;
+  let effectiveKey = input.idempotencyKey;
   try {
     await ensureApplicationRegistered(store, input.applicationId, dependencies.controlCatalogRoot, typeof input.params.manifestPath === 'string' ? input.params.manifestPath : undefined);
     // A terminal run is immutable and its workflow instance already exists:
@@ -430,7 +431,6 @@ async function enqueueDurableOperation(context: Context<AppEnv>, dependencies: C
     };
     run = await tryStart(input.idempotencyKey);
     let retryAttempt = 1;
-    let effectiveKey = input.idempotencyKey;
     while (run.status === 'FAILED' || run.status === 'BLOCKED') {
       effectiveKey = `${input.idempotencyKey}:retry:${retryAttempt}`;
       run = await tryStart(effectiveKey);
@@ -451,7 +451,13 @@ async function enqueueDurableOperation(context: Context<AppEnv>, dependencies: C
   const workflowId = `lp-${input.kind}-${run.id}`;
   let instance: { id: string };
   try {
-    instance = await workflow.create({ id: workflowId, params: { ...input.params, operationId: run.id, workflowId } });
+    // The workflow must execute under the key its run was created under: when
+    // the enqueue advanced to a derived retry key, the phase handlers and the
+    // runner's startRun would otherwise collide with the terminal run that
+    // still owns the base key (startWorkflowRun throws LP-DB-IDEMPOTENCY-REUSED
+    // against its stale payload).
+    const workflowParams = { ...input.params, operationId: run.id, workflowId, ...(effectiveKey !== input.idempotencyKey ? { idempotencyKey: effectiveKey } : {}) };
+    instance = await workflow.create({ id: workflowId, params: workflowParams });
   } catch {
     return errorResponse(context, 'LP-WORKFLOW-CREATE-FAILED', 'The durable workflow could not be started.', 503, true);
   }

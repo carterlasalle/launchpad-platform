@@ -746,6 +746,11 @@ describe('internal workflow dispatch', () => {
     expect(retried?.status).toBe('QUEUED');
     expect(retried?.idempotencyKey).toBe('key-1:retry:1');
     expect(retried?.payloadHash).not.toBe((await harness.store.getWorkflowRun(firstBody.operationId))?.payloadHash);
+    // The dispatched workflow executes under the run's actual key: the phase
+    // handlers' startRun must resolve the retry run, never the terminal run
+    // that still owns the base key (which would throw LP-DB-IDEMPOTENCY-REUSED
+    // against its stale payload).
+    expect(harness.workflowCalls.at(-1)?.params).toMatchObject({ idempotencyKey: 'key-1:retry:1', operationId: secondBody.operationId });
   });
 
   it('refuses to displace a live or completed run with a different payload', async () => {
