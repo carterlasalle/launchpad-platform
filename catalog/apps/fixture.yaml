@@ -30,6 +30,7 @@ metadata:
 # Plan re-attested after provider-state drift (rollback + candidate deployments).
 # Plan re-attested with the stable observed-state projection.
 # Plan re-attested with the whitelisted observed project projection.
+# Redeploy: tokentest app fixed the JSX runtime (React is not defined).
   owners:
     - "@CarterLaSalle"
   labels:
