@@ -14,6 +14,13 @@ function canonicalProjectConfiguration(value: unknown): Record<string, unknown> 
   // canonical form is '.'. Normalize so the planner diff and the apply
   // settings readback compare equal values for the same intent.
   if (project.rootDirectory === null || project.rootDirectory === undefined || project.rootDirectory === '') project.rootDirectory = '.';
+  // Volatile fields must not enter the observed state: latestDeployments and
+  // updatedAt change whenever ANY deployment is created for the project, so
+  // plan review fingerprints (which include the observed state hash) would
+  // drift on every apply's own staged candidate and no attestation could
+  // ever match the successor run.
+  delete project.latestDeployments;
+  delete project.updatedAt;
   return project;
 }
 
