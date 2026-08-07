@@ -702,6 +702,41 @@ describe('internal workflow dispatch', () => {
     expect(run?.status).toBe('FAILED');
     expect(run?.errorCode).toBe('LP-CONTROL-APPLICATION-NOT_FOUND');
   });
+
+  it('re-enqueues the same logical operation after a failed run under a fresh derived key', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims());
+    const first = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    const firstBody = await first.json() as { operationId: string; status: string };
+    expect(first.status).toBe(202);
+    expect(firstBody.status).toBe('QUEUED');
+    await harness.store.updateWorkflowRun(firstBody.operationId, { status: 'FAILED', completedAt: new Date().toISOString(), errorCode: 'LP-INTERNAL-ERROR' });
+    const callsBefore = harness.workflowCalls.length;
+    const second = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    const secondBody = await second.json() as { operationId: string; status: string; replayed?: boolean };
+    expect(second.status).toBe(202);
+    expect(secondBody.status).toBe('QUEUED');
+    expect(secondBody.replayed).toBeUndefined();
+    expect(secondBody.operationId).not.toBe(firstBody.operationId);
+    expect(harness.workflowCalls.length).toBe(callsBefore + 1);
+    const retried = await harness.store.getWorkflowRun(secondBody.operationId);
+    expect(retried?.status).toBe('QUEUED');
+  });
+
+  it('replays an already-completed operation without dispatching a duplicate workflow', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims());
+    const first = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    const firstBody = await first.json() as { operationId: string };
+    await harness.store.updateWorkflowRun(firstBody.operationId, { status: 'SUCCEEDED', completedAt: new Date().toISOString(), errorCode: null });
+    const callsBefore = harness.workflowCalls.length;
+    const second = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    const secondBody = await second.json() as { operationId: string; status: string; replayed?: boolean };
+    expect(second.status).toBe(202);
+    expect(secondBody.operationId).toBe(firstBody.operationId);
+    expect(secondBody.replayed).toBe(true);
+    expect(harness.workflowCalls.length).toBe(callsBefore);
+  });
 });
 
 describe('operator dashboard reads', () => {
