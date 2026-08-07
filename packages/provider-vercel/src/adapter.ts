@@ -303,7 +303,11 @@ export class VercelAdapter implements ProjectProvider {
     // below are accepted; declared settings that map to API fields are applied
     // through the update contract.
     const body = {
-      ...(before ? {} : { name: spec.name, gitRepository: { type: 'github', repo: spec.repository } }),
+      // Shadow preview projects are created WITHOUT the repository git link:
+      // their deployments carry gitSource directly, and every link consumes a
+      // slot in Vercel's per-repo project limit (25) — linked shadow projects
+      // from past previews exhausted it ('repo_links_exceeded_limit').
+      ...(before ? {} : { name: spec.name, ...(spec.settings.launchpadShadow === true ? {} : { gitRepository: { type: 'github', repo: spec.repository } }) }),
       framework: spec.framework,
       ...(spec.rootDirectory && spec.rootDirectory !== '.' ? { rootDirectory: spec.rootDirectory } : {}),
       installCommand: spec.build.installCommand,
