@@ -72,6 +72,21 @@ it('fails closed when the domain belongs to a different project', async () => {
   await expect(adapter.getDomain('app', 'app.example.com', ctx)).rejects.toMatchObject({ code: 'LP-VERCEL-DOMAIN-IDENTITY-MISMATCH' });
 });
 
+it('creates staged production candidates against the production branch ref and exact commit', async () => {
+  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const adapter = new VercelAdapter({ token: 'token', teamId: 'team', fetchImpl: async (input, init) => {
+    const url = String(input);
+    const body = init?.body !== undefined && typeof init.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : {};
+    requests.push({ url, body });
+    return new Response(JSON.stringify({ id: 'dpl_1', projectId: 'prj_1', state: 'STAGED', target: 'staging', meta: { gitRepo: 'acme/app', gitCommitSha: COMMIT } }), { status: 200 });
+  } });
+  const created = await adapter.createDeployment({ projectId: 'prj_1', environment: 'production', repository: 'acme/app', commitSha: COMMIT, desiredGeneration: 1, staged: true, rootDirectory: '.', ref: 'main' }, ctx);
+  expect(created.id).toBe('dpl_1');
+  const deploymentRequest = requests.find((request) => request.url.includes('/v13/deployments'));
+  expect(deploymentRequest?.body.gitSource).toMatchObject({ type: 'github', org: 'acme', repo: 'app', ref: 'main', sha: COMMIT });
+  expect(deploymentRequest?.body.target).toBe('staging');
+});
+
 it('reads the git repository and commit from every Vercel deployment meta shape during wait', async () => {
   const shapes = [
     { meta: { gitRepo: 'acme/app', gitCommitSha: COMMIT } },

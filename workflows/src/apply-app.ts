@@ -593,7 +593,7 @@ export async function applyCreateCandidate(input: { base: ApplyBase; store: Laun
   // branch HEAD (resolved by the controller), never the control-repository
   // commit that triggered the apply. The canonical Vercel project id is used
   // so the deployment record (and the promotion gate) compares like-for-like.
-  const candidate = await input.provider.createDeployment({ projectId, environment: 'production', repository: project.repository, commitSha: input.appCommit ?? input.base.sourceCommit, desiredGeneration: input.plan.desiredGeneration, staged: true, rootDirectory: project.rootDirectory }, input.context);
+  const candidate = await input.provider.createDeployment({ projectId, environment: 'production', repository: project.repository, commitSha: input.appCommit ?? input.base.sourceCommit, desiredGeneration: input.plan.desiredGeneration, staged: true, rootDirectory: project.rootDirectory, ref: project.productionBranch }, input.context);
   await input.store.recordDeployment({ id: candidate.id, applicationId: input.base.applicationId, projectId, environment: 'production', repository: project.repository, commitSha: candidate.commitSha, desiredGeneration: candidate.desiredGeneration, state: candidate.state, url: candidate.url, createdAt: candidate.createdAt });
   return { candidate };
 }
