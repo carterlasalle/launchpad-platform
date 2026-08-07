@@ -7,21 +7,25 @@ function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 function canonicalProjectConfiguration(value: unknown): Record<string, unknown> {
-  const project = { ...record(value) };
-  if (!('autoAssignProductionDomains' in project) && 'autoAssignCustomDomains' in project) project.autoAssignProductionDomains = project.autoAssignCustomDomains;
-  delete project.autoAssignCustomDomains;
+  const project = record(value);
+  // Whitelist projection: the observed project configuration must contain ONLY
+  // the fields the planner diff and the apply adapters consume. Vercel's raw
+  // project response carries deployment-activity state (latestDeployments,
+  // updatedAt, targets, lastAliasRequest, lastRollbackTarget, creator,
+  // speedInsights, resourceConfig, ...) that changes whenever ANY deployment
+  // is created — including the apply's own staged candidate — so a raw spread
+  // drifts the plan review fingerprint on every run and no attestation can
+  // ever match the successor apply (observed live across the tokentest loop).
+  const configuration: Record<string, unknown> = {};
+  for (const key of ['id', 'name', 'framework', 'rootDirectory', 'nodeVersion', 'installCommand', 'buildCommand', 'outputDirectory', 'autoAssignProductionDomains', 'protection', 'link', 'domains'] as const) {
+    if (key in project) configuration[key] = project[key];
+  }
+  if (!('autoAssignProductionDomains' in configuration) && 'autoAssignCustomDomains' in project) configuration.autoAssignProductionDomains = project.autoAssignCustomDomains;
   // Vercel represents the project-root default as null/empty; the manifest's
   // canonical form is '.'. Normalize so the planner diff and the apply
   // settings readback compare equal values for the same intent.
-  if (project.rootDirectory === null || project.rootDirectory === undefined || project.rootDirectory === '') project.rootDirectory = '.';
-  // Volatile fields must not enter the observed state: latestDeployments and
-  // updatedAt change whenever ANY deployment is created for the project, so
-  // plan review fingerprints (which include the observed state hash) would
-  // drift on every apply's own staged candidate and no attestation could
-  // ever match the successor run.
-  delete project.latestDeployments;
-  delete project.updatedAt;
-  return project;
+  if (configuration.rootDirectory === null || configuration.rootDirectory === undefined || configuration.rootDirectory === '') configuration.rootDirectory = '.';
+  return configuration;
 }
 
 function linkedRepository(link: Record<string, unknown>): string | null {
