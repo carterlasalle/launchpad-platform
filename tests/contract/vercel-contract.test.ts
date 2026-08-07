@@ -43,6 +43,19 @@ it('creates a project with the official POST /v10/projects body and applies decl
   expect(patch.body).toEqual({ autoAssignCustomDomains: false });
 });
 
+it('creates shadow preview projects without a git link so repo link limits never block previews', async () => {
+  const { adapter, requests } = mount(loadScenarios('vercel').projectCreate);
+  const shadowProject: ProjectSpec = { ...project, settings: { ...project.settings, launchpadShadow: true } };
+  const result = await adapter.ensureProject(shadowProject, ctx);
+  expect(result.resource.providerResourceId).toBe('prj_1');
+  const create = expectRequest(requests, 'POST', '/v10/projects');
+  expect(create.body).toEqual({
+    name: 'app', framework: 'nextjs',
+    installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null,
+  });
+  expect('gitRepository' in (create.body ?? {})).toBe(false);
+});
+
 it('updates an existing project with PATCH and reports change via canonical readback', async () => {
   const changed = mount(loadScenarios('vercel').projectUpdate);
   const result = await changed.adapter.ensureProject(project, ctx);
