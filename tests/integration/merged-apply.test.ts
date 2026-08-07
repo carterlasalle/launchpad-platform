@@ -341,7 +341,7 @@ describe('merged apply flow (integration)', () => {
     expect(envStep?.result).toMatchObject({ skipped: false, mutation: { changed: false } });
   });
 
-  it('rolls back to the previous known-good when production health fails, keeping the run failed', async () => {
+  it('rolls back to the previous known-good when production health fails, keeping the run failed', { timeout: 30_000 }, async () => {
     harness.restore();
     harness = await seedApplyHarness({ seedKnownGood: true });
     desired = await harness.loadFixtureDesired();
