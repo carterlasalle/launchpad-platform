@@ -17,7 +17,7 @@ function canonicalProjectConfiguration(value: unknown): Record<string, unknown> 
   // drifts the plan review fingerprint on every run and no attestation can
   // ever match the successor apply (observed live across the tokentest loop).
   const configuration: Record<string, unknown> = {};
-  for (const key of ['id', 'name', 'framework', 'rootDirectory', 'nodeVersion', 'installCommand', 'buildCommand', 'outputDirectory', 'autoAssignProductionDomains', 'protection', 'link'] as const) {
+  for (const key of ['id', 'name', 'framework', 'rootDirectory', 'nodeVersion', 'installCommand', 'buildCommand', 'outputDirectory', 'autoAssignProductionDomains', 'protection', 'link', 'domains'] as const) {
     if (key in project) configuration[key] = project[key];
   }
   if (!('autoAssignProductionDomains' in configuration) && 'autoAssignCustomDomains' in project) configuration.autoAssignProductionDomains = project.autoAssignCustomDomains;
