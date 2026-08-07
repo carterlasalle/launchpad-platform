@@ -25,7 +25,7 @@
     "@launchpad/workflows": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "4.19.3",
+    "tsx": "4.23.5",
     "typescript": "5.8.3",
     "vitest": "3.2.6"
   },
