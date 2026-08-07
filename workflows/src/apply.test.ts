@@ -76,8 +76,8 @@ async function attestPlan(store: InMemoryLaunchpadStore, desiredApp: DesiredAppl
   await store.savePlanReviewAttestation({ applicationId: desiredApp.metadata.id, prHeadSourceCommit: sourceCommit, desiredHash, generation: plan.desiredGeneration, planFingerprint: plan.fingerprint, reviewFingerprint, repository: 'acme/app', actor: 'alice', workflowRef: 'acme/app/.github/workflows/apply.yml@refs/heads/main' });
 }
 
-function run(store: InMemoryLaunchpadStore, provider: FakeProvider, plan: PlatformPlan, observedState: ObservedApplication, options: { sourceCommit?: string; fetchImpl?: typeof fetch } = {}): ReturnType<typeof runApplyWorkflow> {
-  return runApplyWorkflow({ store, provider, desired, observed: observedState, plan, sourceCommit: options.sourceCommit ?? plan.sourceCommit, context, fetchImpl: options.fetchImpl ?? okFetch, sleep: async () => undefined });
+function run(store: InMemoryLaunchpadStore, provider: FakeProvider, plan: PlatformPlan, observedState: ObservedApplication, options: { sourceCommit?: string; fetchImpl?: typeof fetch; sleep?: () => Promise<void> } = {}): ReturnType<typeof runApplyWorkflow> {
+  return runApplyWorkflow({ store, provider, desired, observed: observedState, plan, sourceCommit: options.sourceCommit ?? plan.sourceCommit, context, fetchImpl: options.fetchImpl ?? okFetch, sleep: options.sleep ?? (async () => undefined) });
 }
 
 const WRITE_CALLS = ['ensureProject', 'ensureGitConnection', 'ensureEnvironment', 'ensureDomain', 'ensureRecord', 'createDeployment', 'promote', 'rollback'];
@@ -206,6 +206,27 @@ it('blocks on application lock conflicts before any provider write', async () =>
   expect(result.status).toBe('FAILED');
   expect(result.errorCode).toBe('LP-LOCK-CONFLICT');
   expect(provider.calls.some((call) => WRITE_CALLS.includes(call))).toBe(false);
+});
+
+it('waits out lock contention and proceeds once the holder releases', async () => {
+  const provider = testProvider();
+  const store = await seededStore();
+  const { plan, observed: observedState } = await planFor(provider, store);
+  await store.acquireLock('application:app', 'other-workflow', 900);
+  let released = false;
+  const result = await run(store, provider, plan, observedState, {
+    // The first retry backoff releases the competing lock; the retryable
+    // acquire then succeeds and the machine proceeds to completion.
+    sleep: async () => {
+      if (!released) {
+        released = true;
+        await store.releaseLock('application:app', 'other-workflow');
+      }
+    },
+  });
+  expect(result.status).toBe('SUCCEEDED');
+  expect(provider.calls).toContain('createDeployment');
+  expect(await store.getLock('application:app')).toBeNull();
 });
 
 it('blocks on domain lock conflicts and releases locks in failure paths', async () => {
