@@ -141,7 +141,7 @@ describe('merged apply flow (integration)', () => {
     // Exact-commit candidate creation and exact promotion (no canary/traffic-split anywhere).
     const deploymentCalls = harness.transport.jsonBodies('POST', '/v13/deployments');
     expect(deploymentCalls).toHaveLength(1);
-    expect((deploymentCalls[0] as Record<string, unknown>).gitSource).toMatchObject({ sha: MAIN_SHA, ref: MAIN_SHA });
+    expect((deploymentCalls[0] as Record<string, unknown>).gitSource).toMatchObject({ sha: MAIN_SHA, ref: 'main' });
     expect(harness.states.vercel.promoteCalls).toEqual([{ projectId: 'fixture-app', deploymentId: 'dpl_10' }]);
     // Every declared variable is reconciled through the official env surface:
     // one list read, one create per variable, one decrypt-capable readback per create.
