@@ -105,10 +105,12 @@ The operator token authenticates the dashboard and every direct operator command
 1. **Cloudflare Workers Secrets Store** — entry `launchpad-operator-token` in the store whose ID is `LAUNCHPAD_SECRETS_STORE_ID` (binding `SECRETS_OPERATOR_TOKEN`); this is what the running controller verifies.
 2. **GitHub Actions secret** `LAUNCHPAD_OPERATOR_TOKEN` — used by scheduled reconciliation and CI operators.
 
-**Read it back** (account owner, from a machine with Cloudflare auth):
+**Read it back** (account owner, from a machine with Cloudflare auth). Secrets are addressed by their **ID**, not their name — list the store to map names to IDs:
 
 ```bash
-yarn wrangler secrets-store secret get '<LAUNCHPAD_SECRETS_STORE_ID>' --name launchpad-operator-token --remote
+yarn wrangler secrets-store secret list '<LAUNCHPAD_SECRETS_STORE_ID>' --remote
+# find the ID of the launchpad-operator-token row, then:
+yarn wrangler secrets-store secret get '<LAUNCHPAD_SECRETS_STORE_ID>' --secret-id '<the-secret-id>' --remote
 ```
 
 or in the Cloudflare dashboard: **Workers & Pages → Workers Secrets Store → your store → `launchpad-operator-token`**. GitHub never returns stored secret values, so the Secrets Store is the source of truth.
@@ -117,8 +119,9 @@ or in the Cloudflare dashboard: **Workers & Pages → Workers Secrets Store → 
 
 ```bash
 # 1. Generate a new high-entropy value (e.g. openssl rand -hex 32)
-# 2. Update the Secrets Store entry
-yarn wrangler secrets-store secret update '<LAUNCHPAD_SECRETS_STORE_ID>' --name launchpad-operator-token --scopes workers --remote
+# 2. Update the Secrets Store entry (--secret-id from the list above; the
+#    prompt reads the new value without putting it in shell history)
+yarn wrangler secrets-store secret update '<LAUNCHPAD_SECRETS_STORE_ID>' --secret-id '<the-secret-id>' --remote
 # 3. Update the GitHub secret to the SAME value (interactive prompt, never on the command line)
 gh secret set LAUNCHPAD_OPERATOR_TOKEN
 # 4. Redeploy the Worker so the new binding value is picked up, then smoke-test the dashboard
