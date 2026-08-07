@@ -22,7 +22,7 @@ jobs:
       code: ${{ steps.scope.outputs.code }}
       docs: ${{ steps.scope.outputs.docs }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -70,7 +70,7 @@ jobs:
         run: |
           echo "::error::Static change classification did not complete successfully."
           exit 1
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
         if: needs.changes.outputs.code == 'true'
@@ -103,7 +103,7 @@ jobs:
         run: |
           echo "::error::A required static prerequisite did not complete successfully."
           exit 1
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
         if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
@@ -138,7 +138,7 @@ jobs:
         run: |
           echo "::error::A required acceptance prerequisite did not complete successfully."
           exit 1
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
         if: needs.changes.outputs.code == 'true'
