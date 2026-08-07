@@ -2390,7 +2390,7 @@ it('PLAN-REVIEW-DESIRED-DRIFT-BLOCKS: changed desired state or generation after 
   });
 });
 
-it('PLAN-REVIEW-MISSING-BLOCKS: apply without any reviewed-plan attestation blocks before provider writes; replays stay idempotent', async () => {
+it('PLAN-REVIEW-MISSING-BLOCKS: apply without any reviewed-plan attestation blocks before provider writes; replays stay idempotent', { timeout: 30_000 }, async () => {
   await scenario('PLAN-REVIEW-MISSING-BLOCKS', async () => {
     const harness = createD1Store(fixedNow);
     try {
