@@ -525,7 +525,13 @@ export class VercelAdapter implements ProjectProvider {
     // explicit promotion step runs (feature `stagedProduction`).
     const target = request.environment === 'production' ? (request.staged ? 'staging' : 'production') : undefined;
     const gitRepository = githubRepositoryParts(request.repository);
-    const response = await this.client.request<unknown>(this.client.withTeam('/v13/deployments'), { method: 'POST', body: JSON.stringify({ name: request.projectId, project: request.projectId, ...(target !== undefined ? { target } : {}), gitSource: { type: 'github', ...gitRepository, ref: request.ref ?? request.commitSha, sha: request.commitSha }, meta: { launchpadApplicationId: ctx.applicationId, desiredGeneration: String(request.desiredGeneration) } }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-deployment', request.projectId, request.commitSha, String(request.desiredGeneration)) });
+    // Bypass Vercel's deployment deduplication for staged candidates: a
+    // previously created candidate for the same commit (e.g. from an older
+    // gitSource shape) would otherwise be returned unchanged, and promote
+    // rejects a deployment that was not created as a staged production build.
+    const deploymentsPath = this.client.withTeam('/v13/deployments');
+    const createUrl = request.staged ? `${deploymentsPath}${deploymentsPath.includes('?') ? '&' : '?'}forceNew=1` : deploymentsPath;
+    const response = await this.client.request<unknown>(createUrl, { method: 'POST', body: JSON.stringify({ name: request.projectId, project: request.projectId, ...(target !== undefined ? { target } : {}), gitSource: { type: 'github', ...gitRepository, ref: request.ref ?? request.commitSha, sha: request.commitSha }, meta: { launchpadApplicationId: ctx.applicationId, desiredGeneration: String(request.desiredGeneration) } }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-deployment', request.projectId, request.commitSha, String(request.desiredGeneration)) });
     return mapDeployment(response, request);
   }
 
