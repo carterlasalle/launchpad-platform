@@ -83,6 +83,7 @@ it('creates staged production candidates against the production branch ref and e
   const created = await adapter.createDeployment({ projectId: 'prj_1', environment: 'production', repository: 'acme/app', commitSha: COMMIT, desiredGeneration: 1, staged: true, rootDirectory: '.', ref: 'main' }, ctx);
   expect(created.id).toBe('dpl_1');
   const deploymentRequest = requests.find((request) => request.url.includes('/v13/deployments'));
+  expect(deploymentRequest?.url).toContain('forceNew=1');
   expect(deploymentRequest?.body.gitSource).toMatchObject({ type: 'github', org: 'acme', repo: 'app', ref: 'main', sha: COMMIT });
   expect(deploymentRequest?.body.target).toBe('staging');
 });
