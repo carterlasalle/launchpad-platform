@@ -45,7 +45,7 @@ const RESOLVED_PROD_CANARY = 'lp-resolved-prod-value-7d1e5b';
 async function computeApplyFingerprint(harness: ControllerHarness, desired: DesiredApplication, options: { attest?: boolean } = {}): Promise<string> {
   const composite = new CompositeProvider(harness.vercel, harness.cloudflare);
   const base = await makeApplyBase({ applicationId: 'fixture-app', sourceCommit: SOURCE_COMMIT, planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'precompute', workflowId: 'precompute-wf' });
-  const loaded = await applyLoadDesired({ base, source: harness.github, controlRepository: CONTROL_REPOSITORY, manifestPath: MANIFEST_PATH, context: harness.context('precompute-wf') });
+  const loaded = await applyLoadDesired({ base, store: harness.store, source: harness.github, controlRepository: CONTROL_REPOSITORY, manifestPath: MANIFEST_PATH, context: harness.context('precompute-wf') });
   const live = await applyObserveLiveState({ base, provider: composite, desired: loaded.desired, context: harness.context('precompute-wf') });
   const plan = await buildPlan({ desired: loaded.desired, observed: live.observed, capabilities: live.capabilities, sourceCommit: base.sourceCommit, desiredGeneration: base.desiredGeneration, ownership: {}, mode: 'apply', now: '2026-08-04T00:00:00.000Z' });
   if (plan.result !== 'READY') {

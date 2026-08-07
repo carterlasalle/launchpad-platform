@@ -283,7 +283,7 @@ export async function applyValidateRequest(input: { base: ApplyBase }): Promise<
   return { accepted: true };
 }
 
-export async function applyLoadDesired(input: { base: ApplyBase; source: SourceProvider; controlRepository: string; manifestPath: string; context: ProviderContext }): Promise<LoadDesiredResult> {
+export async function applyLoadDesired(input: { base: ApplyBase; store: LaunchpadStore; source: SourceProvider; controlRepository: string; manifestPath: string; context: ProviderContext }): Promise<LoadDesiredResult> {
   // TR-LIFE-001: manifest disappearance produces BLOCKED_MISSING_MANIFEST,
   // never deletion; the apply machine stops before any provider read/write.
   if (await input.source.hasPath(input.controlRepository, input.base.sourceCommit, input.manifestPath, input.context) === 'missing') {
@@ -294,6 +294,19 @@ export async function applyLoadDesired(input: { base: ApplyBase; source: SourceP
   if (catalog.issues.length > 0) throw new WorkflowFailure('LP-CONTROL-MANIFEST-INVALID', `Catalog validation failed for ${input.manifestPath}: ${catalog.issues[0]?.code ?? 'unknown'}.`);
   const desired = catalog.applications.find((application) => application.metadata.id === input.base.applicationId);
   if (!desired) throw new WorkflowFailure('LP-CONTROL-APPLICATION-NOT_FOUND', `No manifest for application '${input.base.applicationId}' at commit ${input.base.sourceCommit}.`);
+  // Keep the durable application row's identity current with the manifest so
+  // the dashboard shows the declared owners and display name, not 'unassigned'.
+  await input.store.upsertApplication({
+    id: desired.metadata.id,
+    displayName: desired.metadata.displayName ?? desired.metadata.id,
+    sourcePath: input.manifestPath,
+    desiredGeneration: input.base.desiredGeneration,
+    desiredHash: '',
+    syncStatus: 'UNKNOWN',
+    healthStatus: 'UNKNOWN',
+    lifecycleState: desired.lifecycle?.state ?? 'active',
+    owners: desired.metadata.owners ?? [],
+  });
   return { desired };
 }
 
@@ -826,7 +839,7 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
     case 'load-desired':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, controlRepository: ctx.controlRepository ?? null, manifestPath: ctx.manifestPath ?? null }), run: async () => {
         if (!ctx.source || !ctx.controlRepository || !ctx.manifestPath) throw new WorkflowFailure('LP-WORKFLOW-PAYLOAD-MISSING', 'load-desired requires a source provider, control repository, and manifest path.');
-        return applyLoadDesired({ base, source: ctx.source, controlRepository: ctx.controlRepository, manifestPath: ctx.manifestPath, context: ctx.context });
+        return applyLoadDesired({ base, store: requireRuntime(ctx).store, source: ctx.source, controlRepository: ctx.controlRepository, manifestPath: ctx.manifestPath, context: ctx.context });
       } };
     case 'observe-live-state':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, planFingerprint: base.planFingerprint, applicationId: base.applicationId }), run: async () => {

@@ -1557,7 +1557,8 @@ it('DEL-MISSING-MANIFEST: manifest removal produces BLOCKED_MISSING_MANIFEST and
       idempotencyKey: 'apply-missing-manifest',
       workflowId: 'apply-missing-manifest',
     });
-    await expect(applyLoadDesired({ base, source: github, controlRepository: ACCEPTANCE_CONTROL_REPOSITORY, manifestPath: ACCEPTANCE_MANIFEST_PATH, context: acceptanceContext('missing-manifest') })).rejects.toMatchObject({ name: 'BLOCKED_MISSING_MANIFEST' });
+    const store = createD1Store(fixedNow).store;
+    await expect(applyLoadDesired({ base, store, source: github, controlRepository: ACCEPTANCE_CONTROL_REPOSITORY, manifestPath: ACCEPTANCE_MANIFEST_PATH, context: acceptanceContext('missing-manifest') })).rejects.toMatchObject({ name: 'BLOCKED_MISSING_MANIFEST' });
     expect(transport.writes()).toHaveLength(0);
     return { observed: 'BLOCKED_MISSING_MANIFEST before any provider write', evidence: logEvidence(transport) };
   });
