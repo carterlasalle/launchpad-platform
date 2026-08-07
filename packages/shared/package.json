@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "typescript": "5.8.3",
-    "vitest": "3.2.6"
+    "vitest": "4.1.10"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

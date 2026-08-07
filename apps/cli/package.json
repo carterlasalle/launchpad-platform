@@ -27,7 +27,7 @@
   "devDependencies": {
     "tsx": "4.23.5",
     "typescript": "5.8.3",
-    "vitest": "3.2.6"
+    "vitest": "4.1.10"
   },
   "scripts": {
     "launchpad": "tsx src/main.ts",
