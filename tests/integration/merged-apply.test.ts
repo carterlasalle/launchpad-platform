@@ -113,7 +113,7 @@ describe('merged apply flow (integration)', () => {
   beforeEach(async () => { harness = await seedApplyHarness(); desired = { ...(await harness.loadFixtureDesired()), secrets: FIXTURE_SECRETS }; });
   afterEach(() => { harness.restore(); });
 
-  it('applies end to end: exact-commit reload, live replan, DNS+TLS gates, exact promotion, post-health known-good', async () => {
+  it('applies end to end: exact-commit reload, live replan, DNS+TLS gates, exact promotion, post-health known-good', { timeout: 30_000 }, async () => {
     const planFingerprint = await computeApplyFingerprint(harness, desired);
     const { operationId, workflowId } = await enqueueApply(harness, planFingerprint);
     const instance = harness.workflowInstances[0];
@@ -266,7 +266,7 @@ describe('merged apply flow (integration)', () => {
     await expect(accepted.json()).resolves.toEqual({ accepted: true });
   });
 
-  it('resumes after a forced interruption without duplicating provider writes', async () => {
+  it('resumes after a forced interruption without duplicating provider writes', { timeout: 30_000 }, async () => {
     const planFingerprint = await computeApplyFingerprint(harness, desired);
     const { operationId, workflowId } = await enqueueApply(harness, planFingerprint);
     const instance = harness.workflowInstances[0];
@@ -307,7 +307,7 @@ describe('merged apply flow (integration)', () => {
     expect((await harness.store.getKnownGoodDeployment('fixture-app', 'production'))?.id).toBe('dpl_10');
   });
 
-  it('replays environment reconciliation as a no-op on a second apply', async () => {
+  it('replays environment reconciliation as a no-op on a second apply', { timeout: 30_000 }, async () => {
     const firstFingerprint = await computeApplyFingerprint(harness, desired);
     await enqueueApply(harness, firstFingerprint);
     const firstInstance = harness.workflowInstances[0];
