@@ -591,7 +591,9 @@ function buildStages(input: PreviewWorkflowInput, runId: string, repositoryId: n
       run: async () => {
         const created = stepResult(await input.store.getWorkflowStep(runId, 'create-shadow-project')) as { projectId: string; providerResourceId: string } | null;
         const projectId = created?.projectId ?? projectName;
-        await input.provider.ensureGitConnection({ projectId, repository: desired.repository.name, productionBranch: desired.repository.productionBranch }, input.context);
+        // No git-link verification: shadow projects are intentionally
+        // unlinked (repo link limits); the shadow deployment carries
+        // gitSource directly.
         const variables = await resolvePreviewVariables(desired, input.resolveSecret);
         const environment: EnvironmentSpec = { projectId, environment: 'preview', branch: null, variables };
         await input.provider.ensureEnvironment(environment, input.context);
