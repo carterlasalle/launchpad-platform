@@ -716,7 +716,8 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       if (!operationId) throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start for '${previewApplication.metadata.id}' is missing operationId.`);
       const operation = await pollOperation(controller, operationId, token, timeoutMs);
       if (!SUCCESS_OPERATION_STATUSES[operation.status]) {
-        const message = `Preview workflow ended in ${operation.status}${operation.errorCode ? ` (${operation.errorCode})` : ''}.`;
+        const failed = operation.failedStep !== null ? `; failed step ${operation.failedStep.stepId}${operation.failedStep.error?.code ? ` (${operation.failedStep.error.code})` : ''}${operation.failedStep.error?.message ? `: ${operation.failedStep.error.message}` : ''}` : '';
+        const message = `Preview workflow ended in ${operation.status}${operation.errorCode ? ` (${operation.errorCode})` : ''}${failed}.`;
         providerErrors.push({ code: operation.errorCode ?? `LP-PREVIEW-${operation.status}`, message, operationId: operation.operationId, retryable: null });
         previews.push({ state: operation.status === 'CANCELED' ? 'CANCELED' : 'ERROR', url: null, message });
         continue;
