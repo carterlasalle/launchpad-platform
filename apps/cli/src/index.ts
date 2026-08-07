@@ -706,7 +706,10 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       }
       let accepted: { workflowId?: unknown; operationId?: unknown; status?: unknown };
       try { accepted = JSON.parse(start.text) as typeof accepted; } catch { throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start for '${previewApplication.metadata.id}' returned non-JSON: ${redactText(start.text)}`); }
-      if (accepted.status !== 'QUEUED') throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start for '${previewApplication.metadata.id}' did not report status QUEUED.`);
+      // A replay of an already-enqueued or already-completed preview reports
+      // the recorded run (QUEUED/RUNNING/READY); any other status means the
+      // start was refused.
+      if (accepted.status !== 'QUEUED' && accepted.status !== 'READY' && accepted.status !== 'RUNNING') throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start for '${previewApplication.metadata.id}' did not report status QUEUED.`);
       const operationId = stringOrNull(accepted.operationId);
       if (!operationId) throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start for '${previewApplication.metadata.id}' is missing operationId.`);
       const operation = await pollOperation(controller, operationId, token, timeoutMs);
