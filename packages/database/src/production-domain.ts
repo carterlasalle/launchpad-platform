@@ -10,7 +10,7 @@ export function productionDomainFromObservation(payloadJson: string | null | und
     const observed = JSON.parse(payloadJson) as { resources?: Array<{ resourceType?: string; configuration?: Record<string, unknown> }> };
     for (const resource of observed.resources ?? []) {
       const configuration = resource.configuration;
-      if (resource.resourceType === 'vercel.domain' && configuration !== null && configuration !== undefined && configuration.environment === 'production' && configuration.canonical === true && typeof configuration.hostname === 'string' && configuration.hostname.length > 0) {
+      if ((resource.resourceType === 'vercel.domain' || resource.resourceType === 'project-domain') && configuration !== null && configuration !== undefined && configuration.environment === 'production' && configuration.canonical === true && typeof configuration.hostname === 'string' && configuration.hostname.length > 0) {
         return configuration.hostname;
       }
     }
