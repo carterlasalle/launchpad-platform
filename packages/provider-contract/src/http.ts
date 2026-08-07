@@ -1,4 +1,5 @@
 import { ProviderRequestError } from './errors.js';
+import { redactText } from '@launchpad/shared';
 import type { ProviderName } from '@launchpad/core';
 
 export interface ProviderHttpClientOptions { baseUrl: string; token?: string | undefined; provider: ProviderName; fetchImpl?: typeof fetch | undefined; timeoutMs?: number | undefined; }
@@ -45,10 +46,23 @@ export class ProviderHttpClient {
       if (!response.ok) {
         const retryable = response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500;
         const errorClass: ProviderRequestError['class'] = response.status === 401 ? 'AUTHENTICATION' : response.status === 403 ? 'AUTHORIZATION' : response.status === 404 ? 'NOT_FOUND' : response.status === 409 || response.status === 422 ? 'CONFLICT' : response.status === 429 ? 'RATE_LIMITED' : retryable ? 'TRANSIENT_PROVIDER' : 'INTERNAL';
-        // Raw provider bodies never enter error details: they are persisted
-        // into provider_errors.safe_details_json and surfaced in logs, and
-        // providers may echo secret values back in error responses.
-        throw new ProviderRequestError({ code: `LP-${this.provider.toUpperCase()}-HTTP-${response.status}`, class: errorClass, provider: this.provider, message: `Provider request failed with HTTP ${response.status}.`, status: response.status, retryable, safeDetails: { status: response.status } });
+        // Raw provider bodies never enter error details (providers may echo
+        // secret values back). Only a structured `{ error: { code, message } }`
+        // envelope contributes a bounded, credential-shaped-redacted excerpt,
+        // so rejections like Vercel's promote 422 are actionable.
+        const envelope = body !== null && typeof body === 'object' && !Array.isArray(body)
+          ? (body as Record<string, unknown>).error
+          : null;
+        const reason = envelope !== null && typeof envelope === 'object' && !Array.isArray(envelope)
+          ? (() => {
+              const record = envelope as Record<string, unknown>;
+              const code = typeof record.code === 'string' ? redactText(record.code).slice(0, 120) : null;
+              const message = typeof record.message === 'string' ? redactText(record.message).slice(0, 400) : null;
+              const detail = [code, message].filter((part): part is string => part !== null && part.length > 0).join(': ');
+              return detail.length > 0 ? ` Provider error: ${detail}` : '';
+            })()
+          : '';
+        throw new ProviderRequestError({ code: `LP-${this.provider.toUpperCase()}-HTTP-${response.status}`, class: errorClass, provider: this.provider, message: `Provider request failed with HTTP ${response.status}.${reason}`, status: response.status, retryable, safeDetails: { status: response.status } });
       }
       return body as T;
     } catch (error) {
