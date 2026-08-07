@@ -59,6 +59,144 @@ Never use `npm install`, `pnpm install`, or `bun install`. Do not hand-edit `yar
 | `tests/` | Unit, contract, integration, security, end-to-end, and opt-in live acceptance |
 | `docs/` | Master plan, guides, ADRs, runbooks, and release readiness |
 
+## Deploying an application (catalog authoring)
+
+Launchpad is Git-driven: deploying a service means adding one desired-state manifest under `catalog/apps/` and merging it through the PR pipeline. There is no imperative production deploy command; provider dashboards are observed state, never a configuration path.
+
+### Catalog layout
+
+| File | Purpose |
+|---|---|
+| `catalog/apps/<id>.yaml` | One desired application per file — the only file you create to deploy a service |
+| `catalog/defaults.yaml` | Shared health and policy defaults applied to every application |
+| `catalog/environments.yaml` | Named environment strategies: preview `shadow-project`, staging `custom-environment` (fallback `separate-project`), production `staged-production` |
+| `catalog/zones.yaml` | Allowed Cloudflare zones; every `cloudflare.zoneRef` must reference one |
+
+`schema/app.schema.json` and `schema/defaults.schema.json` are the authoritative field contracts; `catalog/apps/fixture.yaml` is the complete example. Unknown or unsupported fields block validation — nothing is silently dropped.
+
+### Manifest reference (`apiVersion: launchpad.dev/v1`, `kind: Application`)
+
+```yaml
+metadata:            # REQUIRED
+  id: my-service     # immutable after first apply; the primary key everywhere
+  displayName: My Service
+  owners: ["@my-team"]            # GitHub users/teams
+  labels: {}                      # arbitrary key/value pairs
+  annotations: {}                 # arbitrary key/value pairs (no secrets)
+repository:          # REQUIRED
+  provider: github
+  name: acme/my-service
+  productionBranch: main
+  deploymentRef: main             # branch/ref whose root is deployed
+  stagingBranch: main             # optional
+  expectedRepositoryId: 1234      # optional; fail-closed check
+  access:
+    requirePrivateAccessVerification: true   # preflight proves repo access/archive state
+    requireVercelGitAccess: true             # preflight proves Vercel git link access
+  onboarding:
+    managedWorkflow: true
+    workflowVersion: v1
+    openOnboardingPr: false
+vercel:              # REQUIRED
+  scope: {}                        # optional teamIdRef
+  project:
+    name: my-service
+    framework: nextjs              # null = auto-detect
+    rootDirectory: .               # '.' is canonical for repo root
+    nodeVersion: "24.x"
+    build:
+      installCommand: yarn install --immutable
+      buildCommand: yarn build
+      outputDirectory: .next       # null = provider default
+      developmentCommand: null
+      ignoredBuildStep: null
+    git:
+      connected: true
+      productionBranch: main
+    deployment:
+      autoAssignProductionDomains: false   # REQUIRED false for staged promotion
+    regions:
+      functions: []                # optional region list
+    protection: {}                 # optional
+    settings: {}                   # optional; unknown keys fail closed
+environments:        # REQUIRED; preview/production at minimum
+  preview:
+    enabled: true
+    strategy: shadow-project       # default from environments.yaml
+    source: { ref: main }          # branch for preview builds
+    cleanup: { onPrClose: true, retentionHours: 24 }
+    health:                        # independent HTTP health gate
+      path: /api/health
+      method: GET
+      expectedStatus: [200]
+      timeoutSeconds: 10
+      attempts: 3
+      intervalSeconds: 1
+  production:
+    enabled: true
+    health: { path: /api/health, method: GET, expectedStatus: [200], timeoutSeconds: 10, attempts: 3, intervalSeconds: 1 }
+    release:
+      strategy: staged-production
+      promoteExactBuild: true      # build exact commit, promote it, never a canary
+      autoPromoteAfterChecks: true
+    rollback:
+      enabled: true
+      onFailedHealthCheck: true
+      previousKnownGood: true      # only after its own post-promotion health passed
+  staging:                         # optional
+    enabled: false
+    strategy: custom-environment
+    fallbackStrategy: separate-project
+domains:             # REQUIRED for production traffic
+  - hostname: my-service.example.com
+    environment: production
+    canonical: true                # primary production URL
+    cloudflare:
+      zoneRef: config://cloudflare/example.com   # must exist in catalog/zones.yaml
+      mode: dns-only               # default safe mode
+      ttl: auto
+    redirects: []                  # optional redirect objects {id, type, url, required}
+secrets:             # references only — values NEVER in manifests
+  - name: DATABASE_URL
+    source: infisical://my-service/production/DATABASE_URL   # or env://NAME
+    sensitive: true                # true = encrypted at rest in Vercel
+    environments: [production]     # production-only secrets are blocked from previews
+dependencies:        # optional
+  applications: [other-app-id]     # stable Launchpad application IDs; cycles block
+  external:
+    - id: primary-db
+      type: postgres
+      url: https://status.example.com/database
+      requiredBefore: [production]
+policies:            # optional; defaults.yaml provides drift + destructiveChanges
+  drift:
+    mode: open-pr                   # open-pr | adopt | ignore
+    checkIntervalMinutes: 30
+  destructiveChanges: { allowInNormalApply: false }   # never true in normal apply
+  preview: { requiredForMerge: true }
+  staging: { requiredForProduction: false }
+  health: { requiredForPromotion: true }
+  failures:
+    createIssueAfterFinalRetry: true
+    notifyOwners: true
+lifecycle:           # optional; defaults to active
+  state: active                    # active | decommissioning | approved-for-deletion | deleted
+  deletionProtection: true
+  orphanPolicy: retain             # retain | delete (deletion only via reviewed flow)
+  decommission: { requestedAt: null, deleteAfter: null }
+  recoveryPolicy: {}               # optional
+```
+
+### Deploy flow (what merging does)
+
+1. Validate locally: `yarn platform validate --catalog catalog` (also `--format json`).
+2. Open a PR touching `catalog/**`. Credentialed gates run the trusted base commit against the proposed catalog only: `platform / schema`, `catalog`, `provider-preflight`, `plan`, `preview` (real shadow project), `health`, and the required `platform / summary`. One sticky comment carries the plan, downstream effects, preview URL, and health result.
+3. Merge (required checks must be green; the plan must match the reviewed attestation — never merge around a red summary).
+4. `Launchpad Apply` (push-triggered) runs the durable workflow: locks → ensure project/git/settings/environments/secrets → attach domains → owned Cloudflare DNS → authoritative DNS + domain verification + TLS → build an exact-commit STAGED production candidate → candidate health → promote → post-promotion health → record known-good → report.
+5. Verify: `yarn platform status --catalog catalog --controller "$LAUNCHPAD_CONTROLLER_URL"` (needs `LAUNCHPAD_OPERATOR_TOKEN`).
+
+An agent adding a service must: copy `catalog/apps/fixture.yaml`, change every example value, validate, open the PR, and wait for the full gate chain — never merge with a failing `platform / summary`, never hand-edit provider resources, and never delete a manifest to request deletion (that is `BLOCKED_MISSING_MANIFEST`; deletion goes through the reviewed lifecycle flow with a single-use approval token).
+
 ## Working method
 
 1. Identify the requirement and existing implementation path.
