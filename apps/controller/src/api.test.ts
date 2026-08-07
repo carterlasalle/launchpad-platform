@@ -723,6 +723,47 @@ describe('internal workflow dispatch', () => {
     expect(retried?.status).toBe('QUEUED');
   });
 
+  it('re-enqueues a failed run under a fresh derived key even when its stored payload differs', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims());
+    const first = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    const firstBody = await first.json() as { operationId: string; status: string };
+    expect(first.status).toBe(202);
+    expect(firstBody.status).toBe('QUEUED');
+    await harness.store.updateWorkflowRun(firstBody.operationId, { status: 'FAILED', completedAt: new Date().toISOString(), errorCode: 'LP-PROMOTION-REPOSITORY-MISMATCH' });
+    // A drifted plan fingerprint (e.g. provider state changed between attempts
+    // or the run was enqueued by an older control-plane generation) produces a
+    // different payload hash: the terminal run must not poison the key forever.
+    const callsBefore = harness.workflowCalls.length;
+    const second = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody({ planFingerprint: 'g'.repeat(64) })), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    const secondBody = await second.json() as { operationId: string; status: string; replayed?: boolean };
+    expect(second.status).toBe(202);
+    expect(secondBody.status).toBe('QUEUED');
+    expect(secondBody.replayed).toBeUndefined();
+    expect(secondBody.operationId).not.toBe(firstBody.operationId);
+    expect(harness.workflowCalls.length).toBe(callsBefore + 1);
+    const retried = await harness.store.getWorkflowRun(secondBody.operationId);
+    expect(retried?.status).toBe('QUEUED');
+    expect(retried?.idempotencyKey).toBe('key-1:retry:1');
+    expect(retried?.payloadHash).not.toBe((await harness.store.getWorkflowRun(firstBody.operationId))?.payloadHash);
+  });
+
+  it('refuses to displace a live or completed run with a different payload', async () => {
+    const harness = createHarness();
+    const token = await signToken(baseClaims());
+    const first = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody()), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    const firstBody = await first.json() as { operationId: string };
+    // The run is still QUEUED (live): a conflicting payload must be rejected.
+    const conflicting = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody({ planFingerprint: 'g'.repeat(64) })), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(conflicting.status).toBe(409);
+    await expect(conflicting.json()).resolves.toMatchObject({ error: { code: 'LP-IDEMPOTENCY-CONFLICT' } });
+    // A completed (SUCCEEDED) run is immutable too.
+    await harness.store.updateWorkflowRun(firstBody.operationId, { status: 'SUCCEEDED', completedAt: new Date().toISOString(), errorCode: null });
+    const completed = await request(harness, '/v1/applications/app-demo/preview/verify', { method: 'POST', body: JSON.stringify(baseBody({ planFingerprint: 'g'.repeat(64) })), headers: { 'content-type': 'application/json', ...bearer(token) } });
+    expect(completed.status).toBe(409);
+    await expect(completed.json()).resolves.toMatchObject({ error: { code: 'LP-IDEMPOTENCY-CONFLICT' } });
+  });
+
   it('replays an already-completed operation without dispatching a duplicate workflow', async () => {
     const harness = createHarness();
     const token = await signToken(baseClaims());

@@ -406,18 +406,40 @@ async function enqueueDurableOperation(context: Context<AppEnv>, dependencies: C
   let run: WorkflowRunRecord;
   try {
     await ensureApplicationRegistered(store, input.applicationId, dependencies.controlCatalogRoot, typeof input.params.manifestPath === 'string' ? input.params.manifestPath : undefined);
-    run = await store.startWorkflowRun({ applicationId: input.applicationId, workflowType: input.kind, idempotencyKey: input.idempotencyKey, payloadHash });
     // A terminal run is immutable and its workflow instance already exists:
     // a QUEUED/RUNNING/SUCCEEDED replay is returned as-is (the caller dedupes
     // on the response), while a FAILED/BLOCKED run is retried under a fresh
     // derived key so the same logical operation can be re-enqueued without
-    // losing the original run or its audit trail.
+    // losing the original run or its audit trail. A FAILED/BLOCKED run whose
+    // stored payload differs (e.g. enqueued by an older control-plane
+    // generation, or after provider drift changed the plan fingerprint) also
+    // advances to the next derived key instead of poisoning the key forever:
+    // startWorkflowRun throws LP-DB-IDEMPOTENCY-REUSED, so resolve the prior
+    // run from the store and treat a terminal one as the retry-loop condition.
+    const tryStart = async (key: string): Promise<WorkflowRunRecord> => {
+      try {
+        return await store.startWorkflowRun({ applicationId: input.applicationId, workflowType: input.kind, idempotencyKey: key, payloadHash });
+      } catch (error) {
+        if (!(error instanceof LaunchpadError && error.platform.code === 'LP-DB-IDEMPOTENCY-REUSED')) throw error;
+        const prior = (await store.listWorkflowRuns(input.applicationId)).find((candidate) => candidate.idempotencyKey === key);
+        // A live or completed operation must never be displaced by a new
+        // payload; only a terminal failed run frees its key for retry.
+        if (!prior || (prior.status !== 'FAILED' && prior.status !== 'BLOCKED')) throw error;
+        return prior;
+      }
+    };
+    run = await tryStart(input.idempotencyKey);
     let retryAttempt = 1;
+    let effectiveKey = input.idempotencyKey;
     while (run.status === 'FAILED' || run.status === 'BLOCKED') {
-      run = await store.startWorkflowRun({ applicationId: input.applicationId, workflowType: input.kind, idempotencyKey: `${input.idempotencyKey}:retry:${retryAttempt}`, payloadHash });
+      effectiveKey = `${input.idempotencyKey}:retry:${retryAttempt}`;
+      run = await tryStart(effectiveKey);
       retryAttempt += 1;
     }
-    await store.registerIdempotentRequest({ idempotencyKey: input.idempotencyKey, operationId: run.id, payloadHash });
+    // The ledger entry must mirror the key the run was actually created under:
+    // registering the base key when the run advanced to a derived retry key
+    // would collide with the old failed run's recorded payload.
+    await store.registerIdempotentRequest({ idempotencyKey: effectiveKey, operationId: run.id, payloadHash });
   } catch (error) {
     return mapEnqueueError(context, error);
   }
