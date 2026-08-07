@@ -345,7 +345,8 @@ export async function applyReplanVerify(input: { base: ApplyBase; store: Launchp
   ]);
   const attestation = await input.store.getPlanReviewAttestation(input.base.applicationId, reviewFingerprint);
   if (!attestation) {
-    throw new WorkflowFailure('LP-PLAN-REVIEW-ATTESTATION-MISSING', `No reviewed-plan attestation exists for review fingerprint ${reviewFingerprint} of application '${input.base.applicationId}'; the plan was not reviewed at its PR head or provider/desired state changed after review.`);
+    const existing = (await input.store.listPlanReviewAttestations(input.base.applicationId, { limit: 10 })).map((row) => ({ reviewFingerprint: row.reviewFingerprint.slice(0, 16), createdAt: row.createdAt, prHeadSourceCommit: row.prHeadSourceCommit.slice(0, 12), generation: row.generation, planFingerprint: row.planFingerprint.slice(0, 12) }));
+    throw new WorkflowFailure('LP-PLAN-REVIEW-ATTESTATION-MISSING', `No reviewed-plan attestation exists for review fingerprint ${reviewFingerprint} of application '${input.base.applicationId}'; the plan was not reviewed at its PR head or provider/desired state changed after review. Existing attestations: ${JSON.stringify(existing)}.`);
   }
   if (attestation.desiredHash !== desiredHash || attestation.generation !== input.base.desiredGeneration) {
     throw new WorkflowFailure('LP-PLAN-REVIEW-DESIRED-STATE-DRIFT', `The reviewed-plan attestation binds desired state ${attestation.desiredHash.slice(0, 12)}/generation ${attestation.generation}, but the current plan targets ${desiredHash.slice(0, 12)}/generation ${input.base.desiredGeneration}; re-review the changed desired state.`);
