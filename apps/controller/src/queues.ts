@@ -2,7 +2,7 @@ import { metricWorkflowOf, type MetricsRegistry } from '@launchpad/shared';
 
 export const QUEUE_ENVELOPE_VERSION = 1 as const;
 export const DEAD_LETTER_QUEUE = 'launchpad-dead-letter';
-export const QUEUE_KINDS = ['provider-event', 'health-check'] as const;
+export const QUEUE_KINDS = ['provider-event', 'health-check', 'preview-cleanup'] as const;
 export type QueueKind = (typeof QUEUE_KINDS)[number];
 
 /**

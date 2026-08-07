@@ -757,6 +757,11 @@ export class D1LaunchpadStore implements LaunchpadStore {
     return result.results.map((row) => this.toCleanupJob(row));
   }
 
+  async listDueCleanupJobs(options: { limit?: number; now?: string } = {}): Promise<CleanupJobRecord[]> {
+    const result = await this.db.prepare('SELECT id, application_id, provider_resource_id, expires_at, status, attempts, last_error FROM cleanup_jobs WHERE status = \'QUEUED\' AND expires_at <= ? ORDER BY expires_at ASC LIMIT ?').bind(options.now ?? this.nowIso(), options.limit ?? -1).all<SqlCleanupJobRow>();
+    return result.results.map((row) => this.toCleanupJob(row));
+  }
+
   // tombstones -------------------------------------------------------------
 
   async createTombstone(input: TombstoneCreate): Promise<TombstoneRecord> {

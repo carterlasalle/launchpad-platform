@@ -722,6 +722,12 @@ export class InMemoryLaunchpadStore implements LaunchpadStore {
     return rows.map((row) => this.copyCleanupJob(row));
   }
 
+  async listDueCleanupJobs(options: { limit?: number; now?: string } = {}): Promise<CleanupJobRecord[]> {
+    const now = options.now ?? this.nowIso();
+    const rows = [...this.cleanupJobs.values()].filter((row) => row.status === 'QUEUED' && row.expires_at <= now).sort((left, right) => left.expires_at.localeCompare(right.expires_at)).slice(0, options.limit);
+    return rows.map((row) => this.copyCleanupJob(row));
+  }
+
   // tombstones -------------------------------------------------------------
 
   async createTombstone(input: TombstoneCreate): Promise<TombstoneRecord> {

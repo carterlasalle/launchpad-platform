@@ -434,14 +434,15 @@ export function createWorkflowHandlers(env: ControllerEnv['Bindings'], repositor
       const applicationId = requiredPayload<string>(payload, 'applicationId');
       if (!store) throw new Error('LP-PREVIEW-STORE-MISSING');
       const context = contextFor(payload, applicationId);
-      const reason = payload.reason === 'PR_MERGED' ? 'PR_MERGED' : 'PR_CLOSED';
+      const reason = payload.reason === 'PR_MERGED' ? 'PR_MERGED' : payload.reason === 'TTL_EXPIRED' ? 'TTL_EXPIRED' : payload.reason === 'SUPERSEDED' ? 'SUPERSEDED' : payload.reason === 'ORPHAN' ? 'ORPHAN' : 'PR_CLOSED';
+      const prReason = reason === 'PR_MERGED' ? 'PR_MERGED' : 'PR_CLOSED';
       const projectId = typeof payload.projectId === 'string' && payload.projectId.length > 0 ? payload.projectId : null;
       if (projectId) {
         return await cleanupShadowProject({ store, provider: vercel, context, applicationId, projectId, providerResourceId: typeof payload.providerResourceId === 'string' && payload.providerResourceId.length > 0 ? payload.providerResourceId : projectId, reason, cleanupJobId: typeof payload.cleanupJobId === 'string' ? payload.cleanupJobId : undefined }) as unknown as Record<string, unknown>;
       }
       const pullRequestNumber = Number(payload.pullRequestNumber ?? payload.prNumber ?? 0);
       if (pullRequestNumber <= 0) throw new Error('LP-WORKFLOW-PAYLOAD-MISSING-PRNUMBER');
-      return await cleanupPreviewForPullRequest({ store, provider: vercel, context, applicationId, pullRequestNumber, reason }) as unknown as Record<string, unknown>;
+      return await cleanupPreviewForPullRequest({ store, provider: vercel, context, applicationId, pullRequestNumber, reason: prReason }) as unknown as Record<string, unknown>;
     },
     'app-preview': async (payload) => {
       const applicationId = requiredPayload<string>(payload, 'applicationId');
