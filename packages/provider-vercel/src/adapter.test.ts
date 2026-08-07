@@ -85,6 +85,11 @@ it('reads the git repository and commit from every Vercel deployment meta shape 
     expect(ready.commitSha, JSON.stringify(meta)).toBe(COMMIT);
     expect(ready.environment, JSON.stringify(meta)).toBe('production');
   }
+  // Live Vercel meta shape: githubOrg/githubRepo parts (observed 2026-08-06).
+  const liveShape = new VercelAdapter({ token: 'token', fetchImpl: async (input) => (String(input).includes('/v13/deployments/dpl_wait') ? new Response(JSON.stringify({ id: 'dpl_wait', projectId: 'prj_1', state: 'READY', target: 'production', meta: { githubOrg: 'acme', githubRepo: 'app', githubCommitSha: COMMIT } }), { status: 200 }) : new Response('{}', { status: 404 })) });
+  const live = await liveShape.waitForDeployment({ projectId: 'prj_1', deploymentId: 'dpl_wait', timeoutMs: 5_000, pollMs: 10 }, ctx);
+  expect(live.repository).toBe('acme/app');
+  expect(live.commitSha).toBe(COMMIT);
 });
 
 it('fails closed when the deployments list is malformed', async () => {
