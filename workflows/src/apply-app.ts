@@ -841,7 +841,7 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
     case 'no-destroy-gate':
       return { id: name, preconditionHash: canonicalJson({ planFingerprint: ctx.plan?.fingerprint ?? base.planFingerprint }), run: async () => applyNoDestroyGate({ plan: requirePlan(ctx) }) };
     case 'acquire-locks':
-      return { id: name, preconditionHash: canonicalJson({ applicationId: base.applicationId, planFingerprint: base.planFingerprint, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), run: async () => applyAcquireLocks({ base, store: requireRuntime(ctx).store, desired: requireDesired(ctx) }) };
+      return { id: name, preconditionHash: canonicalJson({ applicationId: base.applicationId, planFingerprint: base.planFingerprint, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: LOCK_ACQUIRE_RETRY, run: async () => applyAcquireLocks({ base, store: requireRuntime(ctx).store, desired: requireDesired(ctx) }) };
     case 'ensure-project':
       return mutationStep(name, ctx, (locks) => applyEnsureProject({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context }));
     case 'ensure-git':
