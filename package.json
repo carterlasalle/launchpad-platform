@@ -26,22 +26,22 @@
     "platform": "yarn workspace @launchpad/cli launchpad"
   },
   "dependencies": {
-    "ajv": "8.18.0",
+    "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "hono": "4.13.0",
-    "jose": "6.0.10",
-    "yaml": "2.8.1"
+    "jose": "6.2.8",
+    "yaml": "2.9.0"
   },
   "resolutions": {
     "undici@npm:7.28.0": "npm:7.29.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260804.1",
-    "@types/node": "22.15.0",
-    "@typescript-eslint/parser": "8.31.0",
-    "eslint": "10.8.0",
+    "@types/node": "26.1.2",
+    "@typescript-eslint/parser": "8.66.0",
+    "eslint": "9.24.0",
     "typescript": "5.8.3",
-    "vitest": "3.2.6",
+    "vitest": "4.1.10",
     "wrangler": "4.118.0"
   }
 }
