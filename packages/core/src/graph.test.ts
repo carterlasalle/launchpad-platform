@@ -57,7 +57,7 @@ describe('resource graph and topological layers', () => {
     const duplicated: DesiredApplication = { ...desired, domains: [...desired.domains, { ...desired.domains[0]! }] };
     const validation = validateResourceGraph(buildResourceGraph(duplicated, minimalObserved()));
     expect(validation.valid).toBe(false);
-    expect(validation.issues.some((issue) => issue.code === 'DUPLICATE_KEY' && issue.message.includes('vercel.domain.app.example.com'))).toBe(true);
+    expect(validation.issues.some((issue) => issue.code === 'DUPLICATE_KEY' && new RegExp('vercel\\.domain\\.app\\.example\\.com').test(issue.message))).toBe(true);
   });
 
   it('rejects duplicate nodes from colliding variable and secret bindings', () => {

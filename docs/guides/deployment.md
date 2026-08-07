@@ -206,8 +206,12 @@ Set values available to all workflows:
 gh variable set LAUNCHPAD_CONTROL_PLANE_ENABLED --body false
 gh variable set LAUNCHPAD_CONTROLLER_URL --body 'https://<controller-host>'
 gh variable set LAUNCHPAD_OIDC_AUDIENCE --body 'https://<oidc-audience>'
+gh variable set LAUNCHPAD_OIDC_REPOSITORY_ALLOWLIST --body '<owner>/<control-repo>'
+gh variable set LAUNCHPAD_OIDC_WORKFLOW_ALLOWLIST --body '<owner>/<control-repo>/.github/workflows/apply.yml@refs/heads/main,<owner>/<control-repo>/.github/workflows/validate-plan.yml@refs/heads/main,<owner>/<control-repo>/.github/workflows/deploy-control-plane.yml@refs/heads/main,<owner>/<control-repo>/.github/workflows/reusable-app-preview.yml@refs/heads/main,<owner>/<control-repo>/.github/workflows/destroy.yml@refs/heads/main,<owner>/<control-repo>/.github/workflows/live-acceptance.yml@refs/heads/main'
 gh variable set LAUNCHPAD_VERCEL_TEAM_ID --body '<team-id-or-slug>'
 ```
+
+The OIDC allowlist variables are required by the deploy render (fail-closed): the repository allowlist is the control repository, and the workflow allowlist is the comma-separated workflow_refs of every control-plane workflow that mints an OIDC token. pull_request-triggered runs are accepted for an allowlisted workflow path (their `workflow_ref` carries a transient `refs/pull/N/merge|head` ref).
 
 Keep `LAUNCHPAD_CONTROL_PLANE_ENABLED=false` through bootstrap and live acceptance.
 
@@ -293,6 +297,7 @@ The active ruleset must protect `refs/heads/main`, have no bypass actors, requir
 ```text
 static / toolchain
 static / quality
+acceptance / offline
 platform / summary
 dependency / review
 ```
