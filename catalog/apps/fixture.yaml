@@ -27,6 +27,7 @@ metadata:
 # Canonical promotion targeting is deployed; retry apply.
 # Deployment meta shapes are deployed; retry apply.
 # Control plane is enabled with allowlists; final apply.
+# Plan re-attested after provider-state drift (rollback + candidate deployments).
   owners:
     - "@CarterLaSalle"
   labels:
