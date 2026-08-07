@@ -43,7 +43,7 @@ export interface RequiredDnsRecord {
   /** Explicit acknowledgment that must be true before proxied mode is applied (PRD-DNS-005). */
   proxyAcknowledgment?: boolean;
 }
-export interface DeploymentRequest { projectId: string; environment: EnvironmentName; repository: string; commitSha: string; desiredGeneration: number; staged: boolean; rootDirectory?: string; }
+export interface DeploymentRequest { projectId: string; environment: EnvironmentName; repository: string; commitSha: string; desiredGeneration: number; staged: boolean; rootDirectory?: string; /** Git ref (branch) the deployment resolves from; Vercel classifies the environment from it, so staged-production candidates must name the production branch. Defaults to the commit SHA when omitted. */ ref?: string; }
 export interface DeploymentWaitRequest { projectId: string; deploymentId: string; timeoutMs: number; pollMs: number; }
 export interface PromotionRequest { projectId: string; deploymentId: string; expectedCommitSha: string; }
 export interface RollbackRequest { projectId: string; deploymentId: string; previousKnownGoodId: string; }
