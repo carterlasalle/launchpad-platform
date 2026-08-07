@@ -336,7 +336,7 @@ it('fails the release while reporting successful rollback and keeps the original
   // healthy, the production domain is degraded, regardless of how many
   // attempts the health check makes (count-based routing flakes under
   // slower CI when retry/attempt interleavings shift).
-  const result = await run(store, provider, plan, observedState, { fetchImpl: async (input) => (String(input).includes('app.example.com') ? new Response(JSON.stringify({ status: 'bad' }), { status: 500 }) : new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) });
+  const result = await run(store, provider, plan, observedState, { fetchImpl: async (input) => (new URL(String(input)).host === 'app.example.com' ? new Response(JSON.stringify({ status: 'bad' }), { status: 500 }) : new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) });
   expect(result.status).toBe('FAILED');
   expect(result.errorCode).toBe('LP-HEALTH-PRODUCTION-FAILED');
   expect(result.rollback?.restored).toBe(true);
