@@ -42,7 +42,10 @@ const MAX_LOG_LINES = 50;
 const MAX_LOG_BYTES = 4096;
 
 function sanitizeNamePart(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+  // Single linear pass: split on any run of non-alphanumeric characters,
+  // drop empties, join with '-'. No regex alternation or repetition that
+  // could backtrack super-linearly on hostile input (CodeQL poly-redos).
+  return value.toLowerCase().split(/[^a-z0-9-]+/).filter((part) => part.length > 0).join('-');
 }
 
 /**

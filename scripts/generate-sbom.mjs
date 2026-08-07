@@ -28,7 +28,10 @@ const workflow = process.env.GITHUB_WORKFLOW || 'local';
 const runId = process.env.GITHUB_RUN_ID || 'local';
 
 const npmPurl = (name, version) => {
-  const encoded = name.startsWith('@') ? `%40${name.slice(1).replace('/', '%2F')}` : name;
+  // Encode every reserved character in both name segments (not just the
+  // first '/'); encodeURIComponent covers all characters the package
+  // manager can emit.
+  const encoded = name.startsWith('@') ? `%40${name.slice(1).split('/').map((segment) => encodeURIComponent(segment)).join('%2F')}` : encodeURIComponent(name);
   return `pkg:npm/${encoded}@${version}`;
 };
 

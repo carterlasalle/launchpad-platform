@@ -414,7 +414,7 @@ it('reports origin and public route results and derives compatibility', async ()
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = typeof input === 'string' ? input : String(input);
     probeCalls.push({ url, headers: new Headers(init?.headers) });
-    if (url.startsWith('https://app.vercel.app')) return new Response('ok', { status: 200, headers: { 'cf-connecting-ip': '203.0.113.10' } });
+    if (new URL(url).host === 'app.vercel.app') return new Response('ok', { status: 200, headers: { 'cf-connecting-ip': '203.0.113.10' } });
     return new Response('ok', { status: 200 });
   }) as typeof fetch;
   const adapter = new CloudflareAdapter({ token: 'token', fetchImpl });
@@ -439,7 +439,7 @@ it('reports incompatible when the origin does not carry CF-Connecting-IP through
 it('reports a failed origin route when the direct probe errors', async () => {
   const fetchImpl = (async (input: RequestInfo | URL): Promise<Response> => {
     const url = typeof input === 'string' ? input : String(input);
-    if (url.startsWith('https://app.vercel.app')) throw new TypeError('fetch failed');
+    if (new URL(url).host === 'app.vercel.app') throw new TypeError('fetch failed');
     return new Response('ok', { status: 200 });
   }) as typeof fetch;
   const adapter = new CloudflareAdapter({ token: 'token', fetchImpl });
