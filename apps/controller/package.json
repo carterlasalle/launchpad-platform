@@ -20,7 +20,7 @@
     "@launchpad/provider-vercel": "workspace:*",
     "@launchpad/workflows": "workspace:*",
     "hono": "4.13.0",
-    "jose": "6.0.10"
+    "jose": "6.2.8"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260804.1",
