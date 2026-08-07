@@ -217,10 +217,14 @@ describe('merged apply flow (integration)', () => {
     expect(await harness.store.getLock('application:fixture-app')).toBeNull();
   });
 
-  it('blocks a conflicting application lock before any provider write', async () => {
+  it('waits out lock contention before any provider write', { timeout: 30_000 }, async () => {
     const planFingerprint = await computeApplyFingerprint(harness, desired);
     const { operationId } = await enqueueApply(harness, planFingerprint);
     await harness.store.acquireLock('application:fixture-app', 'other-operator', 900);
+    // The competing operator releases during the first backoff; the retryable
+    // acquire then succeeds. (Exhaustion behavior is covered by the unit
+    // suite with instant sleeps; the phase-dispatched retry sleeps are real.)
+    const releaseTimer = setTimeout(() => { void harness.store.releaseLock('application:fixture-app', 'other-operator'); }, 250);
     const instance = harness.workflowInstances[0];
     if (!instance) throw new Error('workflow instance missing');
     let thrown: Error | null = null;
@@ -229,12 +233,12 @@ describe('merged apply flow (integration)', () => {
     } catch (error) {
       thrown = error as Error;
     }
-    expect(thrown?.name).toBe('LP-LOCK-CONFLICT');
+    clearTimeout(releaseTimer);
+    expect(thrown).toBeNull();
     const run = await harness.store.getWorkflowRun(operationId);
-    expect(run).toMatchObject({ status: 'FAILED', errorCode: 'LP-LOCK-CONFLICT' });
-    expect(harness.transport.count('POST', 'api.vercel.com')).toBe(0);
-    expect(harness.transport.count('PATCH', 'api.vercel.com')).toBe(0);
-    expect(harness.transport.count('POST', 'api.cloudflare.com')).toBe(0);
+    expect(run).toMatchObject({ status: 'SUCCEEDED', errorCode: null });
+    expect(await harness.store.getLock('application:fixture-app')).toBeNull();
+    expect(harness.transport.count('POST', '/v13/deployments')).toBe(1);
   });
 
   it('rejects destructive plans at the no-destroy gate before locks or writes', async () => {
