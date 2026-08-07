@@ -78,7 +78,7 @@ describe('VercelAdapter capability matrix', () => {
     expect(features.stagedProduction).toBe(true);
     const staged = vercelAdapter(loadScenarios('vercel').deploymentCreateStaged);
     await staged.adapter.createDeployment({ projectId: 'app', environment: 'production', repository: 'acme/app', commitSha: 'a'.repeat(40), desiredGeneration: 1, staged: true }, ctx);
-    expect(expectRequest(staged.requests, 'POST', '/v13/deployments').body).toMatchObject({ target: 'staging' });
+    expect(expectRequest(staged.requests, 'POST', '/v13/deployments?forceNew=1').body).toMatchObject({ target: 'staging' });
 
     expect(features.exactPromotion).toBe(true);
     const promote = vercelAdapter(loadScenarios('vercel').promote);

@@ -96,7 +96,7 @@
     { "request": { "method": "POST", "path": "/v13/deployments" }, "response": { "status": 200, "body": { "id": "dpl_1", "name": "app", "url": "app-1.vercel.app", "readyState": "QUEUED", "createdAt": 1782835200000 } } }
   ],
   "deploymentCreateStaged": [
-    { "request": { "method": "POST", "path": "/v13/deployments" }, "response": { "status": 200, "body": { "id": "dpl_staged", "name": "app", "url": "app-staged.vercel.app", "readyState": "QUEUED", "createdAt": 1782835200000 } } }
+    { "request": { "method": "POST", "path": "/v13/deployments?forceNew=1" }, "response": { "status": 200, "body": { "id": "dpl_staged", "name": "app", "url": "app-staged.vercel.app", "readyState": "QUEUED", "createdAt": 1782835200000 } } }
   ],
   "deploymentCreateProduction": [
     { "request": { "method": "POST", "path": "/v13/deployments" }, "response": { "status": 200, "body": { "id": "dpl_prod", "name": "app", "url": "app-prod.vercel.app", "readyState": "QUEUED", "createdAt": 1782835200000 } } }
