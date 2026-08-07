@@ -538,7 +538,7 @@ export class VercelAdapter implements ProjectProvider {
     // rejects a deployment that was not created as a staged production build.
     const deploymentsPath = this.client.withTeam('/v13/deployments');
     const createUrl = request.staged ? `${deploymentsPath}${deploymentsPath.includes('?') ? '&' : '?'}forceNew=1` : deploymentsPath;
-    const response = await this.client.request<unknown>(createUrl, { method: 'POST', body: JSON.stringify({ name: request.projectId, project: request.projectId, ...(target !== undefined ? { target } : {}), gitSource: { type: 'github', ...gitRepository, ref: request.ref ?? request.commitSha, sha: request.commitSha }, meta: { launchpadApplicationId: ctx.applicationId, desiredGeneration: String(request.desiredGeneration) } }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-deployment', request.projectId, request.commitSha, String(request.desiredGeneration)) });
+    const response = await this.client.request<unknown>(createUrl, { method: 'POST', body: JSON.stringify({ name: request.projectId, project: request.projectId, ...(target !== undefined ? { target } : {}), gitSource: { type: 'github', ...gitRepository, ref: request.ref ?? request.commitSha, sha: request.commitSha }, meta: { launchpadApplicationId: ctx.applicationId, desiredGeneration: String(request.desiredGeneration) } }), correlationId: ctx.correlationId, idempotencyKey: idempotencyKey('vercel-deployment', request.projectId, request.commitSha, String(request.desiredGeneration), request.ref ?? 'sha', request.staged ? 'staged' : 'plain') });
     return mapDeployment(response, request);
   }
 
