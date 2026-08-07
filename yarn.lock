@@ -690,13 +690,8 @@ __metadata:
     ajv: "npm:8.20.0"
     ajv-formats: "npm:3.0.1"
     typescript: "npm:5.8.3"
-<<<<<<< HEAD
-    vitest: "npm:3.2.6"
-    yaml: "npm:2.9.0"
-=======
     vitest: "npm:4.1.10"
-    yaml: "npm:2.8.3"
->>>>>>> c6926e2 (build(deps-dev): bump vitest from 3.2.6 to 4.1.10)
+    yaml: "npm:2.9.0"
   languageName: unknown
   linkType: soft
 
@@ -890,54 +885,15 @@ __metadata:
     "@launchpad/provider-testkit": "workspace:*"
     "@launchpad/shared": "workspace:*"
     typescript: "npm:5.8.3"
-<<<<<<< HEAD
-    vitest: "npm:3.2.6"
+    vitest: "npm:4.1.10"
     yaml: "npm:2.9.0"
   languageName: unknown
   linkType: soft
-
-"@napi-rs/lzma-linux-x64-gnu@npm:1.5.1":
-  version: 1.5.1
-  resolution: "@napi-rs/lzma-linux-x64-gnu@npm:1.5.1"
-  conditions: os=linux & cpu=x64 & libc=glibc
-=======
-    vitest: "npm:4.1.10"
-    yaml: "npm:2.8.1"
-  languageName: unknown
-  linkType: soft
-
-"@nodelib/fs.scandir@npm:2.1.5":
-  version: 2.1.5
-  resolution: "@nodelib/fs.scandir@npm:2.1.5"
-  dependencies:
-    "@nodelib/fs.stat": "npm:2.0.5"
-    run-parallel: "npm:^1.1.9"
-  checksum: 10c0/732c3b6d1b1e967440e65f284bd06e5821fedf10a1bea9ed2bb75956ea1f30e08c44d3def9d6a230666574edbaf136f8cfd319c14fd1f87c66e6a44449afb2eb
-  languageName: node
-  linkType: hard
-
-"@nodelib/fs.stat@npm:2.0.5, @nodelib/fs.stat@npm:^2.0.2":
-  version: 2.0.5
-  resolution: "@nodelib/fs.stat@npm:2.0.5"
-  checksum: 10c0/88dafe5e3e29a388b07264680dc996c17f4bda48d163a9d4f5c1112979f0ce8ec72aa7116122c350b4e7976bc5566dc3ddb579be1ceaacc727872eb4ed93926d
-  languageName: node
-  linkType: hard
-
-"@nodelib/fs.walk@npm:^1.2.3":
-  version: 1.2.8
-  resolution: "@nodelib/fs.walk@npm:1.2.8"
-  dependencies:
-    "@nodelib/fs.scandir": "npm:2.1.5"
-    fastq: "npm:^1.6.0"
-  checksum: 10c0/db9de047c3bb9b51f9335a7bb46f4fcfb6829fb628318c12115fbaf7d369bfce71c15b103d1fc3b464812d936220ee9bc1c8f762d032c9f6be9acc99249095b1
-  languageName: node
-  linkType: hard
 
 "@oxc-project/types@npm:=0.143.0":
   version: 0.143.0
   resolution: "@oxc-project/types@npm:0.143.0"
   checksum: 10c0/f450bdc6ebd69b09b5d77c1ca45369f9e1a2b69d21f9dfcdaaa2379e8d5228bfdd014e77bef9bc21ca5fd118fb9e2213d30d8eb70299f03b1aac5ee1ab2802ba
->>>>>>> c6926e2 (build(deps-dev): bump vitest from 3.2.6 to 4.1.10)
   languageName: node
   linkType: hard
 
@@ -1505,11 +1461,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-<<<<<<< HEAD
-"debug@npm:^4.3.1, debug@npm:^4.3.2, debug@npm:^4.4.1, debug@npm:^4.4.3":
-=======
-"debug@npm:^4.3.1, debug@npm:^4.3.2, debug@npm:^4.3.4":
->>>>>>> c6926e2 (build(deps-dev): bump vitest from 3.2.6 to 4.1.10)
+"debug@npm:^4.3.1, debug@npm:^4.3.2, debug@npm:^4.4.3":
   version: 4.4.3
   resolution: "debug@npm:4.4.3"
   dependencies:
@@ -1556,11 +1508,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-<<<<<<< HEAD
-"esbuild@npm:0.28.1, esbuild@npm:^0.27.0 || ^0.28.0, esbuild@npm:~0.28.0":
-=======
-"esbuild@npm:0.28.1":
->>>>>>> c6926e2 (build(deps-dev): bump vitest from 3.2.6 to 4.1.10)
+"esbuild@npm:0.28.1, esbuild@npm:~0.28.0":
   version: 0.28.1
   resolution: "esbuild@npm:0.28.1"
   dependencies:
@@ -2410,18 +2358,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-<<<<<<< HEAD
-"picomatch@npm:^4.0.2, picomatch@npm:^4.0.3, picomatch@npm:^4.0.4":
-=======
-"picomatch@npm:^2.3.1":
-  version: 2.3.2
-  resolution: "picomatch@npm:2.3.2"
-  checksum: 10c0/a554d1709e59be97d1acb9eaedbbc700a5c03dbd4579807baed95100b00420bc729335440ef15004ae2378984e2487a7c1cebd743cfdb72b6fa9ab69223c0d61
-  languageName: node
-  linkType: hard
-
 "picomatch@npm:^4.0.3, picomatch@npm:^4.0.4, picomatch@npm:^4.0.5":
->>>>>>> c6926e2 (build(deps-dev): bump vitest from 3.2.6 to 4.1.10)
   version: 4.0.5
   resolution: "picomatch@npm:4.0.5"
   checksum: 10c0/947bc6b6e1ff1e6c5aaf95b107a0839d12802f4f7b867663f67d47accba939ca1cb582cf99dfc30438efa1c4648ac5990967e783e8929c36b03e8440704ef1bd
@@ -2474,29 +2411,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-<<<<<<< HEAD
-"rollup@npm:^4.43.0":
-  version: 4.62.4
-  resolution: "rollup@npm:4.62.4"
-=======
-"resolve-pkg-maps@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "resolve-pkg-maps@npm:1.0.0"
-  checksum: 10c0/fb8f7bbe2ca281a73b7ef423a1cbc786fb244bd7a95cbe5c3fba25b27d327150beca8ba02f622baea65919a57e061eb5005204daa5f93ed590d9b77463a567ab
-  languageName: node
-  linkType: hard
-
-"reusify@npm:^1.0.4":
-  version: 1.1.0
-  resolution: "reusify@npm:1.1.0"
-  checksum: 10c0/4eff0d4a5f9383566c7d7ec437b671cc51b25963bd61bf127c3f3d3f68e44a026d99b8d2f1ad344afff8d278a8fe70a8ea092650a716d22287e8bef7126bb2fa
-  languageName: node
-  linkType: hard
-
 "rolldown@npm:~1.2.1":
   version: 1.2.3
   resolution: "rolldown@npm:1.2.3"
->>>>>>> c6926e2 (build(deps-dev): bump vitest from 3.2.6 to 4.1.10)
   dependencies:
     "@oxc-project/types": "npm:=0.143.0"
     "@rolldown/binding-android-arm64": "npm:1.2.3"
