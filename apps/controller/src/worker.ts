@@ -1,4 +1,5 @@
-import { D1LaunchpadStore, InMemoryDatabase, LaunchpadRepositories } from '@launchpad/database';
+import { D1LaunchpadStore, InMemoryDatabase, LaunchpadRepositories, type LaunchpadStore } from '@launchpad/database';
+import { stableId } from '@launchpad/shared';
 import { createControllerApp } from './api.js';
 import { controllerDependencies } from './handlers.js';
 import type { D1Database, ExecutionContext, ScheduledController } from '@cloudflare/workers-types';
@@ -165,6 +166,46 @@ async function listApplicationIds(env: ControllerEnv['Bindings']): Promise<strin
   return repositories.listApplications().map((row) => row.application);
 }
 
+/**
+ * Dispatches every cleanup job whose retention window has elapsed to the
+ * internal `preview-cleanup` workflow. The workflow claims the job, deletes
+ * the owned shadow project (fail-closed on ownership), and completes the job;
+ * a dispatch failure leaves the job QUEUED for the next sweep, and retryable
+ * deletion failures surface as FAILED jobs that later sweeps re-attempt.
+ */
+export async function dispatchDuePreviewCleanup(input: { store: LaunchpadStore; dispatch: (envelope: QueueEnvelope) => Promise<void>; now?: () => string; limit?: number }): Promise<{ dispatched: number; failed: number }> {
+  const now = input.now ?? (() => new Date().toISOString());
+  const due = await input.store.listDueCleanupJobs({ limit: input.limit ?? 50, now: now() });
+  let dispatched = 0;
+  let failed = 0;
+  for (const job of due) {
+    const resource = await input.store.getResource('vercel', job.providerResourceId);
+    const envelope: QueueEnvelope = {
+      version: 1,
+      kind: 'preview-cleanup',
+      id: stableId('cleanup-sweep', job.id),
+      createdAt: now(),
+      payload: {
+        applicationId: job.applicationId,
+        // The workflow's ownership gate parses the shadow project NAME from
+        // projectId; the durable resource row maps the provider id to it.
+        projectId: resource?.resourceKey ?? job.providerResourceId,
+        providerResourceId: job.providerResourceId,
+        reason: 'TTL_EXPIRED',
+        cleanupJobId: job.id,
+      },
+    };
+    try {
+      await input.dispatch(envelope);
+      dispatched += 1;
+    } catch {
+      // Leave the job QUEUED: the next sweep re-dispatches it.
+      failed += 1;
+    }
+  }
+  return { dispatched, failed };
+}
+
 export default {
   async fetch(request: Request, env: ControllerEnv['Bindings'], executionContext: ExecutionContext): Promise<Response> {
     const runtime = await withSecrets(env);
@@ -186,6 +227,22 @@ export default {
       await dispatchScheduledReconciliation({ applicationIds, shardCount: parseReconciliationShardCount(runtime.RECONCILIATION_SHARD_COUNT), dispatcher });
     } else {
       observability.logger.info('scheduled reconciliation skipped because the control plane is disabled', { step: 'scheduled/reconciliation', controlPlaneEnabled: false });
+    }
+    // Preview cleanup sweep: dispatch shadow-project deletions whose retention
+    // window elapsed. Runs whenever D1 is configured; failures are logged,
+    // never fatal to the reconciliation dispatch above.
+    if (env.DB) {
+      try {
+        const database = env.DB as D1Database;
+        const cleanupDispatcher = createHttpQueueDispatcher({ internalUrl: runtime.CONTROLLER_INTERNAL_URL, internalToken: runtime.CONTROLLER_INTERNAL_TOKEN });
+        const sweep = await dispatchDuePreviewCleanup({
+          store: new D1LaunchpadStore(database),
+          dispatch: (envelope) => cleanupDispatcher.dispatch(envelope),
+        });
+        observability.logger.info('preview cleanup sweep complete', { step: 'scheduled/preview-cleanup', dispatched: sweep.dispatched, failed: sweep.failed });
+      } catch (error) {
+        observability.logger.error('preview cleanup sweep failed', { step: 'scheduled/preview-cleanup', errorCode: 'LP-CLEANUP-SWEEP-FAILED', message: error instanceof Error ? error.message : 'unknown' });
+      }
     }
     // Failure observability pass: credential-expiry warnings (metadata only),
     // bounded metric snapshots, and the controller error-rate alert. Failures

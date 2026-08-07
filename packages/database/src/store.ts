@@ -448,6 +448,8 @@ export interface LaunchpadStore {
   completeCleanupJob(id: string, status: 'SUCCEEDED' | 'FAILED', lastError?: string | null): Promise<CleanupJobRecord>;
   listCleanupJobs(applicationId: string): Promise<CleanupJobRecord[]>;
   listPendingCleanupJobs(options?: { limit?: number }): Promise<CleanupJobRecord[]>;
+  /** Cleanup jobs whose retention window has elapsed: QUEUED with `expires_at <= now`, oldest first. Drives the scheduled cleanup sweep. */
+  listDueCleanupJobs(options?: { limit?: number; now?: string }): Promise<CleanupJobRecord[]>;
 
   // tombstones -------------------------------------------------------------
   createTombstone(input: TombstoneCreate): Promise<TombstoneRecord>;
