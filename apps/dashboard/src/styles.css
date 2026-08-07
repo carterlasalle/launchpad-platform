@@ -83,6 +83,13 @@ h3{font:700 14px var(--sans);margin:0;letter-spacing:.01em}
 .def-list--config{grid-template-columns:minmax(150px,max-content) 1fr}
 .notice{font:500 11px var(--mono);color:var(--muted);border:1px dashed var(--line);border-radius:8px;padding:10px 14px;margin:0}
 .notice--warn{color:var(--amber);border-color:rgba(255,189,112,.35)}
+.config-changes{display:flex;flex-direction:column;gap:14px;max-width:680px}
+.config-change{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.config-change__heading{font:600 10px var(--mono);letter-spacing:.18em;color:var(--muted);margin:0}
+.config-change__label{display:flex;flex-direction:column;gap:6px;font:600 10px var(--mono);letter-spacing:.14em;color:var(--muted)}
+.config-change__input{background:var(--ink);border:1px solid var(--line);border-radius:6px;color:var(--text);font:500 12px var(--mono);padding:9px 12px;width:100%;min-width:0}
+.config-change__input:focus{outline:none;border-color:var(--cyan)}
+.config-change .action-status{font:500 11px var(--mono);color:var(--muted);margin:0}
 .internal-link{color:var(--cyan);text-decoration:none}
 .internal-link:hover{text-decoration:underline}
 .external-link{color:var(--cyan);text-decoration:none}

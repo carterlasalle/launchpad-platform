@@ -1,6 +1,7 @@
 import { sha256Hex, stableId } from '@launchpad/shared';
 import type { HealthCheckRecord, LifecycleState, ObservedApplication, PlannedOperation, PlatformError, PlatformPlan, ProviderName } from '@launchpad/core';
 import { conflict, invalidArgument, notFound } from './errors.js';
+import { productionDomainFromObservation } from './production-domain.js';
 import { serializeJson, validateLockKey, type ApplicationStatusPatch, type ApplicationUpsert, type AuditAppend, type CleanupJobUpsert, type CredentialMetadataUpsert, type DeletionApprovalCreate, type DeploymentUpsert, type DesiredGenerationAdvance, type DriftEventUpsert, type IdempotentRequestRegister, type IncidentUpsert, type LaunchpadStore, type MetricSnapshotUpsert, type ObservationUpsert, type PlanReviewAttestationUpsert, type PlanUpsert, type PromotionUpsert, type ProviderErrorUpsert, type ReconciliationOpen, type ResourceUpsert, type StoreOptions, type TombstoneCreate, type TombstoneRelease, type WebhookReceiptUpsert, type WorkflowRunCancel, type WorkflowRunStart, type WorkflowRunPatch, type WorkflowStepUpsert } from './store.js';
 import { TERMINAL_WORKFLOW_STATUSES, type ApplicationRecord, type ApplicationDetail, type AuditRecord, type CleanupJobRecord, type CredentialMetadataRecord, type CredentialStatus, type DashboardApplicationRow, type DeletionApprovalRecord, type DeploymentRow, type DesiredGenerationRecord, type DriftEventRecord, type HealthStatus, type IdempotentRequestRecord, type IncidentRecord, type LockRecord, type MetricSnapshotRecord, type ObservationRecord, type PlanReviewAttestationRecord, type PromotionRecord, type ProviderErrorRecord, type ReconciliationRequestRecord, type ResourceRecord, type StoredPlanRecord, type SyncStatus, type TombstoneRecord, type WebhookReceiptRecord, type WorkflowRunRecord, type WorkflowStepRecord, type WorkflowStatus } from './types.js';
 
@@ -954,11 +955,13 @@ export class InMemoryLaunchpadStore implements LaunchpadStore {
 
   async getApplicationDetail(applicationId: string): Promise<ApplicationDetail> {
     const app = await this.getApplication(applicationId);
-    if (!app) return { application: null, knownGoodDeployment: null, latestHealthCheck: null, openWorkflowRuns: [], recentWorkflowRuns: [] };
+    if (!app) return { application: null, knownGoodDeployment: null, productionDomain: null, latestHealthCheck: null, openWorkflowRuns: [], recentWorkflowRuns: [] };
     const knownGoodDeployment = await this.getKnownGoodDeployment(applicationId, 'production');
+    const latestObservation = [...this.observations.values()].filter((row) => row.application_id === applicationId).sort((left, right) => right.observed_at.localeCompare(left.observed_at) || right.id.localeCompare(left.id))[0];
+    const productionDomain = productionDomainFromObservation(latestObservation?.payload_json ?? null);
     const healthRows = [...this.healthChecks.values()].filter((row) => row.application_id === applicationId).sort((left, right) => right.checked_at.localeCompare(left.checked_at)).slice(0, 1);
     const openWorkflowRuns = await this.listOpenWorkflowRuns(applicationId);
     const recentWorkflowRuns = await this.listWorkflowRuns(applicationId, { limit: 10 });
-    return { application: app, knownGoodDeployment, latestHealthCheck: healthRows[0] ? this.copyHealthCheck(healthRows[0]) : null, openWorkflowRuns, recentWorkflowRuns };
+    return { application: app, knownGoodDeployment, productionDomain, latestHealthCheck: healthRows[0] ? this.copyHealthCheck(healthRows[0]) : null, openWorkflowRuns, recentWorkflowRuns };
   }
 }
