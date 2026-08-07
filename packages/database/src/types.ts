@@ -396,6 +396,8 @@ export interface DashboardApplicationRow {
 export interface ApplicationDetail {
   application: ApplicationRecord | null;
   knownGoodDeployment: DeploymentRow | null;
+  /** Canonical production hostname from the managed domain resources, when attached (the real production URL; the deployment's own URL is auto-generated). */
+  productionDomain: string | null;
   latestHealthCheck: HealthCheckRecord | null;
   openWorkflowRuns: WorkflowRunRecord[];
   recentWorkflowRuns: WorkflowRunRecord[];

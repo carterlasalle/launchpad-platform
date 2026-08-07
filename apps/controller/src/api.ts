@@ -817,7 +817,7 @@ interface ApplicationSummaryView {
   updatedAt: string;
 }
 
-function applicationSummaryView(app: ApplicationRecord, knownGood: DeploymentRow | null, latestHealth: HealthCheckRecord | null): ApplicationSummaryView {
+function applicationSummaryView(app: ApplicationRecord, knownGood: DeploymentRow | null, latestHealth: HealthCheckRecord | null, productionDomain: string | null): ApplicationSummaryView {
   return {
     application: app.id,
     displayName: app.displayName,
@@ -827,7 +827,9 @@ function applicationSummaryView(app: ApplicationRecord, knownGood: DeploymentRow
     health: app.healthStatus,
     deployment: knownGood?.state ?? null,
     currentDeploymentCommit: knownGood?.commitSha ?? null,
-    productionUrl: knownGood?.url ?? null,
+    // The canonical managed domain is the production URL traffic actually
+    // flows through; the deployment record's own URL is auto-generated.
+    productionUrl: productionDomain !== null ? `https://${productionDomain}` : knownGood?.url ?? null,
     latestHealthCheck: latestHealth ? { result: latestHealth.result, checkedAt: latestHealth.checkedAt } : null,
     desiredGeneration: app.desiredGeneration,
     lifecycleState: app.lifecycleState,
@@ -1663,7 +1665,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     if (!detail.application) return errorResponse(context, 'LP-APPLICATION-NOT-FOUND', `No application '${applicationId}' is registered.`, 404, false);
     const seen = new Set<string>();
     const operations = [...detail.openWorkflowRuns, ...detail.recentWorkflowRuns].filter((run) => (seen.has(run.id) ? false : (seen.add(run.id), true))).sort(byStartedAscending).map(operationView);
-    return context.json({ application: applicationSummaryView(detail.application, detail.knownGoodDeployment, detail.latestHealthCheck), operations, knownGoodDeployment: detail.knownGoodDeployment, latestHealthCheck: detail.latestHealthCheck ? healthCheckView(detail.latestHealthCheck) : null });
+    return context.json({ application: applicationSummaryView(detail.application, detail.knownGoodDeployment, detail.latestHealthCheck, detail.productionDomain), operations, knownGoodDeployment: detail.knownGoodDeployment, latestHealthCheck: detail.latestHealthCheck ? healthCheckView(detail.latestHealthCheck) : null });
   });
   app.get('/v1/applications/:id/resources', operatorMiddleware(dependencies), async (context) => {
     if (!dependencies.store) return errorResponse(context, 'LP-PERSISTENCE-CONFIG-MISSING', 'Durable persistence is not configured.', 503, false);

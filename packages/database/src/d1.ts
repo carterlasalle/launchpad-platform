@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import { sha256Hex, stableId } from '@launchpad/shared';
 import type { HealthCheckRecord, LifecycleState, ObservedApplication, PlannedOperation, PlatformError, PlatformPlan, ProviderName } from '@launchpad/core';
 import { conflict, invalidArgument, notFound } from './errors.js';
+import { productionDomainFromObservation } from './production-domain.js';
 import { serializeJson, validateLockKey, type ApplicationStatusPatch, type ApplicationUpsert, type AuditAppend, type CleanupJobUpsert, type CredentialMetadataUpsert, type DeletionApprovalCreate, type DeploymentUpsert, type DesiredGenerationAdvance, type DriftEventUpsert, type IdempotentRequestRegister, type IncidentUpsert, type LaunchpadStore, type MetricSnapshotUpsert, type ObservationUpsert, type PlanReviewAttestationUpsert, type PlanUpsert, type PromotionUpsert, type ProviderErrorUpsert, type ReconciliationOpen, type ResourceUpsert, type StoreOptions, type TombstoneCreate, type TombstoneRelease, type WebhookReceiptUpsert, type WorkflowRunCancel, type WorkflowRunStart, type WorkflowRunPatch, type WorkflowStepUpsert } from './store.js';
 import { TERMINAL_WORKFLOW_STATUSES, type ApplicationDetail, type ApplicationRecord, type AuditRecord, type CleanupJobRecord, type CredentialMetadataRecord, type CredentialStatus, type DashboardApplicationRow, type DeletionApprovalRecord, type DeploymentRow, type DesiredGenerationRecord, type DriftEventRecord, type IdempotentRequestRecord, type IncidentRecord, type LockRecord, type MetricSnapshotRecord, type ObservationRecord, type PlanReviewAttestationRecord, type PromotionRecord, type ProviderErrorRecord, type ReconciliationRequestRecord, type ResourceRecord, type StoredPlanRecord, type TombstoneRecord, type WebhookReceiptRecord, type WorkflowRunRecord, type WorkflowStepRecord, type WorkflowStatus } from './types.js';
 
@@ -1031,18 +1032,20 @@ export class D1LaunchpadStore implements LaunchpadStore {
   async listApplications(): Promise<DashboardApplicationRow[]> {
     const result = await this.db.prepare(`SELECT
       a.id AS application, a.display_name AS displayName, a.owners_json AS ownersJson, a.sync_status AS sync, a.health_status AS health,
-      kg.state AS deployment, kg.commit_sha AS currentDeploymentCommit, kg.url AS productionUrl,
+      kg.state AS deployment, kg.commit_sha AS currentDeploymentCommit, kg.url AS deploymentUrl, ob.payload_json AS observationJson,
       rr.resolved_at AS lastSuccessfulReconciliation, wr.status AS activeOperation, op.pull_request_url AS openPrOrIncident,
       a.updated_at AS updatedAt
     FROM applications a
     LEFT JOIN deployments kg ON kg.id = (SELECT d.id FROM deployments d WHERE d.application_id = a.id AND d.environment = 'production' AND d.state = 'CURRENT' ORDER BY d.created_at DESC, d.rowid DESC LIMIT 1)
+    LEFT JOIN observations ob ON ob.id = (SELECT o.id FROM observations o WHERE o.application_id = a.id ORDER BY o.observed_at DESC, o.id DESC LIMIT 1)
     LEFT JOIN (SELECT application_id, MAX(resolved_at) AS resolved_at FROM reconciliation_requests WHERE status = 'RESOLVED' GROUP BY application_id) rr ON rr.application_id = a.id
     LEFT JOIN (SELECT application_id, MIN(status) AS status FROM workflow_runs WHERE status NOT IN (${TERMINAL_WORKFLOW_STATUSES.map(() => '?').join(', ')}) GROUP BY application_id) wr ON wr.application_id = a.id
     LEFT JOIN (SELECT application_id, pull_request_url FROM reconciliation_requests WHERE status = 'OPEN' AND pull_request_url IS NOT NULL GROUP BY application_id) op ON op.application_id = a.id
     ORDER BY a.id ASC`).bind(...TERMINAL_WORKFLOW_STATUSES).all<SqlDashboardRow>();
     return result.results.map((row) => {
       const owners = JSON.parse(row.ownersJson) as string[];
-      return { application: row.application, displayName: row.displayName, owners, owner: owners[0] ?? 'unassigned', sync: row.sync, health: row.health, deployment: row.deployment, currentDeploymentCommit: row.currentDeploymentCommit, productionUrl: row.productionUrl, lastSuccessfulReconciliation: row.lastSuccessfulReconciliation, activeOperation: row.activeOperation, openPrOrIncident: row.openPrOrIncident, updatedAt: row.updatedAt };
+      const productionDomain = productionDomainFromObservation(row.observationJson);
+      return { application: row.application, displayName: row.displayName, owners, owner: owners[0] ?? 'unassigned', sync: row.sync, health: row.health, deployment: row.deployment, currentDeploymentCommit: row.currentDeploymentCommit, productionUrl: productionDomain !== null ? `https://${productionDomain}` : row.deploymentUrl, lastSuccessfulReconciliation: row.lastSuccessfulReconciliation, activeOperation: row.activeOperation, openPrOrIncident: row.openPrOrIncident, updatedAt: row.updatedAt };
     });
   }
 
@@ -1050,6 +1053,7 @@ export class D1LaunchpadStore implements LaunchpadStore {
     const statements: D1PreparedStatement[] = [
       this.db.prepare('SELECT id, display_name, source_path, desired_generation, desired_hash, sync_status, health_status, lifecycle_state, owners_json, updated_at FROM applications WHERE id = ?').bind(applicationId),
       this.db.prepare('SELECT id, application_id, project_id, environment, repository, commit_sha, desired_generation, state, url, created_at FROM deployments WHERE application_id = ? AND environment = \'production\' AND state = \'CURRENT\' ORDER BY created_at DESC, id DESC LIMIT 1').bind(applicationId),
+      this.db.prepare('SELECT payload_json FROM observations WHERE application_id = ? ORDER BY observed_at DESC, id DESC LIMIT 1').bind(applicationId),
       this.db.prepare('SELECT id, application_id, environment, deployment_id, url, attempt, dns_resolved, tls_valid, status_code, latency_ms, assertion_results_json, result, checked_at, error_code FROM health_checks WHERE application_id = ? ORDER BY checked_at DESC, id DESC LIMIT 1').bind(applicationId),
       this.db.prepare(`SELECT id, application_id, workflow_type, status, idempotency_key, payload_hash, started_at, completed_at, error_code FROM workflow_runs WHERE application_id = ? AND status NOT IN (${TERMINAL_WORKFLOW_STATUSES.map(() => '?').join(', ')}) ORDER BY started_at ASC`).bind(applicationId, ...TERMINAL_WORKFLOW_STATUSES),
       this.db.prepare('SELECT id, application_id, workflow_type, status, idempotency_key, payload_hash, started_at, completed_at, error_code FROM workflow_runs WHERE application_id = ? ORDER BY started_at DESC, id DESC LIMIT 10').bind(applicationId),
@@ -1057,10 +1061,12 @@ export class D1LaunchpadStore implements LaunchpadStore {
     const results = await this.db.batch(statements);
     const applicationRow = results[0]?.results?.[0] as SqlApplicationRow | undefined;
     const knownGoodRow = results[1]?.results?.[0] as SqlDeploymentRow | undefined;
-    const healthRow = results[2]?.results?.[0] as SqlHealthCheckRow | undefined;
-    const openRunRows = (results[3]?.results ?? []) as SqlWorkflowRunRow[];
-    const recentRunRows = (results[4]?.results ?? []) as SqlWorkflowRunRow[];
-    return { application: applicationRow ? this.toApplication(applicationRow) : null, knownGoodDeployment: knownGoodRow ? this.toDeployment(knownGoodRow) : null, latestHealthCheck: healthRow ? this.toHealthCheck(healthRow) : null, openWorkflowRuns: openRunRows.map((row) => this.toWorkflowRun(row)), recentWorkflowRuns: recentRunRows.map((row) => this.toWorkflowRun(row)) };
+    const observationRow = results[2]?.results?.[0] as { payload_json?: string } | undefined;
+    const healthRow = results[3]?.results?.[0] as SqlHealthCheckRow | undefined;
+    const openRunRows = (results[4]?.results ?? []) as SqlWorkflowRunRow[];
+    const recentRunRows = (results[5]?.results ?? []) as SqlWorkflowRunRow[];
+    const productionDomain = productionDomainFromObservation(observationRow?.payload_json);
+    return { application: applicationRow ? this.toApplication(applicationRow) : null, knownGoodDeployment: knownGoodRow ? this.toDeployment(knownGoodRow) : null, productionDomain, latestHealthCheck: healthRow ? this.toHealthCheck(healthRow) : null, openWorkflowRuns: openRunRows.map((row) => this.toWorkflowRun(row)), recentWorkflowRuns: recentRunRows.map((row) => this.toWorkflowRun(row)) };
   }
 }
 
@@ -1095,4 +1101,4 @@ interface SqlLockRow { resource_key: string; owner_id: string; acquired_at: stri
 interface SqlIdempotentRequestRow { idempotency_key: string; operation_id: string; payload_hash: string; created_at: string; }
 interface SqlPlanReviewAttestationRow { id: string; application_id: string; pr_head_source_commit: string; desired_hash: string; generation: number; plan_fingerprint: string; review_fingerprint: string; repository: string; actor: string; workflow_ref: string; created_at: string; }
 interface SqlDeletionApprovalRow { id: string; application_id: string; token_hash: string; requested_by: string | null; status: DeletionApprovalRecord['status']; expires_at: string; created_at: string; used_at: string | null; revoked_at: string | null; }
-interface SqlDashboardRow { application: string; displayName: string; ownersJson: string; sync: ApplicationRecord['syncStatus']; health: ApplicationRecord['healthStatus']; deployment: DeploymentRow['state'] | null; currentDeploymentCommit: string | null; productionUrl: string | null; lastSuccessfulReconciliation: string | null; activeOperation: string | null; openPrOrIncident: string | null; updatedAt: string; }
+interface SqlDashboardRow { application: string; displayName: string; ownersJson: string; sync: ApplicationRecord['syncStatus']; health: ApplicationRecord['healthStatus']; deployment: DeploymentRow['state'] | null; currentDeploymentCommit: string | null; deploymentUrl: string | null; observationJson: string | null; lastSuccessfulReconciliation: string | null; activeOperation: string | null; openPrOrIncident: string | null; updatedAt: string; }
