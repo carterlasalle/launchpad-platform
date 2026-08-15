@@ -89,8 +89,10 @@ domains:
 secrets:
   - name: NEXT_PUBLIC_CONVEX_URL
     source: env://NEXT_PUBLIC_CONVEX_URL
-    sensitive: true
-    environments: [production]
+    # public by design (baked into the client bundle); non-sensitive so it may
+    # bind to preview (sensitive secrets are production-only per policy)
+    sensitive: false
+    environments: [production, preview]
 dependencies:
   applications: []
   external: []
