@@ -62,7 +62,7 @@ it('executes credentialed and report-writing PR steps only from the trusted base
     expect(steps.find((step) => step.uses === './trusted/.github/actions/assert-pr-head'), jobName).toBeDefined();
     const setup = steps.find((step) => step.name === 'Install trusted platform dependencies');
     expect(setup?.['working-directory'], jobName).toBe('trusted');
-    expect(setup?.run, jobName).toContain('corepack yarn@4.10.3 install --immutable');
+    expect(setup?.run, jobName).toContain('yarn install --immutable');
     for (const step of steps.filter((candidate) => candidate.run?.includes('yarn platform'))) {
       expect(step['working-directory'], `${jobName}: ${step.name ?? step.run}`).toBe('trusted');
       expect(step.run, jobName).toContain('$GITHUB_WORKSPACE/proposed/catalog');

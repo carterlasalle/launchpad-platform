@@ -5,9 +5,6 @@
   "main": "apps/controller/src/worker.ts",
   "compatibility_date": "2026-08-04",
   "compatibility_flags": ["nodejs_compat"],
-  "limits": {
-    "subrequest_count": 1000
-  },
   "assets": {
     "directory": "./apps/dashboard/dist",
     "binding": "ASSETS",

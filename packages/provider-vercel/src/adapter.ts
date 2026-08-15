@@ -376,9 +376,7 @@ export class VercelAdapter implements ProjectProvider {
         value: revealed,
         type: typeof value === 'string' ? 'plain' : 'encrypted',
         target: [environment],
-        // Vercel rejects `gitBranch` unless target=preview — production and
-        // development env bindings must not carry the branch scope.
-        gitBranch: environment === 'preview' ? (spec.branch ?? null) : null,
+        gitBranch: spec.branch ?? null,
       };
     });
     const resource = (configuration: Record<string, unknown>, changed: boolean): MutationResult<ObservedResource> => ({

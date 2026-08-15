@@ -183,7 +183,7 @@ jobs:
         working-directory: trusted
         run: |
           corepack enable
-          YARN_ENABLE_GLOBAL_CACHE=0 corepack yarn@4.10.3 install --immutable
+          yarn install --immutable
       - name: Run provider preflight
         working-directory: trusted
         run: yarn platform preflight --catalog "$GITHUB_WORKSPACE/proposed/catalog" --format json
@@ -230,7 +230,7 @@ jobs:
         working-directory: trusted
         run: |
           corepack enable
-          YARN_ENABLE_GLOBAL_CACHE=0 corepack yarn@4.10.3 install --immutable
+          yarn install --immutable
       - name: Build provider-aware plan
         working-directory: trusted
         run: yarn platform plan --catalog "$GITHUB_WORKSPACE/proposed/catalog" --sha ${{ env.HEAD_SHA }} --format json --output "$GITHUB_WORKSPACE/artifacts"
@@ -291,7 +291,7 @@ jobs:
         working-directory: trusted
         run: |
           corepack enable
-          YARN_ENABLE_GLOBAL_CACHE=0 corepack yarn@4.10.3 install --immutable
+          yarn install --immutable
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: launchpad-plan
@@ -345,7 +345,7 @@ jobs:
         working-directory: trusted
         run: |
           corepack enable
-          YARN_ENABLE_GLOBAL_CACHE=0 corepack yarn@4.10.3 install --immutable
+          yarn install --immutable
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         continue-on-error: true
         with:
@@ -476,7 +476,7 @@ jobs:
         working-directory: trusted
         run: |
           corepack enable
-          YARN_ENABLE_GLOBAL_CACHE=0 corepack yarn@4.10.3 install --immutable
+          yarn install --immutable
       - name: Publish aggregated Launchpad report comment
         if: ${{ needs.changes.outputs.relevant == 'true' && !github.event.pull_request.head.repo.fork }}
         working-directory: trusted

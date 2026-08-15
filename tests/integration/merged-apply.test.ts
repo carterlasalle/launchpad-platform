@@ -149,9 +149,9 @@ describe('merged apply flow (integration)', () => {
     expect(harness.states.vercel.envCalls.map((call) => call.key)).toEqual(['DATABASE_URL', 'API_TOKEN', 'PROD_TOKEN']);
     // The manifest literal flows verbatim as a plain variable; resolved secrets
     // are revealed only at request construction (encrypted type).
-    expect(harness.states.vercel.envCalls[0]).toMatchObject({ key: 'DATABASE_URL', value: 'postgres://fixture:db-password@db.internal/fixture', type: 'plain', target: ['production'], gitBranch: null });
-    expect(harness.states.vercel.envCalls[1]).toMatchObject({ key: 'API_TOKEN', value: RESOLVED_TOKEN_CANARY, type: 'encrypted', target: ['production'], gitBranch: null });
-    expect(harness.states.vercel.envCalls[2]).toMatchObject({ key: 'PROD_TOKEN', value: RESOLVED_PROD_CANARY, type: 'encrypted', target: ['production'], gitBranch: null });
+    expect(harness.states.vercel.envCalls[0]).toMatchObject({ key: 'DATABASE_URL', value: 'postgres://fixture:db-password@db.internal/fixture', type: 'plain', target: ['production'], gitBranch: 'main' });
+    expect(harness.states.vercel.envCalls[1]).toMatchObject({ key: 'API_TOKEN', value: RESOLVED_TOKEN_CANARY, type: 'encrypted', target: ['production'], gitBranch: 'main' });
+    expect(harness.states.vercel.envCalls[2]).toMatchObject({ key: 'PROD_TOKEN', value: RESOLVED_PROD_CANARY, type: 'encrypted', target: ['production'], gitBranch: 'main' });
     expect(harness.transport.requestsFor('GET', '/v9/projects/fixture-app/env').filter((request) => request.url.endsWith('/v9/projects/fixture-app/env'))).toHaveLength(1);
     expect(harness.transport.requestsFor('GET', '/v9/projects/fixture-app/env/env_')).toHaveLength(3);
     expect(harness.transport.count('PATCH', '/v9/projects/fixture-app/env/')).toBe(0);
