@@ -173,7 +173,7 @@ function envTransport(initial: Array<Record<string, unknown>> = [], tamperWith?:
   return { fetchImpl, envs, calls };
 }
 
-const productionEnv = (key: string, value: string, type = 'encrypted'): Record<string, unknown> => ({ key, value, type, target: ['production'], gitBranch: 'main' });
+const productionEnv = (key: string, value: string, type = 'encrypted'): Record<string, unknown> => ({ key, value, type, target: ['production'], gitBranch: null });
 
 it('creates every declared variable through list/create/readback and never serializes values', async () => {
   const { fetchImpl, calls } = envTransport();
@@ -182,8 +182,8 @@ it('creates every declared variable through list/create/readback and never seria
   expect(result.changed).toBe(true);
   const writes = calls.filter((call) => call.method === 'POST');
   expect(writes).toHaveLength(2);
-  expect(writes[0]!.body).toEqual({ key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: 'main' });
-  expect(writes[1]!.body).toEqual({ key: 'API_TOKEN', value: TOKEN_SECRET, type: 'encrypted', target: ['production'], gitBranch: 'main' });
+  expect(writes[0]!.body).toEqual({ key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: null });
+  expect(writes[1]!.body).toEqual({ key: 'API_TOKEN', value: TOKEN_SECRET, type: 'encrypted', target: ['production'], gitBranch: null });
   expect(calls.filter((call) => call.method === 'GET' && /\/env\/env_\d+$/.test(call.url))).toHaveLength(2);
   // The raw values exist only inside the write request bodies.
   for (const call of calls) {
@@ -205,7 +205,7 @@ it('updates a drifted variable in place with PATCH and a verified readback', asy
   const result = await adapter.ensureEnvironment({ projectId: 'app', environment: 'production', branch: 'main', variables: { DATABASE_URL: new SensitiveValue(DB_SECRET) } }, ctx);
   expect(result.changed).toBe(true);
   const patch = calls.find((call) => call.method === 'PATCH');
-  expect(patch).toMatchObject({ url: 'https://api.vercel.com/v9/projects/app/env/env_1', body: { key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: 'main' } });
+  expect(patch).toMatchObject({ url: 'https://api.vercel.com/v9/projects/app/env/env_1', body: { key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: null } });
   expect(calls.filter((call) => call.method === 'GET' && /\/env\/env_1$/.test(call.url))).toHaveLength(1);
   expect(JSON.stringify(result)).not.toContain(DB_SECRET);
 });

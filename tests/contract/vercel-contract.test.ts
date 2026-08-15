@@ -95,8 +95,8 @@ it('reconciles every declared variable through the official env list/create/read
   expectRequest(requests, 'GET', '/v9/projects/app/env');
   const creates = requests.filter((request) => request.method === 'POST' && request.path === '/v10/projects/app/env');
   expect(creates).toHaveLength(2);
-  expect(creates[0]!.body).toEqual({ key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: 'main' });
-  expect(creates[1]!.body).toEqual({ key: 'API_TOKEN', value: TOKEN_SECRET, type: 'encrypted', target: ['production'], gitBranch: 'main' });
+  expect(creates[0]!.body).toEqual({ key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: null });
+  expect(creates[1]!.body).toEqual({ key: 'API_TOKEN', value: TOKEN_SECRET, type: 'encrypted', target: ['production'], gitBranch: null });
   expect(creates[0]!.headers['idempotency-key']).toBeDefined();
   // Every created variable is verified through the decrypt-capable single-env readback.
   expect(requests.filter((request) => request.method === 'GET' && request.path.startsWith('/v9/projects/app/env/env_'))).toHaveLength(2);
@@ -111,7 +111,7 @@ it('updates an existing variable with the official PATCH body and verifies the r
   const result = await adapter.ensureEnvironment({ projectId: 'app', environment: 'production', branch: 'main', variables: { DATABASE_URL: new SensitiveValue(DB_SECRET) } }, ctx);
   expect(result.changed).toBe(true);
   const patch = expectRequest(requests, 'PATCH', '/v9/projects/app/env/env_1');
-  expect(patch.body).toEqual({ key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: 'main' });
+  expect(patch.body).toEqual({ key: 'DATABASE_URL', value: DB_SECRET, type: 'encrypted', target: ['production'], gitBranch: null });
   expect(patch.headers['idempotency-key']).toBeDefined();
   expect(requests.filter((request) => request.method === 'GET' && request.path === '/v9/projects/app/env/env_1')).toHaveLength(1);
   expect(JSON.stringify(result)).not.toContain(DB_SECRET);
