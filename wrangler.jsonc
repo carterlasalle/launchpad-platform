@@ -33,6 +33,7 @@
   "vars": {
     "LAUNCHPAD_ENV": "development",
     "LAUNCHPAD_CONTROL_PLANE_ENABLED": "false",
+    "NEXT_PUBLIC_CONVEX_URL": "https://disciplined-hamster-925.convex.cloud",
     "CONTROLLER_INTERNAL_URL": "http://127.0.0.1:8787",
     "CONTROL_REPOSITORY": "carterlasalle/launchpad-platform",
     "CONTROL_CATALOG_ROOT": "catalog/apps",
