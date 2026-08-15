@@ -2,7 +2,7 @@ apiVersion: launchpad.dev/v1
 kind: ReconciliationRequest
 metadata:
   app: glowgo
-  observedAt: 2026-08-15T11:47:15.257Z
+  observedAt: 2026-08-15T12:01:05.874Z
 spec:
   desiredGeneration: 0
   reason: external-drift
