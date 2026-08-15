@@ -3,7 +3,7 @@ kind: Application
 metadata:
   id: glowgo
   displayName: GlowGo
-  description: Mobile spray tan marketplace — find, book, and review vetted mobile spray-tan artists
+  description: Mobile spray tan marketplace — find, book, and review vetted mobile spray-tan artists, powered by a location-aware matching engine
   owners:
     - "@CarterLaSalle"
   labels:
