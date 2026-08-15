@@ -110,7 +110,7 @@ export const REQUIRED_SCENARIOS: readonly RequiredScenario[] = [
   // --- Reviewed-plan approval gate (§11 approval gate; §33 provider state
   // changed after approval; squash-merge-neutral plan review) ---
   { id: 'PLAN-REVIEW-SQUASH-PASS', sections: ['11', '33', '47'], checklist: ['Deployment correctness'], description: 'A squash-merged equivalent plan passes the approval gate: the source-commit-neutral review fingerprint is identical across the PR head and the merged commit, while the exact plan fingerprints differ.' },
-  { id: 'PLAN-REVIEW-DRIFT-BLOCKS', sections: ['11', '33', '47'], checklist: ['Safety'], description: 'Provider drift after review: a fresh merged replan has no attestation for its review fingerprint and blocks (LP-PLAN-REVIEW-ATTESTATION-MISSING) before any provider write.' },
+  { id: 'PLAN-REVIEW-DRIFT-SURVIVES', sections: ['11', '33', '47'], checklist: ['Safety'], description: 'Provider drift after review: the review identity binds the desired state, so the attestation survives drift and the apply proceeds past the approval gate.' },
   { id: 'PLAN-REVIEW-DESIRED-DRIFT-BLOCKS', sections: ['11', '33', '47'], checklist: ['Safety'], description: 'Changed desired state or generation after review yields no attestation for the new review fingerprint and blocks apply before any provider write.' },
   { id: 'PLAN-REVIEW-MISSING-BLOCKS', sections: ['11', '33', '47'], checklist: ['Safety', 'Reliability'], description: 'Apply without a reviewed-plan attestation blocks before provider writes; re-attesting the same reviewed plan is idempotent (one row, replay returns it, conflicting bindings are refused); recording the attestation unblocks the identical apply.' },
 

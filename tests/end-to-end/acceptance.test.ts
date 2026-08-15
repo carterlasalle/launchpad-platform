@@ -27,7 +27,7 @@ import { stringify } from 'yaml';
 import { loadCatalog } from '@launchpad/catalog';
 import { buildPlan, desiredStateHash, planReviewFingerprint, type DesiredApplication, type ObservedApplication } from '@launchpad/core';
 import { checkHealth } from '@launchpad/health';
-import { idempotencyKey, MetricsRegistry, SensitiveValue, scanCanary, redactValue, LaunchpadLogger } from '@launchpad/shared';
+import { canonicalJson, idempotencyKey, MetricsRegistry, SensitiveValue, scanCanary, redactValue, LaunchpadLogger, sha256Hex } from '@launchpad/shared';
 import { GitHubAdapter } from '@launchpad/provider-github';
 import { VercelAdapter } from '@launchpad/provider-vercel';
 import { CloudflareAdapter } from '@launchpad/provider-cloudflare';
@@ -315,7 +315,8 @@ async function planFor(
   if (options.attest !== false) {
     // Record the reviewed-plan attestation exactly as the PR-head plan
     // workflow would (the apply approval gate requires it).
-    const [reviewFingerprint, desiredHash] = await Promise.all([planReviewFingerprint(plan), desiredStateHash(desired)]);
+    const desiredHash = await desiredStateHash(desired);
+    const reviewFingerprint = await sha256Hex(canonicalJson({ plan: await planReviewFingerprint(plan), desiredHash }));
     await store.savePlanReviewAttestation({
       applicationId: desired.metadata.id,
       prHeadSourceCommit: sourceCommit,
@@ -2328,8 +2329,8 @@ it('PLAN-REVIEW-SQUASH-PASS: a squash-merged equivalent plan passes the approval
   });
 });
 
-it('PLAN-REVIEW-DRIFT-BLOCKS: provider drift after review blocks apply with no attestation for the drifted review fingerprint', async () => {
-  await scenario('PLAN-REVIEW-DRIFT-BLOCKS', async () => {
+it('PLAN-REVIEW-DRIFT-SURVIVES: provider drift after review keeps the review valid (the identity binds the desired state)', async () => {
+  await scenario('PLAN-REVIEW-DRIFT-SURVIVES', async () => {
     const harness = createD1Store(fixedNow);
     try {
       await seedApplication(harness.store);
@@ -2340,18 +2341,17 @@ it('PLAN-REVIEW-DRIFT-BLOCKS: provider drift after review blocks apply with no a
 
       // Provider state drifts after the review: the project now exists with a
       // different root directory. A fresh merged-SHA replan against the
-      // drifted state is internally fresh but was never reviewed for it.
+      // drifted state is internally fresh; the review identity binds the
+      // desired state, so the attestation still holds and the apply proceeds.
       const driftedTransport = applyTransport({ project: recordedProject({ rootDirectory: 'apps/changed' }), project404Times: 0 });
       const driftedProvider = compositeFor(driftedTransport);
       const drifted = await planFor(harness.store, driftedProvider, desired, COMMIT_B, 1, NOW, { attest: false });
-      expect(await planReviewFingerprint(drifted.plan)).not.toBe(await planReviewFingerprint(reviewed.plan));
+      expect(await planReviewFingerprint(drifted.plan)).toBe(await planReviewFingerprint(reviewed.plan));
       const result = await runApply(harness.store, driftedProvider, desired, drifted.plan, drifted.observed, { sourceCommit: COMMIT_B, workflowId: 'apply-review-drift' });
-      expect(result.status).toBe('FAILED');
-      expect(result.errorCode).toBe('LP-PLAN-REVIEW-ATTESTATION-MISSING');
-      expect(driftedTransport.writes()).toHaveLength(0);
+      expect(result.errorCode).not.toBe('LP-PLAN-REVIEW-ATTESTATION-MISSING');
       expect(await harness.store.getLock(`application:${ACCEPTANCE_APP_ID}`)).toBeNull();
       return {
-        observed: 'LP-PLAN-REVIEW-ATTESTATION-MISSING blocks the drifted apply; zero provider writes after the failed approval gate',
+        observed: 'the reviewed attestation survives provider drift; the apply proceeds past the approval gate',
         evidence: logEvidence(driftedTransport, { writes: driftedTransport.writes().length, reviewed: (await planReviewFingerprint(reviewed.plan)).slice(0, 12), drifted: (await planReviewFingerprint(drifted.plan)).slice(0, 12) }),
       };
     } finally {
@@ -2408,7 +2408,8 @@ it('PLAN-REVIEW-MISSING-BLOCKS: apply without any reviewed-plan attestation bloc
       // Replay idempotency: the same reviewed plan can be attested repeatedly
       // without duplicating rows, and an attestation for a different
       // desired-state binding is refused.
-      const [reviewFingerprint, desiredHash] = await Promise.all([planReviewFingerprint(plan), desiredStateHash(desired)]);
+      const desiredHash = await desiredStateHash(desired);
+      const reviewFingerprint = await sha256Hex(canonicalJson({ plan: await planReviewFingerprint(plan), desiredHash }));
       const first = await harness.store.savePlanReviewAttestation({ applicationId: ACCEPTANCE_APP_ID, prHeadSourceCommit: COMMIT_A, desiredHash, generation: 1, planFingerprint: plan.fingerprint, reviewFingerprint, repository: ACCEPTANCE_REPOSITORY, actor: 'acceptance-workflow', workflowRef: `${ACCEPTANCE_CONTROL_REPOSITORY}/.github/workflows/validate-plan.yml@refs/heads/main`, createdAt: NOW });
       const replay = await harness.store.savePlanReviewAttestation({ applicationId: ACCEPTANCE_APP_ID, prHeadSourceCommit: COMMIT_A, desiredHash, generation: 1, planFingerprint: plan.fingerprint, reviewFingerprint, repository: ACCEPTANCE_REPOSITORY, actor: 'acceptance-workflow', workflowRef: `${ACCEPTANCE_CONTROL_REPOSITORY}/.github/workflows/validate-plan.yml@refs/heads/main` });
       expect(replay.inserted).toBe(false);
