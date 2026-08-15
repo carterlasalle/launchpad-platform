@@ -639,7 +639,19 @@ async function verifyReviewedPlan(context: Context<AppEnv>, dependencies: Contro
   if (!reviewedRepository) return errorResponse(context, 'LP-OIDC-CLAIM-MISSING-REPOSITORY', 'The OIDC token is missing the repository claim.', 401, false);
   const verdict = await verifyPullRequestHead(dependencies, { repository: reviewedRepository, prNumber: binding.prNumber, sourceCommit });
   if (!verdict.ok) return errorResponse(context, verdict.code, verdict.message, verdict.retryable ? 503 : 401, verdict.retryable);
-  const reviewFingerprint = await planReviewFingerprint(plan as unknown as PlatformPlan);
+  // The review identity binds the plan content AND the redacted desired
+  // manifest hash. Without the desiredHash, the same plan reviewed against a
+  // changed manifest (e.g. a reconcile that advanced the generation/hash)
+  // collides in the attestation's UNIQUE(application_id, review_fingerprint)
+  // constraint as LP-DB-PLAN-REVIEW-REPLAY-CONFLICT instead of starting a
+  // fresh review. The sourceCommit is deliberately excluded so a review
+  // survives a squash merge (plan content is stable across it).
+  const reviewFingerprint = await sha256Hex(
+    canonicalJson({
+      plan: await planReviewFingerprint(plan as unknown as PlatformPlan),
+      desiredHash,
+    }),
+  );
   const actor = binding.actor ?? claims.actor ?? 'workflow';
   try {
     await ensureApplicationRegistered(store, applicationId, dependencies.controlCatalogRoot, manifestPath ?? undefined);
