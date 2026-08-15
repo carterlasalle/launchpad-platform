@@ -36,7 +36,7 @@ vercel:
       developmentCommand: null
       ignoredBuildStep: null
     git:
-      connected: true
+      connected: false
       productionBranch: main
     deployment:
       autoAssignProductionDomains: false
