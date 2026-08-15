@@ -5,4 +5,4 @@ runs:
     - shell: bash
       run: corepack enable
     - shell: bash
-      run: yarn install --immutable
+      run: corepack yarn@4.10.3 install --immutable
