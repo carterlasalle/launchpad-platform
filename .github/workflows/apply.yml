@@ -8,6 +8,7 @@ on:
       - 'schema/**'
       - 'packages/**'
       - 'workflows/**'
+      - 'reconciliation/**'
       - '.github/workflows/apply.yml'
 
 permissions: {}
