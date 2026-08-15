@@ -2,7 +2,7 @@ apiVersion: launchpad.dev/v1
 kind: Application
 metadata:
   id: glowgo
-  displayName: GlowGo
+  displayName: GlowGo Marketplace
   description: Mobile spray tan marketplace — find, book, and review vetted mobile spray-tan artists
   owners:
     - "@CarterLaSalle"
