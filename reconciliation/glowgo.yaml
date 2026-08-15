@@ -2,10 +2,10 @@ apiVersion: launchpad.dev/v1
 kind: ReconciliationRequest
 metadata:
   app: glowgo
-  observedAt: 2026-08-15T05:30:23.706Z
+  observedAt: 2026-08-15T06:00:25.966Z
 spec:
   desiredGeneration: 0
   reason: external-drift
   operation: restore-desired-state
   driftFingerprint: sha256:275f92714fecd06745a66735371c87f0a9002b5628dce268066018d501913de6
-  sourceCommit: 940c11e046dad2e6cf2bb395ede9014cdb0155d1
+  sourceCommit: d547a979694a5c89ce4ee9d5304de07541c7ca74
