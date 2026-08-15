@@ -1885,9 +1885,15 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       return mapEnqueueError(context, error);
     }
     const workflowId = `lp-decommission-${run.id}`;
+    // Clock is env-controlled (server-side only — never client-supplied): the
+    // integration tests freeze NOW to exercise the cooling-off/expiry gates;
+    // production deployments leave NOW unset and fall back to real time.
+    const now = typeof (context.env as Record<string, unknown>).NOW === 'string'
+      ? (context.env as Record<string, unknown>).NOW as string
+      : new Date().toISOString();
     let instance: { id: string };
     try {
-      instance = await workflow.create({ id: workflowId, params: { version: 1, kind: 'decommission', applicationId, idempotencyKey, operationId: run.id, workflowId, approvalId, approvalToken, sourceCommit, domain, actor, now: new Date().toISOString() } });
+      instance = await workflow.create({ id: workflowId, params: { version: 1, kind: 'decommission', applicationId, idempotencyKey, operationId: run.id, workflowId, approvalId, approvalToken, sourceCommit, domain, actor, now } });
     } catch {
       return errorResponse(context, 'LP-WORKFLOW-CREATE-FAILED', 'The durable workflow could not be started.', 503, true);
     }
