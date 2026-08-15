@@ -307,7 +307,7 @@ export class VercelAdapter implements ProjectProvider {
       // their deployments carry gitSource directly, and every link consumes a
       // slot in Vercel's per-repo project limit (25) — linked shadow projects
       // from past previews exhausted it ('repo_links_exceeded_limit').
-      ...(before ? {} : { name: spec.name, ...(spec.settings.launchpadShadow === true ? {} : { gitRepository: { type: 'github', repo: spec.repository } }) }),
+      ...(before ? {} : { name: spec.name, ...(spec.settings.launchpadShadow === true ? {} : { gitRepository: { type: 'github', ...githubRepositoryParts(spec.repository) } }) }),
       framework: spec.framework,
       ...(spec.rootDirectory && spec.rootDirectory !== '.' ? { rootDirectory: spec.rootDirectory } : {}),
       installCommand: spec.build.installCommand,
