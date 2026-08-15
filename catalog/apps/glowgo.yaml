@@ -27,12 +27,12 @@ vercel:
   project:
     name: glowgo
     framework: nextjs
-    rootDirectory: .
+    rootDirectory: apps/web
     nodeVersion: "24.x"
     build:
       installCommand: npm install
-      buildCommand: npm run build:web
-      outputDirectory: apps/web/.next
+      buildCommand: npm run build
+      outputDirectory: .next
       developmentCommand: null
       ignoredBuildStep: null
     git:
