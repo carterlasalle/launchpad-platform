@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesiredApplication } from '@launchpad/core';
+import { canonicalJson, sha256Hex } from '@launchpad/shared';
 import { buildPlan, desiredStateHash, planReviewFingerprint } from '@launchpad/core';
 import { applyLoadDesired, applyObserveLiveState, makeApplyBase } from '@launchpad/workflows';
 import { CompositeProvider } from '../../apps/controller/src/handlers.js';
@@ -55,7 +56,8 @@ async function computeApplyFingerprint(harness: ControllerHarness, desired: Desi
   if (options.attest !== false) {
     // Record the reviewed-plan attestation the merged apply requires: the
     // review happened at the PR head (HEAD_SHA) against this exact plan.
-    const [reviewFingerprint, desiredHash] = await Promise.all([planReviewFingerprint(plan), desiredStateHash(loaded.desired)]);
+    const desiredHash = await desiredStateHash(loaded.desired);
+    const reviewFingerprint = await sha256Hex(canonicalJson({ plan: await planReviewFingerprint(plan), desiredHash }));
     await harness.store.savePlanReviewAttestation({ applicationId: 'fixture-app', prHeadSourceCommit: HEAD_SHA, desiredHash, generation: plan.desiredGeneration, planFingerprint: plan.fingerprint, reviewFingerprint, repository: 'example/fixture', actor: 'alice', workflowRef: WORKFLOW_REF });
   }
   return plan.fingerprint;

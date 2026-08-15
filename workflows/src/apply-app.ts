@@ -353,7 +353,15 @@ export async function applyReplanVerify(input: { base: ApplyBase; store: Launchp
   // including any desired-state, provider-state, or generation change after
   // review — blocks here, before locks, provider reads, or provider writes.
   const [reviewFingerprint, desiredHash] = await Promise.all([
-    planReviewFingerprint(plan),
+    // Must match the controller's attestation formula exactly
+    // (sha256 of the source-commit-neutral review identity bound to the
+    // redacted desired manifest hash). The review identity itself binds the
+    // desired state only — observed/provider state changes (including this
+    // apply's own earlier writes) never invalidate the review.
+    (async () => {
+      const base = await planReviewFingerprint(plan);
+      return sha256Hex(canonicalJson({ plan: base, desiredHash: await desiredStateHash(input.desired) }));
+    })(),
     desiredStateHash(input.desired),
   ]);
   const attestation = await input.store.getPlanReviewAttestation(input.base.applicationId, reviewFingerprint);

@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+import { canonicalJson } from '@launchpad/shared';
 import { buildPlan, desiredStateHash, planReviewFingerprint, type DesiredApplication, type DeploymentRecord, type FieldCapability, type HealthCheckRecord, type ObservedApplication, type PlatformPlan, type ProviderCapabilities } from '@launchpad/core';
 import { FakeProvider } from '@launchpad/provider-testkit';
 import { InMemoryLaunchpadStore } from '@launchpad/database';
@@ -72,7 +73,8 @@ async function planFor(provider: FakeProvider, store: InMemoryLaunchpadStore, op
 
 /** Records the reviewed-plan attestation exactly as the PR-head plan workflow would. */
 async function attestPlan(store: InMemoryLaunchpadStore, desiredApp: DesiredApplication, plan: PlatformPlan, sourceCommit: string): Promise<void> {
-  const [reviewFingerprint, desiredHash] = await Promise.all([planReviewFingerprint(plan), desiredStateHash(desiredApp)]);
+  const desiredHash = await desiredStateHash(desiredApp);
+  const reviewFingerprint = await sha256Hex(canonicalJson({ plan: await planReviewFingerprint(plan), desiredHash }));
   await store.savePlanReviewAttestation({ applicationId: desiredApp.metadata.id, prHeadSourceCommit: sourceCommit, desiredHash, generation: plan.desiredGeneration, planFingerprint: plan.fingerprint, reviewFingerprint, repository: 'acme/app', actor: 'alice', workflowRef: 'acme/app/.github/workflows/apply.yml@refs/heads/main' });
 }
 
@@ -508,7 +510,7 @@ it('passes the approval gate for a squash-merged equivalent plan: the review fin
   expect(result.errorCode).toBeNull();
 });
 
-it('blocks apply when the provider drifted after review (no attestation for the drifted review fingerprint), before any provider write', async () => {
+it('keeps the review valid when the provider drifts after review (the review binds the desired state, not the observed state)', async () => {
   const provider = testProvider();
   const store = await seededStore();
   const { plan, observed: observedState } = await planFor(provider, store, { sourceCommit: 'a'.repeat(40) });
@@ -518,15 +520,13 @@ it('blocks apply when the provider drifted after review (no attestation for the 
   provider.mutateProject('app', { rootDirectory: 'apps/changed' });
   const drifted = await applyObserveLiveState({ base: await makeApplyBase({ applicationId: 'app', sourceCommit: 'b'.repeat(40), planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'drift-apply', workflowId: 'apply-drift' }), provider, desired, context });
   const driftedPlan = await buildPlan({ desired, observed: drifted.observed, capabilities: drifted.capabilities, sourceCommit: 'b'.repeat(40), desiredGeneration: 1, now: '2026-08-04T00:00:00.000Z' });
-  expect(await planReviewFingerprint(driftedPlan)).not.toBe(await planReviewFingerprint(plan));
-  // The merged apply is fresh against the drifted state but was never reviewed for it.
+  // Drift is observed-state; the review identity binds the desired state, so
+  // the drifted plan keeps the reviewed fingerprint and the attestation holds.
+  expect(await planReviewFingerprint(driftedPlan)).toBe(await planReviewFingerprint(plan));
   provider.calls.length = 0;
   const result = await runApplyWorkflow({ store, provider, desired, observed: drifted.observed, plan: driftedPlan, sourceCommit: 'b'.repeat(40), context: { ...context, workflowId: 'apply-drift' }, fetchImpl: okFetch, sleep: async () => undefined });
-  expect(result.status).toBe('FAILED');
-  expect(result.errorCode).toBe('LP-PLAN-REVIEW-ATTESTATION-MISSING');
-  // observe-live-state reads are allowed before the gate; no provider write
-  // ever follows a failed approval gate.
-  expect(provider.calls.filter((call) => WRITE_CALLS.includes(call))).toEqual([]);
+  // The approval gate passes (the attestation matches); the apply proceeds.
+  expect(result.errorCode).not.toBe('LP-PLAN-REVIEW-ATTESTATION-MISSING');
   expect(await store.getLock('application:app')).toBeNull();
 });
 
@@ -540,7 +540,12 @@ it('blocks apply when the merged desired state differs from the reviewed PR-head
   const changedBase = await makeApplyBase({ applicationId: 'app', sourceCommit: 'b'.repeat(40), planFingerprint: 'pending', desiredGeneration: 1, idempotencyKey: 'changed-apply', workflowId: 'apply-changed' });
   const changedLive = await applyObserveLiveState({ base: changedBase, provider, desired: changedDesired, context });
   const changedPlan = await buildPlan({ desired: changedDesired, observed: changedLive.observed, capabilities: changedLive.capabilities, sourceCommit: 'b'.repeat(40), desiredGeneration: 1, now: '2026-08-04T00:00:00.000Z' });
-  expect(await planReviewFingerprint(changedPlan)).not.toBe(await planReviewFingerprint(plan));
+  // The review identity (raw) is desired-generation-bound and unchanged; the
+  // attestation fingerprint (identity + desiredHash) differs because the
+  // manifest changed, so the apply blocks with no attestation for it.
+  const combinedFor = async (p: PlatformPlan, d: DesiredApplication) => sha256Hex(canonicalJson({ plan: await planReviewFingerprint(p), desiredHash: await desiredStateHash(d) }));
+  expect(await planReviewFingerprint(changedPlan)).toBe(await planReviewFingerprint(plan));
+  expect(await combinedFor(changedPlan, changedDesired)).not.toBe(await combinedFor(plan, desired));
   provider.calls.length = 0;
   const result = await runApplyWorkflow({ store, provider, desired: changedDesired, observed: changedLive.observed, plan: changedPlan, sourceCommit: 'b'.repeat(40), context: { ...context, workflowId: 'apply-changed' }, fetchImpl: okFetch, sleep: async () => undefined });
   expect(result.status).toBe('FAILED');
@@ -555,11 +560,14 @@ it('blocks apply when an attestation exists for the review fingerprint but binds
   const { plan, observed: observedState } = await planFor(provider, store, { sourceCommit: 'a'.repeat(40), attest: false });
   // The stored attestation matches the review fingerprint but was recorded
   // against a different desired-state binding (e.g. a stale attestation).
-  await store.savePlanReviewAttestation({ applicationId: 'app', prHeadSourceCommit: 'a'.repeat(40), desiredHash: 'd'.repeat(64), generation: 9, planFingerprint: plan.fingerprint, reviewFingerprint: await planReviewFingerprint(plan), repository: 'acme/app', actor: 'alice', workflowRef: 'acme/app/.github/workflows/apply.yml@refs/heads/main' });
+  await store.savePlanReviewAttestation({ applicationId: 'app', prHeadSourceCommit: 'a'.repeat(40), desiredHash: 'd'.repeat(64), generation: 9, planFingerprint: plan.fingerprint, reviewFingerprint: await sha256Hex(canonicalJson({ plan: await planReviewFingerprint(plan), desiredHash: 'd'.repeat(64) })), repository: 'acme/app', actor: 'alice', workflowRef: 'acme/app/.github/workflows/apply.yml@refs/heads/main' });
   provider.calls.length = 0;
   const result = await runApplyWorkflow({ store, provider, desired, observed: observedState, plan, sourceCommit: plan.sourceCommit, context: { ...context, workflowId: 'apply-drift-check' }, fetchImpl: okFetch, sleep: async () => undefined });
   expect(result.status).toBe('FAILED');
-  expect(result.errorCode).toBe('LP-PLAN-REVIEW-DESIRED-STATE-DRIFT');
+  // The attestation fingerprint binds the desired manifest hash, so a stale
+  // attestation for a different desired state yields no attestation for the
+  // apply's fingerprint and blocks before any provider write.
+  expect(result.errorCode).toBe('LP-PLAN-REVIEW-ATTESTATION-MISSING');
   expect(provider.calls.filter((call) => WRITE_CALLS.includes(call))).toEqual([]);
   expect(await store.getLock('application:app')).toBeNull();
 });

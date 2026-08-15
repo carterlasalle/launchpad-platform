@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { loadCatalog } from '@launchpad/catalog';
+import { canonicalJson, sha256Hex } from '@launchpad/shared';
 import { buildPlan, desiredStateHash, planReviewFingerprint, type FieldCapability, type ProviderCapabilities } from '@launchpad/core';
 import { InMemoryLaunchpadStore } from '@launchpad/database';
 import { FakeProvider } from '@launchpad/provider-testkit';
@@ -57,7 +58,8 @@ it('proves catalog, preview, apply, drift, reconciliation, and safe deletion', a
   const plan = await buildPlan({ desired, observed: live.observed, capabilities: live.capabilities, sourceCommit: applyBase.sourceCommit, desiredGeneration: 1, now: NOW });
   // Record the reviewed-plan attestation the apply gate requires (the PR-head
   // review evidence for this exact plan and desired state).
-  await store.savePlanReviewAttestation({ applicationId: desired.metadata.id, prHeadSourceCommit: plan.sourceCommit, desiredHash: await desiredStateHash(desired), generation: plan.desiredGeneration, planFingerprint: plan.fingerprint, reviewFingerprint: await planReviewFingerprint(plan), repository: 'acme/fixture', actor: 'e2e', workflowRef: 'acme/fixture/.github/workflows/apply.yml@refs/heads/main' });
+  const desiredHash = await desiredStateHash(desired);
+  await store.savePlanReviewAttestation({ applicationId: desired.metadata.id, prHeadSourceCommit: plan.sourceCommit, desiredHash, generation: plan.desiredGeneration, planFingerprint: plan.fingerprint, reviewFingerprint: await sha256Hex(canonicalJson({ plan: await planReviewFingerprint(plan), desiredHash })), repository: 'acme/fixture', actor: 'e2e', workflowRef: 'acme/fixture/.github/workflows/apply.yml@refs/heads/main' });
   const applied = await runApplyWorkflow({ store, provider, desired, observed: live.observed, plan, sourceCommit: plan.sourceCommit, context, fetchImpl: async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 }), sleep: async () => undefined });
   expect(applied.status, `apply failed with ${applied.errorCode ?? 'unknown'}`).toBe('SUCCEEDED');
 
