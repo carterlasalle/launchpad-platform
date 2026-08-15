@@ -34,7 +34,7 @@ it('creates a project with the official POST /v10/projects body and applies decl
   expect(create.body).toEqual({
     name: 'app', framework: 'nextjs',
     installCommand: 'yarn install', buildCommand: 'yarn build', outputDirectory: null,
-    gitRepository: { type: 'github', repo: 'acme/app' },
+    gitRepository: { type: 'github', org: 'acme', repo: 'app' },
   });
   expect(create.headers['idempotency-key']).toBeDefined();
   // Settings that map to API fields are honored through the update contract;
