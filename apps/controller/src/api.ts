@@ -284,7 +284,9 @@ function mapEnqueueError(context: Context<AppEnv>, error: unknown): Response {
   if (error instanceof LaunchpadError) {
     if (error.platform.code === 'LP-DB-IDEMPOTENCY-REUSED') return errorResponse(context, 'LP-IDEMPOTENCY-CONFLICT', 'This idempotency key was already used with a different payload.', 409, false);
     if (error.platform.code === 'LP-DB-TOMBSTONE-REUSE-BLOCKED') return errorResponse(context, 'LP-APPLICATION-TOMBSTONED', 'The application is tombstoned and cannot be operated on.', 409, false);
-    return errorResponse(context, 'LP-OPERATION-PERSIST-FAILED', 'The operation could not be durably recorded.', 500, true);
+    // Surface the real typed code so operators can act on the actual failure;
+    // the message stays generic to avoid leaking provider bodies or values.
+    return errorResponse(context, 'LP-OPERATION-PERSIST-FAILED', `The operation could not be durably recorded (${error.platform.code}).`, 500, true);
   }
   return errorResponse(context, 'LP-INTERNAL-ERROR', 'An internal error occurred.', 500, true);
 }
