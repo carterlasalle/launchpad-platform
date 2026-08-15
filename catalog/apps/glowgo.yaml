@@ -90,7 +90,7 @@ secrets:
   - name: NEXT_PUBLIC_CONVEX_URL
     source: env://NEXT_PUBLIC_CONVEX_URL
     sensitive: true
-    environments: [production, preview]
+    environments: [production]
 dependencies:
   applications: []
   external: []
