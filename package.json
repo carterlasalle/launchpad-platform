@@ -33,6 +33,7 @@
     "yaml": "2.9.0"
   },
   "resolutions": {
+    "nanoid@npm:^3.3.17": "npm:3.3.18",
     "undici@npm:7.28.0": "npm:7.29.0"
   },
   "devDependencies": {
