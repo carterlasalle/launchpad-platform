@@ -40,7 +40,7 @@
     "@cloudflare/workers-types": "5.20260804.1",
     "@types/node": "26.1.2",
     "@typescript-eslint/parser": "8.66.0",
-    "eslint": "9.24.0",
+    "eslint": "10.8.1",
     "typescript": "5.8.3",
     "vitest": "4.1.10",
     "wrangler": "4.118.0"
