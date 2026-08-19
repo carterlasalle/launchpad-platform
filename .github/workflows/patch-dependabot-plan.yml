@@ -1,17 +1,20 @@
-# bootstrap revision 2
+# bootstrap revision 3
 name: Patch Dependabot plan gate
 
 on:
   push:
     branches:
       - fix/dependabot-plan-trust
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name == 'push' || github.head_ref == 'fix/dependabot-plan-trust')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
