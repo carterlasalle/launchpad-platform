@@ -33,8 +33,8 @@ function approvedManifest(desired: DesiredApplication, options: { deleteAfter?: 
 }
 
 async function seedDeletionHarness(options: { ownershipComment?: string; deleteAfter?: string; manifestAtCommit?: boolean; dependents?: boolean; coolingOff?: boolean } = {}): Promise<{ harness: ControllerHarness; desired: DesiredApplication; approval: { approvalId: string; token: string } }> {
-  // Freeze the controller clock at NOW so the cooling-off / expiry gates in the
-  // destroy machine are deterministic (the delete endpoint reads env.NOW).
+  // destroy machine are deterministic (the delete and tombstone-release
+  // endpoints read env.NOW).
   const harness = await createHarness({ envOverrides: { NOW } });
   // Register the application through the real D1 store boundary first: the
   // store requires the application row before any resource, deployment, or
