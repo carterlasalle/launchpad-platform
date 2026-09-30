@@ -72,9 +72,14 @@ describe('plan review fingerprint', () => {
     const changedGeneration = await buildPlan({ desired, observed: minimalObserved(), capabilities, sourceCommit: 'a'.repeat(40), desiredGeneration: 2, now: '2026-08-04T00:00:00.000Z' });
     const drifted = await buildPlan({ desired, observed: minimalObserved('app', 'apps/web'), capabilities, sourceCommit: 'a'.repeat(40), desiredGeneration: 1, now: '2026-08-04T00:00:00.000Z' });
     const review = await planReviewFingerprint(base);
-    expect(await planReviewFingerprint(changedDesired)).not.toBe(review);
+    // The raw identity binds the desired-generation; the manifest content is
+    // bound via the controller's combined fingerprint (identity + desiredHash).
+    expect(await planReviewFingerprint(changedDesired)).toBe(review);
     expect(await planReviewFingerprint(changedGeneration)).not.toBe(review);
-    expect(await planReviewFingerprint(drifted)).not.toBe(review);
+    // Drift is observed-state; the review identity binds the desired state
+    // only, so a drifted plan keeps the same review identity (the apply's
+    // own writes change the observed state without invalidating the review).
+    expect(await planReviewFingerprint(drifted)).toBe(review);
     expect(JSON.stringify(base)).not.toContain('infisical://');
   });
 

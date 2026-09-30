@@ -246,11 +246,16 @@ async function fetchOperationStatus(controller: string, operationId: string, tok
 }
 
 /** Polls the claim-scoped operation status route until a terminal state; fails closed on timeout or malformed responses. */
-async function pollOperation(controller: string, operationId: string, token: string, timeoutMs: number): Promise<OperationStatus> {
+async function pollOperation(controller: string, operationId: string, token: string | (() => Promise<string>), timeoutMs: number): Promise<OperationStatus> {
   const deadline = Date.now() + timeoutMs;
   let last: OperationStatus | null = null;
   while (Date.now() < deadline) {
-    last = await fetchOperationStatus(controller, operationId, token);
+    // GitHub Actions OIDC tokens are valid for ~5 minutes; long operations
+    // (apply chains with DNS/TLS/health) outlive one token. The token factory
+    // mints a fresh token per poll so a mid-operation expiry (401
+    // LP-OIDC-VERIFICATION-FAILED) can never strand a run.
+    const active = typeof token === 'function' ? await token() : token;
+    last = await fetchOperationStatus(controller, operationId, active);
     if (TERMINAL_OPERATION_STATUSES[last.status] === true) return last;
     await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
   }
@@ -502,7 +507,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
     try { accepted = JSON.parse(response.text) as typeof accepted; } catch { throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start returned non-JSON: ${redactText(response.text)}`); }
     const operationId = stringOrNull(accepted.operationId);
     if (!operationId) throw new CliFailure('LP-PREVIEW-START-INVALID', 'Preview start response is missing operationId.');
-    const operation = await pollOperation(controller, operationId, token, operationTimeoutMs(args.flags));
+    const operation = await pollOperation(controller, operationId, requireWorkflowToken, operationTimeoutMs(args.flags));
     if (!SUCCESS_OPERATION_STATUSES[operation.status]) throw new CliFailure('LP-PREVIEW-FAILED', `Preview workflow ended in ${operation.status}${operation.errorCode ? ` (${operation.errorCode})` : ''}.`);
     const result = operation.result ?? {};
     const previewUrl = stringOrNull(result.previewUrl);
@@ -714,7 +719,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       if (accepted.status !== 'QUEUED' && accepted.status !== 'READY' && accepted.status !== 'RUNNING') throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start for '${previewApplication.metadata.id}' did not report status QUEUED.`);
       const operationId = stringOrNull(accepted.operationId);
       if (!operationId) throw new CliFailure('LP-PREVIEW-START-INVALID', `Preview start for '${previewApplication.metadata.id}' is missing operationId.`);
-      const operation = await pollOperation(controller, operationId, token, timeoutMs);
+      const operation = await pollOperation(controller, operationId, requireWorkflowToken, timeoutMs);
       if (!SUCCESS_OPERATION_STATUSES[operation.status]) {
         const failed = operation.failedStep !== null ? `; failed step ${operation.failedStep.stepId}${operation.failedStep.error?.code ? ` (${operation.failedStep.error.code})` : ''}${operation.failedStep.error?.message ? `: ${operation.failedStep.error.message}` : ''}` : '';
         const message = `Preview workflow ended in ${operation.status}${operation.errorCode ? ` (${operation.errorCode})` : ''}${failed}.`;
@@ -837,7 +842,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       try { accepted = JSON.parse(response.text) as typeof accepted; } catch { throw new CliFailure('LP-APPLY-START-INVALID', `Apply start for '${applyApplication.metadata.id}' returned non-JSON: ${redactText(response.text)}`); }
       const operationId = stringOrNull(accepted.operationId);
       if (!operationId) throw new CliFailure('LP-APPLY-START-INVALID', `Apply start for '${applyApplication.metadata.id}' is missing operationId.`);
-      const operation = await pollOperation(controller, operationId, token, timeoutMs);
+      const operation = await pollOperation(controller, operationId, requireWorkflowToken, timeoutMs);
       const applied = SUCCESS_OPERATION_STATUSES[operation.status] === true;
       output.write(`${JSON.stringify({ applicationId: applyApplication.metadata.id, status: operation.status, operationId: operation.operationId, errorCode: operation.errorCode, failedStep: operation.failedStep, result: operation.result }, null, 2)}\n`);
       success = success && applied;

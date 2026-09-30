@@ -377,8 +377,16 @@ describe('preview', () => {
       { match: operationRoute, response: () => jsonResponse({ operationId: 'op-1', workflowId: 'wf-1', applicationId: 'invalid-root', kind: 'preview', status: 'SUCCEEDED', errorCode: null, sourceCommit: sha, result: { previewUrl: 'https://lp-pr-1-invalid-root.vercel.app', buildState: 'READY', healthState: 'PASSED' } }) },
     ]);
     const out = writer();
+    let oidcFetches = 0;
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (String(input).includes('oidc.test')) oidcFetches += 1;
+      return originalFetch(input, init);
+    });
     const exitCode = await runCli(['preview', '--catalog', catalog, '--sha', sha, '--pr', '7', '--controller', controller, '--plans', join(plansDir, 'plans.json'), '--output', outputDir], out);
     expect(exitCode).toBe(0);
+    // long operations re-mint the OIDC token per poll (tokens expire in ~5 min)
+    expect(oidcFetches).toBeGreaterThanOrEqual(2);
     expect(startBody).toMatchObject({
       version: 1,
       applicationId: 'invalid-root',

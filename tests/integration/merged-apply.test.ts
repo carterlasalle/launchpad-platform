@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DesiredApplication } from '@launchpad/core';
+import { canonicalJson, sha256Hex } from '@launchpad/shared';
 import { buildPlan, desiredStateHash, planReviewFingerprint } from '@launchpad/core';
 import { applyLoadDesired, applyObserveLiveState, makeApplyBase } from '@launchpad/workflows';
 import { CompositeProvider } from '../../apps/controller/src/handlers.js';
@@ -55,7 +56,8 @@ async function computeApplyFingerprint(harness: ControllerHarness, desired: Desi
   if (options.attest !== false) {
     // Record the reviewed-plan attestation the merged apply requires: the
     // review happened at the PR head (HEAD_SHA) against this exact plan.
-    const [reviewFingerprint, desiredHash] = await Promise.all([planReviewFingerprint(plan), desiredStateHash(loaded.desired)]);
+    const desiredHash = await desiredStateHash(loaded.desired);
+    const reviewFingerprint = await sha256Hex(canonicalJson({ plan: await planReviewFingerprint(plan), desiredHash }));
     await harness.store.savePlanReviewAttestation({ applicationId: 'fixture-app', prHeadSourceCommit: HEAD_SHA, desiredHash, generation: plan.desiredGeneration, planFingerprint: plan.fingerprint, reviewFingerprint, repository: 'example/fixture', actor: 'alice', workflowRef: WORKFLOW_REF });
   }
   return plan.fingerprint;
@@ -149,9 +151,9 @@ describe('merged apply flow (integration)', () => {
     expect(harness.states.vercel.envCalls.map((call) => call.key)).toEqual(['DATABASE_URL', 'API_TOKEN', 'PROD_TOKEN']);
     // The manifest literal flows verbatim as a plain variable; resolved secrets
     // are revealed only at request construction (encrypted type).
-    expect(harness.states.vercel.envCalls[0]).toMatchObject({ key: 'DATABASE_URL', value: 'postgres://fixture:db-password@db.internal/fixture', type: 'plain', target: ['production'], gitBranch: 'main' });
-    expect(harness.states.vercel.envCalls[1]).toMatchObject({ key: 'API_TOKEN', value: RESOLVED_TOKEN_CANARY, type: 'encrypted', target: ['production'], gitBranch: 'main' });
-    expect(harness.states.vercel.envCalls[2]).toMatchObject({ key: 'PROD_TOKEN', value: RESOLVED_PROD_CANARY, type: 'encrypted', target: ['production'], gitBranch: 'main' });
+    expect(harness.states.vercel.envCalls[0]).toMatchObject({ key: 'DATABASE_URL', value: 'postgres://fixture:db-password@db.internal/fixture', type: 'plain', target: ['production'], gitBranch: null });
+    expect(harness.states.vercel.envCalls[1]).toMatchObject({ key: 'API_TOKEN', value: RESOLVED_TOKEN_CANARY, type: 'encrypted', target: ['production'], gitBranch: null });
+    expect(harness.states.vercel.envCalls[2]).toMatchObject({ key: 'PROD_TOKEN', value: RESOLVED_PROD_CANARY, type: 'encrypted', target: ['production'], gitBranch: null });
     expect(harness.transport.requestsFor('GET', '/v9/projects/fixture-app/env').filter((request) => request.url.endsWith('/v9/projects/fixture-app/env'))).toHaveLength(1);
     expect(harness.transport.requestsFor('GET', '/v9/projects/fixture-app/env/env_')).toHaveLength(3);
     expect(harness.transport.count('PATCH', '/v9/projects/fixture-app/env/')).toBe(0);

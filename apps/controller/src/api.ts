@@ -284,7 +284,9 @@ function mapEnqueueError(context: Context<AppEnv>, error: unknown): Response {
   if (error instanceof LaunchpadError) {
     if (error.platform.code === 'LP-DB-IDEMPOTENCY-REUSED') return errorResponse(context, 'LP-IDEMPOTENCY-CONFLICT', 'This idempotency key was already used with a different payload.', 409, false);
     if (error.platform.code === 'LP-DB-TOMBSTONE-REUSE-BLOCKED') return errorResponse(context, 'LP-APPLICATION-TOMBSTONED', 'The application is tombstoned and cannot be operated on.', 409, false);
-    return errorResponse(context, 'LP-OPERATION-PERSIST-FAILED', 'The operation could not be durably recorded.', 500, true);
+    // Surface the real typed code so operators can act on the actual failure;
+    // the message stays generic to avoid leaking provider bodies or values.
+    return errorResponse(context, 'LP-OPERATION-PERSIST-FAILED', `The operation could not be durably recorded (${error.platform.code}).`, 500, true);
   }
   return errorResponse(context, 'LP-INTERNAL-ERROR', 'An internal error occurred.', 500, true);
 }
@@ -637,7 +639,19 @@ async function verifyReviewedPlan(context: Context<AppEnv>, dependencies: Contro
   if (!reviewedRepository) return errorResponse(context, 'LP-OIDC-CLAIM-MISSING-REPOSITORY', 'The OIDC token is missing the repository claim.', 401, false);
   const verdict = await verifyPullRequestHead(dependencies, { repository: reviewedRepository, prNumber: binding.prNumber, sourceCommit });
   if (!verdict.ok) return errorResponse(context, verdict.code, verdict.message, verdict.retryable ? 503 : 401, verdict.retryable);
-  const reviewFingerprint = await planReviewFingerprint(plan as unknown as PlatformPlan);
+  // The review identity binds the plan content AND the redacted desired
+  // manifest hash. Without the desiredHash, the same plan reviewed against a
+  // changed manifest (e.g. a reconcile that advanced the generation/hash)
+  // collides in the attestation's UNIQUE(application_id, review_fingerprint)
+  // constraint as LP-DB-PLAN-REVIEW-REPLAY-CONFLICT instead of starting a
+  // fresh review. The sourceCommit is deliberately excluded so a review
+  // survives a squash merge (plan content is stable across it).
+  const reviewFingerprint = await sha256Hex(
+    canonicalJson({
+      plan: await planReviewFingerprint(plan as unknown as PlatformPlan),
+      desiredHash,
+    }),
+  );
   const actor = binding.actor ?? claims.actor ?? 'workflow';
   try {
     await ensureApplicationRegistered(store, applicationId, dependencies.controlCatalogRoot, manifestPath ?? undefined);
@@ -1885,9 +1899,15 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       return mapEnqueueError(context, error);
     }
     const workflowId = `lp-decommission-${run.id}`;
+    // Clock is env-controlled (server-side only — never client-supplied): the
+    // integration tests freeze NOW to exercise the cooling-off/expiry gates;
+    // production deployments leave NOW unset and fall back to real time.
+    const now = typeof (context.env as Record<string, unknown>).NOW === 'string'
+      ? (context.env as Record<string, unknown>).NOW as string
+      : new Date().toISOString();
     let instance: { id: string };
     try {
-      instance = await workflow.create({ id: workflowId, params: { version: 1, kind: 'decommission', applicationId, idempotencyKey, operationId: run.id, workflowId, approvalId, approvalToken, sourceCommit, domain, actor, now: new Date().toISOString() } });
+      instance = await workflow.create({ id: workflowId, params: { version: 1, kind: 'decommission', applicationId, idempotencyKey, operationId: run.id, workflowId, approvalId, approvalToken, sourceCommit, domain, actor, now } });
     } catch {
       return errorResponse(context, 'LP-WORKFLOW-CREATE-FAILED', 'The durable workflow could not be started.', 503, true);
     }

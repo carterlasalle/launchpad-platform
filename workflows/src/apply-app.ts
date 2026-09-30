@@ -353,7 +353,15 @@ export async function applyReplanVerify(input: { base: ApplyBase; store: Launchp
   // including any desired-state, provider-state, or generation change after
   // review — blocks here, before locks, provider reads, or provider writes.
   const [reviewFingerprint, desiredHash] = await Promise.all([
-    planReviewFingerprint(plan),
+    // Must match the controller's attestation formula exactly
+    // (sha256 of the source-commit-neutral review identity bound to the
+    // redacted desired manifest hash). The review identity itself binds the
+    // desired state only — observed/provider state changes (including this
+    // apply's own earlier writes) never invalidate the review.
+    (async () => {
+      const base = await planReviewFingerprint(plan);
+      return sha256Hex(canonicalJson({ plan: base, desiredHash: await desiredStateHash(input.desired) }));
+    })(),
     desiredStateHash(input.desired),
   ]);
   const attestation = await input.store.getPlanReviewAttestation(input.base.applicationId, reviewFingerprint);
@@ -425,6 +433,21 @@ export async function applyEnsureProject(input: { base: ApplyBase; store: Launch
 export async function applyEnsureGit(input: { base: ApplyBase; store: LaunchpadStore; provider: ProjectProvider & DnsProvider; desired: DesiredApplication; plan: PlatformPlan; locks: HeldLocks; context: ProviderContext }): Promise<EnsureGitResult> {
   await refreshLocks(input.store, input.locks);
   const project = projectSpec(input.desired);
+  // `git.connected: false` is a supported desired state: the application is
+  // deployed via direct gitSource deployments (the same path shadow preview
+  // projects use) and the project is intentionally not git-linked. Skipping
+  // here keeps apply idempotent for disconnected apps — the Vercel API has no
+  // update operation for an existing project's Git link, so a broken link from
+  // an earlier apply must not block re-apply.
+  if (input.desired.vercel.project.git?.connected === false) {
+    return {
+      mutation: {
+        changed: false,
+        operationId: `vercel-git-skip-${project.id}`,
+        resource: { provider: 'vercel', resourceType: 'vercel.git', resourceKey: project.id, providerResourceId: project.id, configuration: { connected: false }, ownershipFingerprint: project.id, observedAt: new Date().toISOString() },
+      },
+    };
+  }
   const mutation = await input.provider.ensureGitConnection({ projectId: project.id, repository: project.repository, productionBranch: project.productionBranch }, input.context);
   const verified = await input.provider.observeProject({ projectId: project.id }, input.context);
   if (!verified) throw new WorkflowFailure('LP-GIT-READBACK-FAILED', `Project '${project.id}' was not observed after the Git connection was ensured.`);

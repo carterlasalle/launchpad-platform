@@ -161,21 +161,31 @@ export async function buildPlan(input: BuildPlanInput): Promise<PlatformPlan> {
  * between review and apply changes it. Never includes raw environment or
  * secret values: every covered field carries keyed fingerprints only.
  */
+/**
+ * Deterministic review identity for a plan.
+ *
+ * Binds ONLY the desired-state dimensions: the application, mode, and
+ * desired generation. Everything else — operations, observed/capability
+ * state hashes, drift, policy results, downstream effects, layers, result,
+ * blocked reason — is excluded: the apply mutates provider state as it
+ * progresses, and the plan's operations are partially observed-driven (drift
+ * operations), so re-computing a plan mid-apply changes those fields without
+ * any change to what was reviewed. Including them made every resumed apply
+ * fail replan-verify with LP-PLAN-REVIEW-ATTESTATION-MISSING after its own
+ * first step (an infinite review→apply loop for any app whose apply makes
+ * writes). The redacted desiredHash is bound separately by the controller's
+ * attestation fingerprint.
+ *
+ * The identity is stable for equivalent manifest content — including across
+ * a squash merge — and never includes raw environment or secret values:
+ * every covered field carries keyed fingerprints only.
+ */
 export async function planReviewFingerprint(plan: PlatformPlan): Promise<string> {
   return sha256Hex(canonicalJson({
-    schemaVersion: 'launchpad.plan-review/v1',
+    schemaVersion: 'launchpad.plan-review/v2',
     applicationId: plan.applicationId,
     mode: plan.mode ?? 'apply',
     desiredGeneration: plan.desiredGeneration,
-    result: plan.result,
-    blockedReason: plan.blockedReason ?? null,
-    observedStateHash: plan.observedStateHash,
-    capabilitySnapshotHash: plan.capabilitySnapshotHash,
-    operations: plan.operations,
-    downstreamEffects: plan.downstreamEffects,
-    policyResults: plan.policyResults,
-    layers: plan.layers ?? [],
-    drift: plan.drift === null || plan.drift === undefined ? null : { detected: plan.drift.detected, fingerprint: plan.drift.fingerprint, records: plan.drift.records },
   }));
 }
 
