@@ -383,13 +383,11 @@ async function appendOperationAudit(store: LaunchpadStore, input: { applicationI
   if (actor !== undefined) details.actor = actor;
   if (input.params !== undefined) details.params = input.params;
   const id = stableId('audit', input.applicationId, 'OIDC_OPERATION_START', input.operationId);
-  const alreadyRecorded = (await store.listAudit(input.applicationId)).some((event) => event.id === id);
-  if (alreadyRecorded) return;
+  if ((await store.getAuditEvent(id)) !== null) return;
   try {
     await store.appendAudit({ id, actor: `oidc:${String(actor ?? details.repository ?? 'workflow')}`, action: 'OIDC_OPERATION_START', applicationId: input.applicationId, details: { ...details, operationId: input.operationId, workflowId: input.workflowId, kind: input.kind } });
   } catch {
-    const raced = (await store.listAudit(input.applicationId)).some((event) => event.id === id);
-    if (!raced) throw new Error('LP-AUDIT-APPEND-FAILED');
+    if ((await store.getAuditEvent(id)) === null) throw new Error('LP-AUDIT-APPEND-FAILED');
   }
 }
 
@@ -432,7 +430,7 @@ async function enqueueDurableOperation(context: Context<AppEnv>, dependencies: C
         return await store.startWorkflowRun({ applicationId: input.applicationId, workflowType: input.kind, idempotencyKey: key, payloadHash });
       } catch (error) {
         if (!(error instanceof LaunchpadError && error.platform.code === 'LP-DB-IDEMPOTENCY-REUSED')) throw error;
-        const prior = (await store.listWorkflowRuns(input.applicationId)).find((candidate) => candidate.idempotencyKey === key);
+        const prior = await store.getWorkflowRunByIdempotencyKey(input.applicationId, key);
         // A live or completed operation must never be displaced by a new
         // payload; only a terminal failed run frees its key for retry.
         if (!prior || (prior.status !== 'FAILED' && prior.status !== 'BLOCKED')) throw error;
@@ -893,14 +891,11 @@ function credentialMetadataView(credential: CredentialMetadataRecord): { id: str
 /** Appends an audit event with a caller-chosen deterministic id; replays never duplicate it. */
 async function appendAuditOnce(store: LaunchpadStore, input: AuditAppend): Promise<void> {
   const id = input.id ?? stableId('audit', input.actor, input.action, input.applicationId ?? 'platform', crypto.randomUUID());
-  const scope = input.applicationId ?? 'platform';
-  const alreadyRecorded = (await store.listAudit(scope)).some((event) => event.id === id);
-  if (alreadyRecorded) return;
+  if ((await store.getAuditEvent(id)) !== null) return;
   try {
     await store.appendAudit({ ...input, id });
   } catch {
-    const raced = (await store.listAudit(scope)).some((event) => event.id === id);
-    if (!raced) throw new Error('LP-AUDIT-APPEND-FAILED');
+    if ((await store.getAuditEvent(id)) === null) throw new Error('LP-AUDIT-APPEND-FAILED');
   }
 }
 
@@ -923,7 +918,7 @@ async function runRetryAction(context: Context<AppEnv>, dependencies: Controller
   const run = await store.getWorkflowRun(operationId);
   if (!run || run.applicationId !== applicationId) return errorResponse(context, 'LP-OPERATION-NOT-FOUND', 'The operation was not found.', 404, false);
   if (run.status !== 'FAILED' && run.status !== 'BLOCKED') return errorResponse(context, 'LP-RETRY-NOT-FAILED', `Only failed or blocked operations can be retried; this operation is ${run.status}.`, 409, false);
-  const startEvent = (await store.listAudit(applicationId)).find((event) => event.action === 'OIDC_OPERATION_START' && typeof event.details === 'object' && event.details !== null && event.details.operationId === operationId);
+  const startEvent = await store.getAuditEvent(stableId('audit', applicationId, 'OIDC_OPERATION_START', operationId));
   const details = startEvent && typeof startEvent.details === 'object' && startEvent.details !== null ? startEvent.details : null;
   const recordedParams = details === null ? null : details.params;
   const params = typeof recordedParams === 'object' && recordedParams !== null && !Array.isArray(recordedParams) ? (recordedParams as Record<string, unknown>) : null;
@@ -1402,7 +1397,7 @@ async function applyConfigChange(context: Context<AppEnv>, dependencies: Control
   // change find the recorded event and return its PR without opening a new
   // one (GitHub-side branch/PR reuse covers the race window).
   const auditId = stableId('audit', applicationId, `CONFIG_CHANGE_${change.toUpperCase()}`, requestFingerprint);
-  const existingEvent = (await store.listAudit(applicationId)).find((event) => event.id === auditId);
+  const existingEvent = await store.getAuditEvent(auditId);
   if (existingEvent) {
     // Fail closed on malformed recorded details: a replay must reproduce the
     // exact recorded PR, never a partially-guessed one.
@@ -1915,7 +1910,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       return errorResponse(context, 'LP-WORKFLOW-CREATE-FAILED', 'The durable workflow could not be started.', 503, true);
     }
     const auditId = stableId('audit', applicationId, 'DELETE_REQUESTED', run.id);
-    if (!(await store.listAudit(applicationId)).some((event) => event.id === auditId)) {
+    if ((await store.getAuditEvent(auditId)) === null) {
       try {
         await store.appendAudit({ id: auditId, actor: operatorPrincipal(context), action: 'DELETE_REQUESTED', applicationId, details: { operationId: run.id, workflowId: instance.id, approvalId, sourceCommit, domain } });
       } catch {
@@ -2091,7 +2086,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
     const operationId = context.req.param('operationId');
     const run = await store.getWorkflowRun(operationId);
     if (!run) return errorResponse(context, 'LP-OPERATION-NOT-FOUND', 'The operation was not found.', 404, false);
-    const startEvent = (await store.listAudit(run.applicationId)).find((event) => event.action === 'OIDC_OPERATION_START' && typeof event.details === 'object' && event.details !== null && event.details.operationId === operationId);
+    const startEvent = await store.getAuditEvent(stableId('audit', run.applicationId, 'OIDC_OPERATION_START', operationId));
     if (!startEvent) return errorResponse(context, 'LP-OIDC-OPERATION-NOT-BOUND', 'The operation is not bound to an OIDC-authenticated workflow.', 403, false);
     // Structurally narrow the persisted audit details before binding any
     // identity field: malformed records fail closed as unbound, never with

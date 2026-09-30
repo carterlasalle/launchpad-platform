@@ -86,6 +86,8 @@ export class LaunchpadRepositories {
 
   listAudit(applicationId: string): AuditRow[] { return this.db.audits.filter((event) => event.applicationId === applicationId).map((event) => structuredClone(event)); }
 
+  getAuditEvent(id: string): AuditRow | null { return structuredClone(this.db.audits.find((event) => event.id === id) ?? null); }
+
   createTombstone(input: Omit<TombstoneRow, 'applicationId'> & { applicationId: string }): TombstoneRow {
     const row = { ...input };
     this.db.tombstones.set(input.applicationId, row);

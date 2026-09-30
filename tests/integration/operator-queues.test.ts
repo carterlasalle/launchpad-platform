@@ -1,3 +1,4 @@
+import { stableId } from '@launchpad/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('cloudflare:workers', () => ({
@@ -107,7 +108,7 @@ describe('operator dashboard and queue surface (integration)', () => {
     const store = harness.store;
     const original = await store.startWorkflowRun({ applicationId: 'fixture-app', workflowType: 'app-preview', idempotencyKey: 'orig-1', payloadHash: 'ph-1' });
     await store.updateWorkflowRun(original.id, { status: 'FAILED', completedAt: '2026-08-04T00:00:00.000Z', errorCode: 'LP-VERCEL-BUILD-FAILED' });
-    await store.appendAudit({ actor: 'oidc:workflow', action: 'OIDC_OPERATION_START', applicationId: 'fixture-app', details: { operationId: original.id, workflowId: 'wf-1', repositoryId: '123456789', ownerId: '987654321', repository: 'example/fixture', workflowRef: 'example/fixture/.github/workflows/p.yml@refs/heads/main', event: 'push', sourceCommit: SOURCE_COMMIT, actor: 'alice', params: { version: 1, kind: 'app-preview', applicationId: 'fixture-app', sourceCommit: SOURCE_COMMIT, idempotencyKey: 'orig-1', repositoryId: '123456789', ownerId: '987654321', repository: 'example/fixture', workflowRef: 'example/fixture/.github/workflows/p.yml@refs/heads/main', event: 'push', actor: 'alice' } } });
+    await store.appendAudit({ id: stableId('audit', 'fixture-app', 'OIDC_OPERATION_START', original.id), actor: 'oidc:workflow', action: 'OIDC_OPERATION_START', applicationId: 'fixture-app', details: { operationId: original.id, workflowId: 'wf-1', repositoryId: '123456789', ownerId: '987654321', repository: 'example/fixture', workflowRef: 'example/fixture/.github/workflows/p.yml@refs/heads/main', event: 'push', sourceCommit: SOURCE_COMMIT, actor: 'alice', params: { version: 1, kind: 'app-preview', applicationId: 'fixture-app', sourceCommit: SOURCE_COMMIT, idempotencyKey: 'orig-1', repositoryId: '123456789', ownerId: '987654321', repository: 'example/fixture', workflowRef: 'example/fixture/.github/workflows/p.yml@refs/heads/main', event: 'push', actor: 'alice' } } });
 
     const retry = await harness.request('/v1/applications/fixture-app/actions/retry', { method: 'POST', headers: { 'content-type': 'application/json', ...OPERATOR }, body: JSON.stringify({ operationId: original.id }) });
     expect(retry.status).toBe(202);
