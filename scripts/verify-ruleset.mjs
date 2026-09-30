@@ -104,9 +104,11 @@ try {
         }
       } else {
         // GitHub adds canonical response-only fields to pull_request rules
-        // (currently required_reviewers and do_not_enforce_on_create). Compare
+        // (required_reviewers, do_not_enforce_on_create, and
+        // require_extra_approval_for_unattributed_changes — the Copilot-review
+        // gate defaults to false and is outside the reviewed spec). Compare
         // the reviewed desired fields while ignoring only those server fields.
-        const responseOnlyFields = new Set(['required_reviewers', 'do_not_enforce_on_create']);
+        const responseOnlyFields = new Set(['required_reviewers', 'do_not_enforce_on_create', 'require_extra_approval_for_unattributed_changes']);
         const normalizeParameters = (parameters) => Object.fromEntries(Object.entries(parameters ?? {}).filter(([key]) => !responseOnlyFields.has(key)));
         const expectedParameters = normalizeParameters(rule.parameters);
         const liveParameters = normalizeParameters(found.parameters);
