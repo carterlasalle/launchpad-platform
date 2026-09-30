@@ -74,6 +74,14 @@ async function readJsonObject(context: Context<AppEnv>): Promise<Record<string, 
   }
 }
 
+// Clock is env-controlled (server-side only — never client-supplied): the
+// integration tests freeze NOW to exercise the cooling-off/expiry gates;
+// production deployments leave NOW unset and fall back to real time.
+function controllerNow(context: Context<AppEnv>): string {
+  const value = (context.env as Record<string, unknown>).NOW;
+  return typeof value === 'string' ? value : new Date().toISOString();
+}
+
 function repositoryIdentityField(body: Record<string, unknown>, key: 'repositoryId' | 'ownerId'): string | undefined {
   const value = body[key];
   if (typeof value === 'string' && value.length > 0) return value;
@@ -1899,12 +1907,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
       return mapEnqueueError(context, error);
     }
     const workflowId = `lp-decommission-${run.id}`;
-    // Clock is env-controlled (server-side only — never client-supplied): the
-    // integration tests freeze NOW to exercise the cooling-off/expiry gates;
-    // production deployments leave NOW unset and fall back to real time.
-    const now = typeof (context.env as Record<string, unknown>).NOW === 'string'
-      ? (context.env as Record<string, unknown>).NOW as string
-      : new Date().toISOString();
+    const now = controllerNow(context);
     let instance: { id: string };
     try {
       instance = await workflow.create({ id: workflowId, params: { version: 1, kind: 'decommission', applicationId, idempotencyKey, operationId: run.id, workflowId, approvalId, approvalToken, sourceCommit, domain, actor, now } });
@@ -1942,7 +1945,7 @@ export function createControllerApp(dependencies: ControllerDependencies): Hono<
           reason: typeof rawOverride.reason === 'string' ? rawOverride.reason : '',
           ...(typeof rawOverride.evidenceUrl === 'string' && rawOverride.evidenceUrl.length > 0 ? { evidenceUrl: rawOverride.evidenceUrl } : {}),
         };
-    const verdict = await assertTombstoneReuseAllowed({ store, applicationId, domain, now: new Date().toISOString(), override });
+    const verdict = await assertTombstoneReuseAllowed({ store, applicationId, domain, now: controllerNow(context), override });
     if (!verdict.allowed) return context.json({ applicationId, domain, allowed: false, code: verdict.code, message: verdict.message, retainUntil: verdict.retainUntil }, 409);
     try {
       await store.appendAudit({ actor: operatorPrincipal(context), action: 'TOMBSTONE_RELEASED', applicationId, details: { domain, ...(override ?? {}) } });
