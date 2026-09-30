@@ -34,7 +34,7 @@
   },
   "resolutions": {
     "nanoid@npm:^3.3.17": "npm:3.3.18",
-    "undici@npm:7.28.0": "npm:7.29.0"
+    "undici@npm:7.28.0": "npm:7.29.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260804.1",
