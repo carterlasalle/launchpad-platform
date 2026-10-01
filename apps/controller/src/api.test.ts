@@ -1042,7 +1042,7 @@ describe('operator recovery actions', () => {
     await seedApplication(harness);
     const run = await harness.store.startWorkflowRun({ applicationId: 'app-demo', workflowType: 'app-preview', idempotencyKey: 'malformed-1', payloadHash: 'h' });
     await harness.store.updateWorkflowRun(run.id, { status: 'FAILED', errorCode: 'LP-BUILD-FAILED' });
-    await harness.store.appendAudit({ actor: 'oidc:acme/web-app', action: 'OIDC_OPERATION_START', applicationId: 'app-demo', details: { operationId: run.id, workflowId: 'w', kind: 'app-preview', params: { version: 1, kind: 'app-preview', applicationId: 'app-demo' } } });
+    await harness.store.appendAudit({ id: stableId('audit', 'app-demo', 'OIDC_OPERATION_START', run.id), actor: 'oidc:acme/web-app', action: 'OIDC_OPERATION_START', applicationId: 'app-demo', details: { operationId: run.id, workflowId: 'w', kind: 'app-preview', params: { version: 1, kind: 'app-preview', applicationId: 'app-demo' } } });
     const response = await request(harness, '/v1/applications/app-demo/actions/retry', { method: 'POST', body: JSON.stringify({ operationId: run.id }), headers: { 'content-type': 'application/json', ...bearer('operator-token') } });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ error: { code: 'LP-RETRY-PARAMS-MALFORMED' } });

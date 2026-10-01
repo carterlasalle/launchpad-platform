@@ -385,6 +385,8 @@ export interface LaunchpadStore {
    */
   cancelWorkflowRun(input: WorkflowRunCancel): Promise<WorkflowRunRecord>;
   getWorkflowRun(id: string): Promise<WorkflowRunRecord | null>;
+  /** Point lookup for idempotent-replay guards; avoids scanning the run history. */
+  getWorkflowRunByIdempotencyKey(applicationId: string, idempotencyKey: string): Promise<WorkflowRunRecord | null>;
   listWorkflowRuns(applicationId: string, options?: { limit?: number }): Promise<WorkflowRunRecord[]>;
   listOpenWorkflowRuns(applicationId: string): Promise<WorkflowRunRecord[]>;
   recordWorkflowStep(input: WorkflowStepUpsert): Promise<WorkflowStepRecord>;
@@ -466,6 +468,8 @@ export interface LaunchpadStore {
 
   // audit (append-only) ----------------------------------------------------
   appendAudit(input: AuditAppend): Promise<AuditRecord>;
+  /** Point lookup for idempotent-replay guards; avoids scanning the append-only log. */
+  getAuditEvent(id: string): Promise<AuditRecord | null>;
   listAudit(applicationId: string, options?: { limit?: number }): Promise<AuditRecord[]>;
   listAuditAll(options?: { limit?: number }): Promise<AuditRecord[]>;
 

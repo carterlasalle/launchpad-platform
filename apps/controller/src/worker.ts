@@ -120,7 +120,7 @@ async function recordProviderEventFanout(store: D1LaunchpadStore | LaunchpadRepo
   const id = `provider-event-fanout:${outcome.eventId}`;
   const scope = 'platform';
   const append = async (): Promise<void> => { await store.appendAudit({ id, actor: 'queue:provider-event', action: 'PROVIDER_EVENT_FANNED_OUT', applicationId: scope, details: { eventId: outcome.eventId, type: outcome.type, applications: outcome.applications, dispatched: outcome.dispatched } }); };
-  const alreadyRecorded = async (): Promise<boolean> => (await store.listAudit(scope)).some((event) => event.id === id);
+  const alreadyRecorded = async (): Promise<boolean> => (await store.getAuditEvent(id)) !== null;
   if (await alreadyRecorded()) return;
   try {
     await append();

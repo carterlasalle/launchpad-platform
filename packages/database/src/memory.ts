@@ -408,6 +408,11 @@ export class InMemoryLaunchpadStore implements LaunchpadStore {
     return row ? this.copyWorkflowRun(row) : null;
   }
 
+  async getWorkflowRunByIdempotencyKey(applicationId: string, idempotencyKey: string): Promise<WorkflowRunRecord | null> {
+    const row = [...this.workflowRuns.values()].find((candidate) => candidate.application_id === applicationId && candidate.idempotency_key === idempotencyKey);
+    return row ? this.copyWorkflowRun(row) : null;
+  }
+
   async listWorkflowRuns(applicationId: string, options: { limit?: number } = {}): Promise<WorkflowRunRecord[]> {
     const rows = [...this.workflowRuns.values()].filter((row) => row.application_id === applicationId).sort((left, right) => right.started_at.localeCompare(left.started_at) || right.id.localeCompare(left.id));
     return rows.slice(0, options.limit).map((row) => this.copyWorkflowRun(row));
@@ -780,6 +785,11 @@ export class InMemoryLaunchpadStore implements LaunchpadStore {
     const row: AuditRow = { id: input.id ?? `audit-${crypto.randomUUID()}`, actor: input.actor, action: input.action, application_id: input.applicationId ?? null, details_json: serializeJson(input.details ?? {}, 'audit details'), created_at: input.createdAt ?? this.nowIso() };
     this.auditEvents.push(row);
     return this.copyAudit(row);
+  }
+
+  async getAuditEvent(id: string): Promise<AuditRecord | null> {
+    const row = this.auditEvents.find((candidate) => candidate.id === id);
+    return row ? this.copyAudit(row) : null;
   }
 
   async listAudit(applicationId: string, options: { limit?: number } = {}): Promise<AuditRecord[]> {

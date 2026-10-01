@@ -208,8 +208,7 @@ interface PreviewStage {
 }
 
 async function findRunByIdempotencyKey(store: LaunchpadStore, applicationId: string, key: string): Promise<WorkflowRunRecord | null> {
-  const runs = await store.listWorkflowRuns(applicationId);
-  return runs.find((run) => run.idempotencyKey === key) ?? null;
+  return store.getWorkflowRunByIdempotencyKey(applicationId, key);
 }
 
 async function ensureApplicationRow(store: LaunchpadStore, desired: DesiredApplication, revision: number, planFingerprint: string): Promise<void> {

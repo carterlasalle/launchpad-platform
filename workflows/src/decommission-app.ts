@@ -1,4 +1,4 @@
-import { canonicalJson, idempotencyKey, sha256Hex } from '@launchpad/shared';
+import { canonicalJson, idempotencyKey, sha256Hex, stableId } from '@launchpad/shared';
 import { loadCatalog } from '@launchpad/catalog';
 import type { DesiredApplication, LifecycleState } from '@launchpad/core';
 import type { LaunchpadStore, ResourceRecord } from '@launchpad/database';
@@ -323,6 +323,7 @@ export async function issueDeletionApproval(input: {
     expiresAt: input.binding.expiresAt ?? '',
   });
   await input.store.appendAudit({
+    id: stableId('audit', input.binding.applicationId, 'DELETION_APPROVAL_ISSUED', approval.id),
     actor: `operator:${input.binding.actor}`,
     action: 'DELETION_APPROVAL_ISSUED',
     applicationId: input.binding.applicationId,
@@ -360,8 +361,12 @@ export async function consumeDeletionApproval(input: {
   if (approval.requestedBy !== null && approval.requestedBy !== input.binding.actor) {
     throw new WorkflowFailure('LP-DESTROY-APPROVAL-BINDING-MISMATCH', 'The presented operator identity does not match the approved actor.');
   }
-  const issued = (await input.store.listAudit(input.binding.applicationId)).find((event) => event.action === 'DELETION_APPROVAL_ISSUED' && typeof event.details === 'object' && event.details !== null && event.details.approvalId === input.approvalId);
-  if (!issued) throw new WorkflowFailure('LP-DESTROY-APPROVAL-BINDING-MISSING', 'The approval has no issuance record; destruction is refused.');
+  const issuedById = await input.store.getAuditEvent(stableId('audit', input.binding.applicationId, 'DELETION_APPROVAL_ISSUED', input.approvalId));
+  // Compatibility: approvals issued before deterministic issuance ids carry a
+  // random-UUID audit id, so fall back to the bounded per-application log scan
+  // (approvals expire, keeping the table small) when the point lookup misses.
+  const issued = issuedById ?? (await input.store.listAudit(input.binding.applicationId, { limit: 200 })).find((event) => event.action === 'DELETION_APPROVAL_ISSUED' && typeof event.details === 'object' && event.details !== null && (event.details as Record<string, unknown>).approvalId === input.approvalId) ?? null;
+  if (!issued || issued.action !== 'DELETION_APPROVAL_ISSUED' || typeof issued.details !== 'object' || issued.details === null || (issued.details as Record<string, unknown>).approvalId !== input.approvalId) throw new WorkflowFailure('LP-DESTROY-APPROVAL-BINDING-MISSING', 'The approval has no issuance record; destruction is refused.');
   const recorded = issued.details as Record<string, unknown>;
   const bindingFields: Array<keyof DeletionApprovalBinding> = ['applicationId', 'domain', 'sourceCommit', 'actor'];
   const mismatches = bindingFields.filter((field) => recorded[field] !== input.binding[field]);

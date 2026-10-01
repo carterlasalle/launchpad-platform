@@ -424,6 +424,11 @@ export class D1LaunchpadStore implements LaunchpadStore {
     return this.loadWorkflowRun(id);
   }
 
+  async getWorkflowRunByIdempotencyKey(applicationId: string, idempotencyKey: string): Promise<WorkflowRunRecord | null> {
+    const row = await this.db.prepare('SELECT id, application_id, workflow_type, status, idempotency_key, payload_hash, started_at, completed_at, error_code FROM workflow_runs WHERE application_id = ? AND idempotency_key = ?').bind(applicationId, idempotencyKey).first<SqlWorkflowRunRow>();
+    return row ? this.toWorkflowRun(row) : null;
+  }
+
   async listWorkflowRuns(applicationId: string, options: { limit?: number } = {}): Promise<WorkflowRunRecord[]> {
     const result = await this.db.prepare('SELECT id, application_id, workflow_type, status, idempotency_key, payload_hash, started_at, completed_at, error_code FROM workflow_runs WHERE application_id = ? ORDER BY started_at DESC, id DESC LIMIT ?').bind(applicationId, options.limit ?? -1).all<SqlWorkflowRunRow>();
     return result.results.map((row) => this.toWorkflowRun(row));
@@ -820,6 +825,11 @@ export class D1LaunchpadStore implements LaunchpadStore {
     const row = await this.db.prepare('SELECT id, actor, action, application_id, details_json, created_at FROM audit_events WHERE id = ?').bind(id).first<SqlAuditRow>();
     if (!row) throw notFound('Audit event', id);
     return this.toAudit(row);
+  }
+
+  async getAuditEvent(id: string): Promise<AuditRecord | null> {
+    const row = await this.db.prepare('SELECT id, actor, action, application_id, details_json, created_at FROM audit_events WHERE id = ?').bind(id).first<SqlAuditRow>();
+    return row ? this.toAudit(row) : null;
   }
 
   async listAudit(applicationId: string, options: { limit?: number } = {}): Promise<AuditRecord[]> {

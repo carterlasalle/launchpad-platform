@@ -646,6 +646,24 @@ export function runStoreContractSuite(name: string, harness: StoreContractHarnes
         expect(event.id).toBe('audit-explicit-1');
         expect((await store.listAuditAll())[0]?.id).toBe('audit-explicit-1');
       });
+
+      it('resolves a single audit event by id without scanning the log', async () => {
+        const store = harness.create();
+        await seedApplication(store);
+        await store.appendAudit({ id: 'audit-point-1', actor: 'operator:alice', action: 'DEPLOY_REQUESTED', applicationId: 'app-demo', details: {}, createdAt: T0 });
+        await store.appendAudit({ id: 'audit-point-2', actor: 'operator:alice', action: 'DEPLOY_REQUESTED', applicationId: 'app-demo', details: {}, createdAt: '2026-08-04T00:00:01.000Z' });
+        expect((await store.getAuditEvent('audit-point-1'))?.action).toBe('DEPLOY_REQUESTED');
+        expect(await store.getAuditEvent('audit-missing')).toBeNull();
+      });
+
+      it('resolves a workflow run by idempotency key without scanning history', async () => {
+        const store = harness.create();
+        await seedApplication(store);
+        const run = await store.startWorkflowRun({ applicationId: 'app-demo', workflowType: 'apply', idempotencyKey: 'ik-point-1', payloadHash: 'p' });
+        expect((await store.getWorkflowRunByIdempotencyKey('app-demo', 'ik-point-1'))?.id).toBe(run.id);
+        expect(await store.getWorkflowRunByIdempotencyKey('app-demo', 'ik-missing')).toBeNull();
+        expect(await store.getWorkflowRunByIdempotencyKey('other-app', 'ik-point-1')).toBeNull();
+      });
     });
 
     describe('credentials metadata', () => {
