@@ -2,7 +2,7 @@ import { renderPlanMarkdown, type PlatformPlan, type ResourceGraph } from '@laun
 import { redactText, redactValue } from '@launchpad/shared';
 
 export type PreviewState = 'READY' | 'ERROR' | 'CANCELED' | 'TIMEOUT' | 'NOT_RUN';
-export interface PreviewSummary { state: PreviewState; url: string | null; message: string; }
+export interface PreviewSummary { applicationId: string; state: PreviewState; url: string | null; message: string; }
 export type HealthState = 'PASSED' | 'FAILED' | 'ERROR' | 'NOT_RUN';
 export interface HealthSummary { state: HealthState; message: string; }
 export interface ProviderErrorSummary { code: string; message: string; operationId: string | null; retryable: boolean | null; }

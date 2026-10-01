@@ -14,7 +14,7 @@ function requireArtifact(files: Record<string, string>, name: string): string {
 }
 
 it('renders one stable sticky comment with escaped provider text', () => {
-  const body = renderStickyComment({ plans: [plan], previews: [{ state: 'ERROR', url: 'https://preview.example', message: '<script>alert(1)</script>' }], healths: [{ state: 'FAILED', message: 'body mismatch' }] });
+  const body = renderStickyComment({ plans: [plan], previews: [{ applicationId: 'app-demo', state: 'ERROR', url: 'https://preview.example', message: '<script>alert(1)</script>' }], healths: [{ state: 'FAILED', message: 'body mismatch' }] });
   expect(body).toContain('<!-- launchpad:plan -->');
   expect(body).toContain('sha256:');
   expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -47,7 +47,7 @@ it('renders real dot graph nodes and edges', () => {
 
 it('creates redacted machine-readable artifacts with bounded size', () => {
   const huge = `x`.repeat(100_000);
-  const artifacts = artifactFiles({ plans: [plan], previews: [{ state: 'READY', url: 'https://preview.example', message: 'ok' }], healths: [{ state: 'PASSED', message: 'ok' }], providerState: { secret: 'api_key=super-secret-value' }, providerError: { code: 'LP-VERCEL-BUILD-FAILED', message: 'token=abc123 failed', operationId: 'op-1', retryable: false }, logs: ['ok'], resourceGraphs: [graph] });
+  const artifacts = artifactFiles({ plans: [plan], previews: [{ applicationId: 'app-demo', state: 'READY', url: 'https://preview.example', message: 'ok' }], healths: [{ state: 'PASSED', message: 'ok' }], providerState: { secret: 'api_key=super-secret-value' }, providerError: { code: 'LP-VERCEL-BUILD-FAILED', message: 'token=abc123 failed', operationId: 'op-1', retryable: false }, logs: ['ok'], resourceGraphs: [graph] });
   expect(Object.keys(artifacts)).toEqual(expect.arrayContaining(['plans.json', 'plan.md', 'resource-graph.json', 'resource-graph.dot', 'provider-state-redacted.json', 'preview-summary.json', 'health-results.json', 'provider-error-redacted.json', 'build-log-tail.txt']));
   expect(artifacts['plans.json']).toContain('"fingerprint"');
   expect(artifacts['provider-state-redacted.json']).not.toContain('super-secret-value');
@@ -95,7 +95,7 @@ it('degrades oversized plans to a bounded minimal projection instead of failing'
 });
 
 it('escapes repository and provider text in the sticky comment', () => {
-  const body = renderStickyComment({ plans: [{ ...plan, applicationId: 'app|<script>', operations: [{ ...plan.operations[0]!, resourceKey: 'vercel.project|"injected"' }] }], previews: [{ state: 'ERROR', url: 'https://example.test', message: 'provider token=abc123' }] });
+  const body = renderStickyComment({ plans: [{ ...plan, applicationId: 'app|<script>', operations: [{ ...plan.operations[0]!, resourceKey: 'vercel.project|"injected"' }] }], previews: [{ applicationId: 'app-demo', state: 'ERROR', url: 'https://example.test', message: 'provider token=abc123' }] });
   expect(body).not.toContain('<script>');
   expect(body).toContain('&lt;script&gt;');
   expect(body).not.toContain('token=abc123');
@@ -122,7 +122,7 @@ it('renders a failure-only sticky comment from explicit job results with escaped
 it('emits only failing preview/health evidence in the failure comment, never green states', () => {
   const body = renderFailureStickyComment({
     jobs: [{ name: 'preview', result: 'failure' }],
-    previews: [{ state: 'ERROR', url: 'https://preview.example', message: 'build failed' }, { state: 'READY', url: 'https://preview.example', message: 'ready' }],
+    previews: [{ applicationId: 'app-demo', state: 'ERROR', url: 'https://preview.example', message: 'build failed' }, { applicationId: 'app-demo', state: 'READY', url: 'https://preview.example', message: 'ready' }],
     healths: [{ state: 'FAILED', message: 'degraded' }, { state: 'PASSED', message: 'healthy' }],
   });
   expect(body).toContain('### Preview failures');

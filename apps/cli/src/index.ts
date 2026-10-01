@@ -384,7 +384,7 @@ function previewSummaries(summary: Record<string, unknown> | null): PreviewSumma
     if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue;
     const record = entry as Record<string, unknown>;
     if (typeof record.applicationId !== 'string' || typeof record.state !== 'string') continue;
-    previews.push({ state: record.state as PreviewSummary['state'], url: stringOrNull(record.url), message: typeof record.message === 'string' ? record.message : '' });
+    previews.push({ applicationId: record.applicationId as string, state: record.state as PreviewSummary['state'], url: stringOrNull(record.url), message: typeof record.message === 'string' ? record.message : '' });
   }
   return previews;
 }
@@ -697,7 +697,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
         throw new CliFailure('LP-PLAN-REVIEW-REJECTED', `Plan review for '${previewApplication.metadata.id}' was rejected with HTTP ${review.status}${envelope ? ` (${envelope.code}: ${escapeHtml(envelope.message)})` : `: ${redactText(review.text)}`}.`);
       }
       if (previewApplication.environments.preview?.enabled === false) {
-        previews.push({ state: 'NOT_RUN', url: null, message: 'Preview is disabled for this application.' });
+        previews.push({ applicationId: previewApplication.metadata.id, state: 'NOT_RUN', url: null, message: 'Preview is disabled for this application.' });
         continue;
       }
       const idempotencyKey = `preview:${previewApplication.metadata.id}:${sha}:${plan.desiredGeneration}`;
@@ -724,7 +724,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
         const failed = operation.failedStep !== null ? `; failed step ${operation.failedStep.stepId}${operation.failedStep.error?.code ? ` (${operation.failedStep.error.code})` : ''}${operation.failedStep.error?.message ? `: ${operation.failedStep.error.message}` : ''}` : '';
         const message = `Preview workflow ended in ${operation.status}${operation.errorCode ? ` (${operation.errorCode})` : ''}${failed}.`;
         providerErrors.push({ code: operation.errorCode ?? `LP-PREVIEW-${operation.status}`, message, operationId: operation.operationId, retryable: null });
-        previews.push({ state: operation.status === 'CANCELED' ? 'CANCELED' : 'ERROR', url: null, message });
+        previews.push({ applicationId: previewApplication.metadata.id, state: operation.status === 'CANCELED' ? 'CANCELED' : 'ERROR', url: null, message });
         continue;
       }
       const result = operation.result ?? {};
@@ -735,7 +735,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       const healthState = stringOrNull(result.healthState);
       if (!buildState || !healthState) throw new CliFailure('LP-PREVIEW-RESULT-INCOMPLETE', `Preview operation ${operationId} for '${previewApplication.metadata.id}' is missing buildState or healthState.`);
       const passed = buildState === 'READY' && healthState === 'PASSED';
-      previews.push({ state: passed ? 'READY' : 'ERROR', url: previewUrl, message: `Build ${buildState}; health ${healthState}.` });
+      previews.push({ applicationId: previewApplication.metadata.id, state: passed ? 'READY' : 'ERROR', url: previewUrl, message: `Build ${buildState}; health ${healthState}.` });
     }
     const outputDir = typeof args.flags.output === 'string' ? args.flags.output : null;
     writePreviewSummary(outputDir, sha, previews);
