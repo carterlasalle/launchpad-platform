@@ -824,7 +824,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
     return response.ok ? 0 : 1;
   }
 
-  const token = await requireOperatorToken();
+  const token = args.command === 'destroy' || args.command === 'reconcile' ? await requireOperatorToken() : null;
 
   if (args.command === 'apply') {
     const sha = exactCommitSha(args.flags);
