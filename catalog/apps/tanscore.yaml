@@ -3,7 +3,7 @@ kind: Application
 metadata:
   id: tanscore
   displayName: TanScore
-  description: Solar/UV forecast and tanning opportunity dashboard (SunStack static export)
+  description: Solar/UV forecast and tanning opportunity dashboard (SunStack static export).
   owners:
     - "@CarterLaSalle"
   labels:
