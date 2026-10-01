@@ -904,7 +904,11 @@ export function applyStep(name: ApplyPhaseName, ctx: ApplyStepContext): DurableS
     case 'verify-vercel-domain':
       return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async (_attempt, stepContext) => applyVerifyVercelDomain({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), projectId: canonicalProjectIdOf(stepContext.outputs, base), context: ctx.context }) };
     case 'verify-tls':
-      return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 }, run: async () => applyVerifyTls({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), context: ctx.context }) };
+      // First-issuance window: a brand-new hostname's certificate can take
+      // well over an hour from DNS creation to READY (tanscore needed ~50
+      // minutes). 12 attempts of up to 5 minutes backoff cover ~30 minutes of
+      // issuance time; anything slower fails visibly for a re-run, never silently.
+      return { id: name, preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: ctx.desired?.domains.map((domain) => domain.hostname) ?? [] }), retry: { maxAttempts: 12, baseDelayMs: 30_000, maxDelayMs: 300_000 }, run: async () => applyVerifyTls({ base, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), context: ctx.context }) };
     case 'create-candidate':
       return mutationStep(name, ctx, (locks, outputs) => applyCreateCandidate({ base, store: requireRuntime(ctx).store, provider: requireRuntime(ctx).provider, desired: requireDesired(ctx), plan: requirePlan(ctx), locks, context: ctx.context, projectId: canonicalProjectIdOf(outputs, base), ...(ctx.appCommit !== undefined ? { appCommit: ctx.appCommit } : {}) }));
     case 'wait-candidate':
@@ -1109,7 +1113,7 @@ export function buildApplyMachine(input: ApplyMachineInput): ApplyMachine {
     {
       id: 'verify-tls',
       preconditionHash: canonicalJson({ sourceCommit: base.sourceCommit, hostnames: submitted.desired.domains.map((domain) => domain.hostname) }),
-      retry: { maxAttempts: 5, baseDelayMs: 5_000, maxDelayMs: 30_000 },
+      retry: { maxAttempts: 12, baseDelayMs: 30_000, maxDelayMs: 300_000 },
       run: async () => applyVerifyTls({ base, provider: runtime.provider, desired: submitted.desired, context }),
     },
     {
