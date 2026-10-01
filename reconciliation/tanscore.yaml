@@ -2,10 +2,10 @@ apiVersion: launchpad.dev/v1
 kind: ReconciliationRequest
 metadata:
   app: tanscore
-  observedAt: 2026-10-01T00:44:56.753Z
+  observedAt: 2026-10-01T01:00:45.854Z
 spec:
   desiredGeneration: 0
   reason: external-drift
   operation: restore-desired-state
   driftFingerprint: sha256:3f922828e434567ad47258d2342b32d854322e7535443910dd3ce1610450c370
-  sourceCommit: a52550439b12bc9fc281c539e2d122045e61bd1c
+  sourceCommit: 2079686b50ec0a206cc7cec94679b41d3d0a27df
