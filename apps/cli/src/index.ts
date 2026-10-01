@@ -657,13 +657,16 @@ export async function runCli(argv: readonly string[], output: { write(value: str
   if (args.command === 'preview') {
     const sha = exactCommitSha(args.flags);
     const controller = requireController(args.flags);
-    const token = await requireWorkflowToken();
     const plansFile = requireStringFlag(args.flags, 'plans', 'LP-PLANS-FILE-MISSING', '--plans <file> with the plan job output is required for preview.');
     const plans = readPlansFile(plansFile);
     const timeoutMs = operationTimeoutMs(args.flags);
     const previews: PreviewSummary[] = [];
     const providerErrors: ProviderErrorSummary[] = [];
     for (const previewApplication of selected) {
+      // GitHub OIDC tokens live ~5 minutes; a multi-app preview outlives one
+      // token. Mint per application so a slow earlier app can never strand a
+      // later start with an expired bearer (401 LP-OIDC-VERIFICATION-FAILED).
+      const token = await requireWorkflowToken();
       const plan = plans.find((candidate) => candidate.applicationId === previewApplication.metadata.id);
       if (!plan) throw new CliFailure('LP-PLAN-MISMATCH', `No plan for application '${previewApplication.metadata.id}' in ${plansFile}.`);
       if (plan.sourceCommit !== sha) throw new CliFailure('LP-PLAN-COMMIT-MISMATCH', `Plan for '${previewApplication.metadata.id}' is bound to ${plan.sourceCommit}; expected ${sha}.`);
@@ -821,7 +824,7 @@ export async function runCli(argv: readonly string[], output: { write(value: str
     return response.ok ? 0 : 1;
   }
 
-  const token = await (args.command === 'reconcile' || args.command === 'destroy' ? requireOperatorToken() : requireWorkflowToken());
+  const token = args.command === 'destroy' || args.command === 'reconcile' ? await requireOperatorToken() : null;
 
   if (args.command === 'apply') {
     const sha = exactCommitSha(args.flags);
@@ -835,6 +838,10 @@ export async function runCli(argv: readonly string[], output: { write(value: str
       if (applyPlan.result !== 'READY') throw new CliFailure('LP-PLAN-NOT-READY', `Plan for '${applyApplication.metadata.id}' is ${applyPlan.result}; apply requires a READY plan.`);
       if (applyPlan.sourceCommit !== sha) throw new CliFailure('LP-PLAN-COMMIT-MISMATCH', `Plan for '${applyApplication.metadata.id}' is bound to ${applyPlan.sourceCommit}; expected ${sha}.`);
       const idempotencyKey = `apply:${applyApplication.metadata.id}:${sha}:${applyPlan.desiredGeneration}`;
+      // GitHub OIDC tokens live ~5 minutes; a multi-app apply outlives one
+      // token. Mint per application so a slow earlier app can never strand a
+      // later start with an expired bearer (401 LP-OIDC-VERIFICATION-FAILED).
+      const token = await requireWorkflowToken();
       const body = { ...workflowPayload(args.flags, token, applyApplication.metadata.id, sha, applyPlan, idempotencyKey), manifestPath: applyApplication.sourcePath ?? null, plan: applyPlan, desired: applyApplication };
       const response = await controllerRequest(controller, `/v1/applications/${encodeURIComponent(applyApplication.metadata.id)}/apply`, token, body);
       if (response.status !== 202) throw new CliFailure('LP-APPLY-START-REJECTED', `Apply start for '${applyApplication.metadata.id}' was rejected with HTTP ${response.status}: ${redactText(response.text)}`);
