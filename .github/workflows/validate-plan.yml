@@ -239,7 +239,7 @@ jobs:
           LAUNCHPAD_VERCEL_TOKEN: ${{ secrets.LAUNCHPAD_VERCEL_TOKEN }}
           LAUNCHPAD_VERCEL_TEAM_ID: ${{ vars.LAUNCHPAD_VERCEL_TEAM_ID }}
           LAUNCHPAD_CLOUDFLARE_TOKEN: ${{ secrets.LAUNCHPAD_CLOUDFLARE_TOKEN }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ always() }}
         continue-on-error: true
         with:
@@ -299,7 +299,7 @@ jobs:
       - name: Request isolated preview
         working-directory: trusted
         run: yarn platform preview --catalog "$GITHUB_WORKSPACE/proposed/catalog" --sha ${{ env.HEAD_SHA }} --pr ${{ github.event.pull_request.number }} --controller "$LAUNCHPAD_CONTROLLER_URL" --plans "$GITHUB_WORKSPACE/artifacts/plans.json" --output "$GITHUB_WORKSPACE/preview-artifacts"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ always() }}
         continue-on-error: true
         with:
@@ -354,7 +354,7 @@ jobs:
       - name: Verify preview health
         working-directory: trusted
         run: yarn platform health --catalog "$GITHUB_WORKSPACE/proposed/catalog" --sha ${{ env.HEAD_SHA }} --preview-summary "$GITHUB_WORKSPACE/preview-artifacts/preview-summary.json" --output "$GITHUB_WORKSPACE/health-artifacts"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ always() }}
         continue-on-error: true
         with:
@@ -484,7 +484,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
         run: yarn platform report-pr --catalog "$GITHUB_WORKSPACE/proposed/catalog" --sha ${{ env.HEAD_SHA }} --pr ${{ github.event.pull_request.number }} --artifacts "$GITHUB_WORKSPACE/report" --output "$GITHUB_WORKSPACE/report"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ always() && needs.changes.outputs.relevant == 'true' }}
         continue-on-error: true
         with:
