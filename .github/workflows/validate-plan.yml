@@ -292,7 +292,7 @@ jobs:
         run: |
           corepack enable
           YARN_ENABLE_GLOBAL_CACHE=0 corepack yarn@4.10.3 install --immutable
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: launchpad-plan
           path: artifacts
@@ -346,7 +346,7 @@ jobs:
         run: |
           corepack enable
           YARN_ENABLE_GLOBAL_CACHE=0 corepack yarn@4.10.3 install --immutable
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         continue-on-error: true
         with:
           name: launchpad-preview
@@ -449,19 +449,19 @@ jobs:
           }
           EOF
           test -s report/job-results.json
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.changes.outputs.relevant == 'true' }}
         continue-on-error: true
         with:
           name: launchpad-plan
           path: report/plan
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.changes.outputs.relevant == 'true' }}
         continue-on-error: true
         with:
           name: launchpad-preview
           path: report/preview
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: ${{ needs.changes.outputs.relevant == 'true' }}
         continue-on-error: true
         with:
