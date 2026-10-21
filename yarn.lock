@@ -743,7 +743,7 @@ __metadata:
     "@launchpad/provider-secrets": "workspace:*"
     "@launchpad/provider-vercel": "workspace:*"
     "@launchpad/workflows": "workspace:*"
-    hono: "npm:4.13.9"
+    hono: "npm:4.13.11"
     jose: "npm:6.2.12"
     typescript: "npm:5.8.3"
     vitest: "npm:4.1.11"
@@ -1819,10 +1819,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hono@npm:4.13.9":
-  version: 4.13.9
-  resolution: "hono@npm:4.13.9"
-  checksum: 10c0/aa3b03f536082a7eba57b254a4d597ae0f7a033dcb8b7a2be30f73db37fcf72320079a8ae1452845b5ff4bb82b794dae3c983bd660506ae9852da1bcb619ca7a
+"hono@npm:4.13.11":
+  version: 4.13.11
+  resolution: "hono@npm:4.13.11"
+  checksum: 10c0/1052fbe5f45d0041828222597247fadb8283147cbf2c1ec930d525393f3bf4e2600f7190c4890c1a9cc97b6e1abd2287fc28ab37ac1988eda079f2b4deac71bb
   languageName: node
   linkType: hard
 
@@ -1938,7 +1938,7 @@ __metadata:
     ajv: "npm:8.20.0"
     ajv-formats: "npm:3.0.1"
     eslint: "npm:10.11.0"
-    hono: "npm:4.13.9"
+    hono: "npm:4.13.11"
     jose: "npm:6.2.12"
     typescript: "npm:5.8.3"
     vitest: "npm:4.1.11"
