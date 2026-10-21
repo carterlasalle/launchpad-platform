@@ -19,7 +19,7 @@
     "@launchpad/provider-secrets": "workspace:*",
     "@launchpad/provider-vercel": "workspace:*",
     "@launchpad/workflows": "workspace:*",
-    "hono": "4.13.9",
+    "hono": "4.13.11",
     "jose": "6.2.12"
   },
   "devDependencies": {
